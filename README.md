@@ -1,6 +1,6 @@
 # Caller - Contact Manager App
 
-A React Native mobile application for real estate agents and office managers to manage contacts, classify call outcomes, and write notes.
+A comprehensive mobile CRM application built with React Native and Expo, designed for real estate professionals to manage leads, handle calls, and track sales performance.
 
 ## Features
 
@@ -83,6 +83,32 @@ Long press on a contact to quickly update their status.
 - **AsyncStorage** for local persistence
 - **React Native Gesture Handler** for interactions
 
-## License
+## 🚀 Features
 
-MIT
+### 👥 Lead & Contact Management
+- **Create Leads:** specific forms for adding new leads with source tracking.
+- **Smart Filtering:** Filter contacts by status (Hot, Warm, Cold, Interested, Not Interested) and "Site Visit Done".
+- **Contact Details:** Detailed view with call history, notes, and reminders.
+- **Search:** Instant search by name or phone number.
+
+### 📞 Advanced Call Handling
+- **In-App Dialer:** Custom keypad and dialer interface.
+- **Call Simulation:** Mock incoming and outgoing call flows for training/testing.
+- **Call Logging:** Automatic logging of call duration, status, and outcomes.
+- **Quick Actions:** Instant access to Call, WhatsApp, and Notes during/after calls.
+
+### 🏢 Project Management
+- **High Demand Projects:** Showcase premium real estate projects.
+- **Interactive Gallery:** Horizontal scrolling image galleries for properties.
+- **Sharing:** Native share functionality to send project details via WhatsApp/Telegram.
+- **Forwarding:** Forward project details directly to selected contacts.
+
+### 📅 Site Visits & Campaigns
+- **Book Site Visits:** Schedule and track property visits.
+- **Campaign Tracking:** Monitor leads from specific marketing campaigns (Google, Facebook, etc.).
+- **Statistics Dashboard:** Visual breakdown of call stats, lead conversion, and performance metrics.
+
+### 🔐 Authentication & Security
+- **Secure Login:** Phone number based authentication simulation.
+- **Profile Management:** User profile settings and preferences.
+- **Data Persistence:** Local storage for contacts, notes, and app state.
