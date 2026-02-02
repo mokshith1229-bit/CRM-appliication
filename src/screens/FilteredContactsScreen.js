@@ -147,6 +147,8 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
                     return status === 'interested';
                 case 'not_interested':
                     return status === 'not_interested';
+                case 'site_visit_done':
+                    return !!(contact.siteVisitDoneBy || contact.siteVisitReview);
                 default:
                     return true;
             }

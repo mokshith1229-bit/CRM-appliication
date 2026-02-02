@@ -109,38 +109,7 @@ const KeypadScreen = ({ navigation }) => {
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingBottom: 60 + insets.bottom }]}>
             <View style={styles.topFlexArea}>
-                {/* Number Input Selection Area */}
-                <View style={styles.inputArea}>
-                    <TextInput
-                        style={styles.phoneNumberInput}
-                        value={phoneNumber}
-                        onChangeText={setPhoneNumber}
-                        placeholder=""
-                        keyboardType="none"
-                        showSoftInputOnFocus={false}
-                        autoFocus={false}
-                        caretHidden={phoneNumber.length === 0}
-                    />
-                </View>
-
-                {/* Info Bar: Actions when no exact match found but phone has input */}
-                <View style={styles.infoBar}>
-                    {phoneNumber.length > 0 && (
-                        <View style={styles.actionsRow}>
-                            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('CreateLead', { phone: phoneNumber })}>
-                                <MaterialIcons name="person-add" size={20} color={COLORS.primary} />
-                                <Text style={styles.actionLabel}>Create contact</Text>
-                            </TouchableOpacity>
-                            <View style={styles.actionDivider} />
-                            <TouchableOpacity style={styles.actionBtn}>
-                                <MaterialIcons name="add" size={20} color={COLORS.primary} />
-                                <Text style={styles.actionLabel}>Add to contact</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
-
-                {/* Suggested Section */}
+                {/* Suggested Section - Moved to top */}
                 <View style={styles.suggestedContainer}>
                     <Text style={styles.suggestedTitle}>
                         {!phoneNumber ? 'Recent Dials' : 'Suggestions'}
@@ -184,6 +153,39 @@ const KeypadScreen = ({ navigation }) => {
                         ))}
                     </ScrollView>
                 </View>
+
+                {/* Number Input Selection Area - Only show when there's input */}
+                {phoneNumber.length > 0 && (
+                    <View style={styles.inputArea}>
+                        <TextInput
+                            style={styles.phoneNumberInput}
+                            value={phoneNumber}
+                            onChangeText={setPhoneNumber}
+                            placeholder=""
+                            keyboardType="none"
+                            showSoftInputOnFocus={false}
+                            autoFocus={false}
+                            caretHidden={phoneNumber.length === 0}
+                        />
+                    </View>
+                )}
+
+                {/* Info Bar: Actions when no exact match found but phone has input */}
+                {phoneNumber.length > 0 && (
+                    <View style={styles.infoBar}>
+                        <View style={styles.actionsRow}>
+                            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('CreateLead', { phone: phoneNumber })}>
+                                <MaterialIcons name="person-add" size={20} color={COLORS.primary} />
+                                <Text style={styles.actionLabel}>Create contact</Text>
+                            </TouchableOpacity>
+                            <View style={styles.actionDivider} />
+                            <TouchableOpacity style={styles.actionBtn}>
+                                <MaterialIcons name="add" size={20} color={COLORS.primary} />
+                                <Text style={styles.actionLabel}>Add to contact</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
             </View>
 
             {/* Dialer Keypad */}

@@ -77,6 +77,24 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
             },
         },
         {
+            id: 'book-site-visit',
+            title: 'Site Visit',
+            icon: 'home-work',
+            onPress: () => {
+                onClose();
+                navigation.navigate('BookSiteVisit');
+            },
+        },
+        {
+            id: 'high-demand-projects',
+            title: 'Projects',
+            icon: 'domain',
+            onPress: () => {
+                onClose();
+                navigation.navigate('HighDemandProjects');
+            },
+        },
+        {
             id: 'my-statistics',
             title: 'My Statistics',
             icon: 'bar-chart',
@@ -101,14 +119,6 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
             icon: 'phone-callback',
             onPress: () => {
                 setShowTestCallModal(true);
-            },
-        },
-        {
-            id: 'logout',
-            title: 'Logout',
-            icon: 'logout',
-            onPress: () => {
-                setShowLogoutModal(true);
             },
         },
     ];
@@ -188,6 +198,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                     { id: 'callback', label: 'Call Back', icon: 'phone-callback' },
                                     { id: 'interested', label: 'Interested', icon: 'star' },
                                     { id: 'not_interested', label: 'Not Interested', icon: 'block' },
+                                    { id: 'site_visit_done', label: 'Site Visit Done', icon: 'check-circle' },
                                 ].map((filter) => (
                                     <TouchableOpacity
                                         key={filter.id}
@@ -255,6 +266,17 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                     </TouchableOpacity>
                                 ))}
                             </ScrollView>
+
+                            <View style={styles.footer}>
+                                <View style={styles.sectionDivider} />
+                                <TouchableOpacity
+                                    style={styles.menuItem}
+                                    onPress={() => setShowLogoutModal(true)}
+                                >
+                                    <MaterialIcons name="logout" size={20} color={COLORS.hot} style={styles.menuIcon} />
+                                    <Text style={[styles.menuText, { color: COLORS.hot }]}>Logout</Text>
+                                </TouchableOpacity>
+                            </View>
                         </SafeAreaView>
                     </Animated.View>
                 </View>
@@ -435,6 +457,9 @@ const styles = StyleSheet.create({
         ...TYPOGRAPHY.subtitle,
         fontSize: 16,
         fontWeight: '500',
+    },
+    footer: {
+        paddingBottom: SPACING.md,
     },
 });
 

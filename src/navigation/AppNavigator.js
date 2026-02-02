@@ -6,6 +6,9 @@ import MyProfileScreen from '../screens/MyProfileScreen';
 import SubscriptionReminderScreen from '../screens/SubscriptionReminderScreen';
 import CustomDrawer from './CustomDrawer';
 import InAppCallScreen from '../screens/InAppCallScreen';
+import BookSiteVisitScreen from '../screens/BookSiteVisitScreen';
+import HighDemandProjectsScreen from '../screens/HighDemandProjectsScreen';
+import ForwardProjectScreen from '../screens/ForwardProjectScreen';
 
 import LoginScreen from '../screens/LoginScreen';
 import MyStatisticsScreen from '../screens/MyStatisticsScreen';
@@ -96,6 +99,12 @@ const AppNavigator = () => {
                 return <HomeScreen {...commonProps} />;
             case 'CreateLead':
                 return <CreateLeadScreen {...commonProps} />;
+            case 'BookSiteVisit':
+                return <BookSiteVisitScreen {...commonProps} />;
+            case 'HighDemandProjects':
+                return <HighDemandProjectsScreen {...commonProps} />;
+            case 'ForwardProject':
+                return <ForwardProjectScreen {...commonProps} />;
             case 'MyProfile':
                 return <MyProfileScreen {...commonProps} />;
             case 'SubscriptionReminder':

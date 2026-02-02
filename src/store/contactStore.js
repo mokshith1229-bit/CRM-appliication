@@ -97,6 +97,9 @@ export const useContactStore = create((set, get) => ({
     // Add note to contact
     addNote: async (contactId, noteText) => {
         const { contacts } = get();
+        console.log('📝 Store addNote called for contact:', contactId);
+        console.log('📝 Note text:', noteText);
+
         const newNote = {
             id: `n${Date.now()}`,
             text: noteText,
@@ -106,11 +109,14 @@ export const useContactStore = create((set, get) => ({
 
         const updatedContacts = contacts.map(contact =>
             contact.id === contactId
-                ? { ...contact, notes: [...contact.notes, newNote] }
+                ? { ...contact, notes: [...(contact.notes || []), newNote] }
                 : contact
         );
+
+        console.log('📝 Updated contacts with new note');
         set({ contacts: updatedContacts });
         await saveContacts(updatedContacts);
+        console.log('📝 Note saved to storage');
     },
 
     // Edit existing note
