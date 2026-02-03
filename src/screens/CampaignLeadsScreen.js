@@ -15,7 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCampaignStore } from '../store/campaignStore';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
-import FilterBar from '../components/FilterBar';
+
 import SearchBar from '../components/SearchBar';
 import QuickActionsSheet from '../components/QuickActionsSheet';
 import StatusOverlay from '../components/StatusOverlay';
@@ -39,16 +39,14 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [reminderContact, setReminderContact] = useState(null);
 
-    const getFilteredLeads = useCampaignStore((state) => state.getFilteredLeads);
-    const activeFilter = useCampaignStore((state) => state.activeFilter);
-    const setActiveFilter = useCampaignStore((state) => state.setActiveFilter);
+    const getLeadsByCampaign = useCampaignStore((state) => state.getLeadsByCampaign);
     const fetchCampaigns = useCampaignStore((state) => state.fetchCampaigns);
     const isLoading = useCampaignStore((state) => state.isLoading);
     const updateLeadStatus = useCampaignStore((state) => state.updateLeadStatus);
     const updateCallSchedule = useCampaignStore((state) => state.updateCallSchedule);
 
-    // Get leads based on store's activeFilter
-    const leads = getFilteredLeads(campaignId);
+    // Get all leads for this campaign
+    const leads = getLeadsByCampaign(campaignId);
 
     // Derived selected lead
     const selectedContact = selectedContactId ? leads.find(l => l.id === selectedContactId) : null;
@@ -171,7 +169,11 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     const renderContactCard = ({ item }) => (
         <ContactCard
-            contact={item}
+            contact={{
+                ...item,
+                campaignName: campaignName,
+                isCampaignLead: true
+            }}
             onPress={(contact) => {
                 setSelectedContactId(contact.id);
                 setShowQuickActions(true);
@@ -228,11 +230,6 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                     </TouchableOpacity>
                 </View>
             )}
-
-            <FilterBar
-                activeFilter={activeFilter}
-                onFilterChange={setActiveFilter}
-            />
 
             <FlatList
                 data={filteredLeads}

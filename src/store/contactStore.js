@@ -85,11 +85,34 @@ export const useContactStore = create((set, get) => ({
     // Update contact status
     updateContactStatus: async (contactId, newStatus) => {
         const { contacts } = get();
-        const updatedContacts = contacts.map(contact =>
-            contact.id === contactId
-                ? { ...contact, status: newStatus }
-                : contact
-        );
+        console.log('🔄 updateContactStatus called:', { contactId, newStatus });
+        const updatedContacts = contacts.map(contact => {
+            if (contact.id === contactId) {
+                const oldStatus = contact.status;
+                const activities = contact.activities || [];
+
+                console.log('📊 Status change check:', { oldStatus, newStatus, isDifferent: oldStatus !== newStatus });
+
+                // Track status change if status is different
+                if (oldStatus !== newStatus) {
+                    const statusChangeActivity = {
+                        id: `activity_${Date.now()}`,
+                        type: 'status_change',
+                        timestamp: new Date().toISOString(),
+                        data: {
+                            oldStatus: oldStatus,
+                            newStatus: newStatus
+                        }
+                    };
+                    activities.unshift(statusChangeActivity);
+                    console.log('✅ Status change activity created:', statusChangeActivity);
+                }
+
+                console.log('📝 Total activities:', activities.length);
+                return { ...contact, status: newStatus, activities };
+            }
+            return contact;
+        });
         set({ contacts: updatedContacts });
         await saveContacts(updatedContacts);
     },
@@ -306,11 +329,34 @@ export const useContactStore = create((set, get) => ({
     // Update call status
     updateCallStatus: async (contactId, callStatus) => {
         const { contacts } = get();
-        const updatedContacts = contacts.map(contact =>
-            contact.id === contactId
-                ? { ...contact, callStatus }
-                : contact
-        );
+        console.log('🔄 updateCallStatus called:', { contactId, callStatus });
+        const updatedContacts = contacts.map(contact => {
+            if (contact.id === contactId) {
+                const oldStatus = contact.status;
+                const activities = contact.activities || [];
+
+                console.log('📊 Status change check:', { oldStatus, newStatus: callStatus, isDifferent: oldStatus !== callStatus });
+
+                // Track status change if status is different
+                if (oldStatus !== callStatus) {
+                    const statusChangeActivity = {
+                        id: `activity_${Date.now()}`,
+                        type: 'status_change',
+                        timestamp: new Date().toISOString(),
+                        data: {
+                            oldStatus: oldStatus,
+                            newStatus: callStatus
+                        }
+                    };
+                    activities.unshift(statusChangeActivity);
+                    console.log('✅ Status change activity created:', statusChangeActivity);
+                }
+
+                console.log('📝 Total activities:', activities.length);
+                return { ...contact, status: callStatus, activities };
+            }
+            return contact;
+        });
         set({ contacts: updatedContacts });
         await saveContacts(updatedContacts);
     },
@@ -335,6 +381,8 @@ export const useContactStore = create((set, get) => ({
 
         const contact = contacts[contactIndex];
         const callLogs = contact.callLogs || [];
+        const activities = contact.activities || [];
+        const isFirstCall = callLogs.length === 0;
 
         const lastCallRecord = {
             id: callData.id,
@@ -348,9 +396,30 @@ export const useContactStore = create((set, get) => ({
             leadSource: callData.leadSource || 'Manual'
         };
 
+        // Add first call activity if this is the first call
+        if (isFirstCall) {
+            const firstCallActivity = {
+                id: `activity_first_${Date.now()}`,
+                type: 'first_call',
+                timestamp: callData.date,
+                data: {}
+            };
+            activities.unshift(firstCallActivity);
+        }
+
+        // Add call activity
+        const callActivity = {
+            id: `activity_call_${callData.id}`,
+            type: 'call',
+            timestamp: callData.date,
+            data: callData
+        };
+        activities.unshift(callActivity);
+
         const updatedContact = {
             ...contact,
             callLogs: [callData, ...callLogs],
+            activities: activities,
             lastCallRecord: lastCallRecord,
             lastCallTime: callData.date,
             source: callData.leadSource || contact.source || 'Manual' // Update contact source too

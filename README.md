@@ -1,88 +1,97 @@
-# Caller - Contact Manager App
+# Real Estate CRM & Caller App
 
-A React Native mobile application for real estate agents and office managers to manage contacts, classify call outcomes, and write notes.
+A comprehensive mobile CRM application built with React Native and Expo, designed for real estate professionals to manage leads, handle calls, and track sales performance.
 
-## Features
+## 🚀 Features
 
-- 📱 **Contact Management**: View and manage all your contacts in one place
-- 🏷️ **Status Classification**: Hot Call, Warm Call, Cold Call, Interested, Not Interested, Personal
-- 🔍 **Smart Filtering**: Quickly filter contacts by status
-- 📝 **Notes System**: Add, edit, and delete notes for each contact
-- 📞 **Quick Actions**: Call, WhatsApp, SMS, Email with one tap
-- 💾 **Local Persistence**: All data saved locally using AsyncStorage
-- 🎨 **Clean UI**: Minimal, mobile-first design with one-hand friendly interactions
+### 👥 Lead & Contact Management
+- **Create Leads:** specific forms for adding new leads with source tracking.
+- **Smart Filtering:** Filter contacts by status (Hot, Warm, Cold, Interested, Not Interested) and "Site Visit Done".
+- **Contact Details:** Detailed view with call history, notes, and reminders.
+- **Search:** Instant search by name or phone number.
 
-## Installation
+### 📞 Advanced Call Handling
+- **In-App Dialer:** Custom keypad and dialer interface.
+- **Call Simulation:** Mock incoming and outgoing call flows for training/testing.
+- **Call Logging:** Automatic logging of call duration, status, and outcomes.
+- **Quick Actions:** Instant access to Call, WhatsApp, and Notes during/after calls.
 
-1. Install dependencies:
-```bash
-npm install
+### 🏢 Project Management
+- **High Demand Projects:** Showcase premium real estate projects.
+- **Interactive Gallery:** Horizontal scrolling image galleries for properties.
+- **Sharing:** Native share functionality to send project details via WhatsApp/Telegram.
+- **Forwarding:** Forward project details directly to selected contacts.
+
+### 📅 Site Visits & Campaigns
+- **Book Site Visits:** Schedule and track property visits.
+- **Campaign Tracking:** Monitor leads from specific marketing campaigns (Google, Facebook, etc.).
+- **Statistics Dashboard:** Visual breakdown of call stats, lead conversion, and performance metrics.
+
+### 🔐 Authentication & Security
+- **Secure Login:** Phone number based authentication simulation.
+- **Profile Management:** User profile settings and preferences.
+- **Data Persistence:** Local storage for contacts, notes, and app state.
+
+## 🛠 Tech Stack
+
+- **Framework:** [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/)
+- **Navigation:** React Navigation (Stack & Drawer)
+- **State Management:** [Zustand](https://github.com/pmndrs/zustand)
+- **Storage:** Async Storage
+- **UI Components:** Custom components, Expo Vector Icons, Linear Gradient
+- **Charts:** React Native Chart Kit
+
+## 📂 Project Structure
+
+```
+src/
+├── components/      # Reusable UI components (Cards, Modals, etc.)
+├── constants/       # App-wide constants (Colors, Theme, Config)
+├── data/            # Mock data and static content
+├── navigation/      # Navigation setup (AppNavigator, CustomDrawer)
+├── screens/         # Main application screens
+├── store/           # Zustand stores for state management
+└── utils/           # Helper functions and utilities
 ```
 
-2. Start the development server:
-```bash
-npm start
-```
+## ⚡ Installation & Setup
 
-3. Run on Android:
-```bash
-npm run android
-```
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/mokshith1229-bit/CRM-appliication.git
+    cd CRM-appliication
+    ```
 
-## Project Structure
+2.  **Install dependencies**
+    ```bash
+    npm install
+    # or
+    yarn install
+    ```
 
-```
-caller/
-├── App.js                          # Root component
-├── src/
-│   ├── components/                 # Reusable UI components
-│   │   ├── ContactCard.js
-│   │   ├── FilterBar.js
-│   │   ├── QuickActionsSheet.js
-│   │   ├── StatusOverlay.js
-│   │   └── NotesModal.js
-│   ├── screens/
-│   │   └── HomeScreen.js          # Main contacts screen
-│   ├── store/
-│   │   └── contactStore.js        # Zustand state management
-│   ├── data/
-│   │   └── mockContacts.js        # Mock contact data
-│   ├── utils/
-│   │   ├── storage.js             # AsyncStorage helpers
-│   │   └── intents.js             # Platform intents
-│   └── constants/
-│       └── theme.js               # Design tokens
-```
+3.  **Start the development server**
+    ```bash
+    npx expo start
+    ```
 
-## Usage
+4.  **Run on Device/Emulator**
+    - **Android:** Press `a` in the terminal or scan the QR code with Expo Go.
+    - **iOS:** Press `i` in the terminal or scan the QR code with Expo Go.
 
-### Filtering Contacts
-Tap any filter tab at the top to view contacts by status.
+## 📱 Key Workflows
 
-### Quick Actions
-Single tap on a contact to open quick actions:
-- 📞 Call
-- 💬 WhatsApp
-- ✉️ Message
-- 📧 Mail
-- 📝 Write Notes
+- **Adding a Lead:** Go to "Create Lead" from the drawer, fill in details, and save.
+- **Making a Call:** Click on a contact to open Quick Actions -> Call, or use the Keypad.
+- **Sharing a Project:** Navigate to "Projects", select a project, and click the Share icon.
+- **Filtering Site Visits:** Open the sidebar -> Filters -> Select "Site Visit Done".
 
-### Updating Status
-Long press on a contact to quickly update their status.
+## 🤝 Contributing
 
-### Managing Notes
-- Tap "Write Notes" from quick actions
-- Add new notes with timestamps
-- Edit or delete existing notes
-- All notes are automatically saved
+1.  Fork the project.
+2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a Pull Request.
 
-## Tech Stack
-
-- **React Native** with Expo
-- **Zustand** for state management
-- **AsyncStorage** for local persistence
-- **React Native Gesture Handler** for interactions
-
-## License
-
-MIT
+---
+Built with ❤️ using React Native Expo

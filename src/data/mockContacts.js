@@ -10,6 +10,45 @@ export const MOCK_CONTACTS = [
         callDirection: 'outgoing',
         lastCallTime: '2026-01-19T16:00:00',
         leadDescription: 'Looking for 3BHK villa in gated community. Budget 80L–1Cr. Ready to buy in 3 months.',
+        activities: [
+            {
+                id: 'activity_1738501234567',
+                type: 'status_change',
+                timestamp: '2026-01-20T10:30:00.000Z',
+                data: {
+                    oldStatus: 'warm',
+                    newStatus: 'hot'
+                }
+            },
+            {
+                id: 'activity_call_call1',
+                type: 'call',
+                timestamp: '2026-01-19T16:00:00.000Z',
+                data: {
+                    id: 'call1',
+                    date: '2026-01-19T16:00:00',
+                    status: 'Connected',
+                    duration: '5m 30s',
+                    notes: 'Discussed villa options in gated community',
+                    type: 'Outgoing'
+                }
+            },
+            {
+                id: 'activity_first_1738400000000',
+                type: 'first_call',
+                timestamp: '2026-01-18T14:00:00.000Z',
+                data: {}
+            },
+            {
+                id: 'activity_1738400123456',
+                type: 'status_change',
+                timestamp: '2026-01-18T09:00:00.000Z',
+                data: {
+                    oldStatus: 'cold',
+                    newStatus: 'warm'
+                }
+            }
+        ],
         notes: [
             {
                 id: 'n1-1',

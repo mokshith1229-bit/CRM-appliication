@@ -168,22 +168,18 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                                         {`${contact.lastCallRecord.duration || '0s'}`}
                                     </Text>
 
-                                    {/* Only show separator if NO campaign info */}
-                                    {!(contact.isCampaignLead || contact.campaignName) && (
-                                        <Text style={styles.bullet}> · </Text>
-                                    )}
-                                    {/* If campaign info exists, add a small space instead of bullet */}
-                                    {(contact.isCampaignLead || contact.campaignName) && (
-                                        <Text> </Text>
-                                    )}
+                                    {/* Separator before timestamp */}
+                                    <Text style={styles.bullet}> · </Text>
 
                                     <Text style={styles.timeText}>
                                         {formatOutcomeDate(contact.lastCallRecord.timestamp)}
                                     </Text>
+
+                                    {/* Campaign name appears at the end */}
                                     {(contact.isCampaignLead || contact.campaignName) && (
                                         <>
                                             <Text style={styles.bullet}> · </Text>
-                                            <Text style={styles.assignedText}>
+                                            <Text style={styles.campaignNameText}>
                                                 {contact.campaignName || contact.source}
                                             </Text>
                                         </>
@@ -191,15 +187,9 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                                 </Text>
                             ) : (
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={styles.statusText}>No call done</Text>
+                                    <Text style={styles.statusText}>Call overdue</Text>
                                     <Text style={styles.bullet}> · </Text>
                                     <Text style={styles.timeText}>--</Text>
-                                    {(contact.isCampaignLead || contact.campaignName) && (
-                                        <>
-                                            <Text style={styles.bullet}> · </Text>
-                                            <Text style={styles.assignedText}>{contact.campaignName || contact.source}</Text>
-                                        </>
-                                    )}
                                 </View>
                             )}
                         </View>
@@ -342,6 +332,11 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#8E8E93',
         marginTop: 1,
+    },
+    campaignNameText: {
+        fontSize: 13,
+        color: '#007AFF',
+        fontWeight: '600',
     },
 });
 

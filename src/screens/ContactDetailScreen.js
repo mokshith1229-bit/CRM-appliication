@@ -19,7 +19,7 @@ import { useCampaignStore } from '../store/campaignStore';
 import EditableField from '../components/EditableField';
 import CustomFieldModal from '../components/CustomFieldModal';
 import StatusPicker from '../components/StatusPicker';
-import CallLogItem from '../components/CallLogItem';
+import ActivityLogItem from '../components/ActivityLogItem';
 import defaultAvatar from '../assets/default_avatar.jpg';
 import { registerForPushNotificationsAsync, schedulePushNotification } from '../utils/NotificationService';
 
@@ -47,6 +47,7 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
     const updateCallNote = useContactStore((state) => state.updateCallNote);
     const updateCallSchedule = useContactStore((state) => state.updateCallSchedule);
     const updateCallScheduleNote = useContactStore((state) => state.updateCallScheduleNote);
+    const getContactById = useContactStore((state) => state.getContactById);
 
     // Campaign Store actions
     const updateLeadName = useCampaignStore((state) => state.updateLeadName);
@@ -86,7 +87,10 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                 if (editedContact.phone !== contact.phone) updateLeadPhone(campaignId, contact.id, editedContact.phone);
                 if (editedContact.email !== contact.email) updateLeadEmail(campaignId, contact.id, editedContact.email);
                 if (editedContact.whatsapp !== contact.whatsapp) updateLeadWhatsApp(campaignId, contact.id, editedContact.whatsapp);
-                if (editedContact.status !== contact.status) updateLeadStatus(campaignId, contact.id, editedContact.status);
+                if (editedContact.status !== contact.status) {
+                    console.log('💾 Saving status change for campaign lead');
+                    await updateLeadStatus(campaignId, contact.id, editedContact.status);
+                }
                 // if (editedContact.source !== contact.source) // campaign lead source is fixed to campaignName
 
                 if (editedContact.callSchedule !== contact.callSchedule) {
@@ -105,7 +109,10 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                 if (editedContact.phone !== contact.phone) updateContactPhone(contact.id, editedContact.phone);
                 if (editedContact.email !== contact.email) updateContactEmail(contact.id, editedContact.email);
                 if (editedContact.whatsapp !== contact.whatsapp) updateContactWhatsApp(contact.id, editedContact.whatsapp);
-                if (editedContact.status !== contact.status) updateCallStatus(contact.id, editedContact.status);
+                if (editedContact.status !== contact.status) {
+                    console.log('💾 Saving status change for contact');
+                    await updateCallStatus(contact.id, editedContact.status);
+                }
                 if (editedContact.source !== contact.source) updateLeadSource(contact.id, editedContact.source);
 
                 if (editedContact.callSchedule !== contact.callSchedule) {
@@ -125,15 +132,42 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                 }
             }
 
-            setIsDirty(false);
-            onClose();
-            if (navigation) {
-                if (campaignId) {
-                    navigation.navigate('CampaignLeads', { campaignId, campaignName });
+            // Refresh contact data from store to get updated activities
+            // Wait a bit for store to update
+            setTimeout(() => {
+                if (!campaignId) {
+                    const refreshedContact = getContactById(contact.id);
+                    if (refreshedContact) {
+                        console.log('🔄 Refreshed contact from store:', refreshedContact);
+                        console.log('📊 Activities in refreshed contact:', refreshedContact.activities?.length || 0);
+                        setEditedContact({ ...refreshedContact });
+                    } else {
+                        console.log('❌ Could not find refreshed contact');
+                    }
                 } else {
-                    navigation.navigate('Home');
+                    // For campaign leads, we need to get from campaign store
+                    const getLeadsByCampaign = useCampaignStore.getState().getLeadsByCampaign;
+                    const campaignLeads = getLeadsByCampaign(campaignId);
+                    const refreshedLead = campaignLeads.find(l => l.id === contact.id);
+                    if (refreshedLead) {
+                        console.log('🔄 Refreshed campaign lead from store:', refreshedLead);
+                        console.log('📊 Activities in refreshed lead:', refreshedLead.activities?.length || 0);
+                        setEditedContact({ ...refreshedLead });
+                    }
                 }
-            }
+            }, 100);
+
+            setIsDirty(false);
+
+            // Don't close immediately - let user see the updated activities
+            // onClose();
+            // if (navigation) {
+            //     if (campaignId) {
+            //         navigation.navigate('CampaignLeads', { campaignId, campaignName });
+            //     } else {
+            //         navigation.navigate('Home');
+            //     }
+            // }
         } catch (error) {
             Alert.alert('Error', 'Failed to save changes. Please try again.');
         }
@@ -381,36 +415,73 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                         </TouchableOpacity>
                     </View>
 
-                    {/* Call Description Toggle */}
+                    {/* Recent Activity Toggle */}
                     <TouchableOpacity
                         style={[styles.sectionHeader, { backgroundColor: showCallLogs ? '#F0F0F2' : '#F5F5F7' }]}
                         onPress={() => setShowCallLogs(!showCallLogs)}
                         activeOpacity={0.8}
                     >
                         <View style={styles.infoRow}>
-                            <Text style={styles.sectionTitle}>Call Description</Text>
+                            <Text style={styles.sectionTitle}>Recent Activity</Text>
                             <Text style={styles.dropdownIcon}>{showCallLogs ? '▲' : '▼'}</Text>
                         </View>
                     </TouchableOpacity>
 
                     {showCallLogs && (
                         <View>
-                            {(editedContact.callLogs || [
-                                { id: 'c1', date: 'Dec 4, 14:05', status: 'Connected', duration: '8m 45sec', notes: 'Discussed property requirements', type: 'Outgoing' },
-                                { id: 'c2', date: 'Dec 4, 10:15', status: 'Disconnected', duration: '0m 0sec', notes: '', type: 'Outgoing' },
-                            ]).map((call) => (
-                                <CallLogItem
-                                    key={call.id}
-                                    call={call}
-                                    onUpdateNote={(callId, note) => {
-                                        if (campaignId) {
-                                            updateLeadCallNote(campaignId, contact.id, callId, note);
-                                        } else {
-                                            updateCallNote(contact.id, callId, note);
-                                        }
-                                    }}
-                                />
-                            ))}
+                            {(() => {
+                                // Merge activities and callLogs for backward compatibility
+                                const activities = editedContact.activities || [];
+                                const callLogs = editedContact.callLogs || [];
+
+                                console.log('🎯 Rendering activities:', {
+                                    activitiesCount: activities.length,
+                                    callLogsCount: callLogs.length,
+                                    activities: activities,
+                                    contactId: contact?.id
+                                });
+
+                                // Convert old callLogs to activity format if not already in activities
+                                const callActivities = callLogs.map(call => ({
+                                    id: `activity_call_${call.id}`,
+                                    type: 'call',
+                                    timestamp: call.date,
+                                    data: call
+                                }));
+
+                                // Combine and deduplicate (prefer activities over converted callLogs)
+                                const activityIds = new Set(activities.map(a => a.id));
+                                const uniqueCallActivities = callActivities.filter(ca => !activityIds.has(ca.id));
+                                const allActivities = [...activities, ...uniqueCallActivities];
+
+                                console.log('📋 All activities after merge:', allActivities.length);
+
+                                // Sort by timestamp (newest first)
+                                allActivities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                                // Show default message if no activities
+                                if (allActivities.length === 0) {
+                                    return (
+                                        <View style={{ padding: 16, alignItems: 'center' }}>
+                                            <Text style={{ color: '#999', fontSize: 14 }}>No activity yet</Text>
+                                        </View>
+                                    );
+                                }
+
+                                return allActivities.map((activity) => (
+                                    <ActivityLogItem
+                                        key={activity.id}
+                                        activity={activity}
+                                        onUpdateNote={(callId, note) => {
+                                            if (campaignId) {
+                                                updateLeadCallNote(campaignId, contact.id, callId, note);
+                                            } else {
+                                                updateCallNote(contact.id, callId, note);
+                                            }
+                                        }}
+                                    />
+                                ));
+                            })()}
                         </View>
                     )}
                 </ScrollView>

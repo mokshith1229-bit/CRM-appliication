@@ -2,11 +2,14 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 
-const FilterBar = ({ activeFilter, onFilterChange, newLeadsCount = 0 }) => {
-    const filters = [
+const FilterBar = ({ activeFilter, onFilterChange, newLeadsCount = 0, excludeFilters = [] }) => {
+    const allFilters = [
         { id: 'all', label: 'All Calls' },
         { id: 'new_leads', label: 'New Enquiries' },
     ];
+
+    // Filter out excluded filters
+    const filters = allFilters.filter(filter => !excludeFilters.includes(filter.id));
     return (
         <View style={styles.container}>
             <View style={styles.rowContainer}>
