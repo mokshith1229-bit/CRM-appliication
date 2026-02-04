@@ -8,9 +8,10 @@ import {
     Alert,
     Switch,
     Platform,
-    SafeAreaView,
+    
     StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';

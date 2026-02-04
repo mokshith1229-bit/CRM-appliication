@@ -10,31 +10,45 @@ import {
     TextInput
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { MOCK_TEAM } from '../data/mockTeam';
 import { COLORS, SPACING } from '../constants/theme';
 
-const TransferLeadModal = ({ visible, onClose, onTransfer }) => {
+const TransferLeadModal = ({ visible, onClose, onTransfer, teamMembers = [] }) => {
     const [searchQuery, setSearchQuery] = useState('');
+    const [reason, setReason] = useState('');
 
     // Filter team members based on search
-    const filteredTeam = MOCK_TEAM.filter(member =>
-        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.role.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredTeam = teamMembers.filter(member =>
+        (member.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (member.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (member.role || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const renderItem = ({ item }) => (
-        <TouchableOpacity
-            style={styles.memberCard}
-            onPress={() => onTransfer(item)}
-        >
-            <Image source={{ uri: item.avatar }} style={styles.avatar} />
-            <View style={styles.info}>
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.role}>{item.role}</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#C7C7CC" />
-        </TouchableOpacity>
-    );
+    const renderItem = ({ item }) => {
+        // Generate initials for avatar fallback
+        const initials = item.name 
+            ? item.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+            : '?';
+        
+        return (
+            <TouchableOpacity
+                style={styles.memberCard}
+                onPress={() => onTransfer(item, reason)}
+            >
+                {item.avatar ? (
+                    <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                ) : (
+                    <View style={[styles.avatar, styles.avatarFallback]}>
+                        <Text style={styles.avatarText}>{initials}</Text>
+                    </View>
+                )}
+                <View style={styles.info}>
+                    <Text style={styles.name}>{item.name || item.email || 'Unknown'}</Text>
+                    <Text style={styles.role}>{item.role || 'Team Member'}</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#C7C7CC" />
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <Modal
@@ -61,6 +75,18 @@ const TransferLeadModal = ({ visible, onClose, onTransfer }) => {
                             placeholder="Search team members..."
                             value={searchQuery}
                             onChangeText={setSearchQuery}
+                        />
+                    </View>
+
+                    {/* Reason Input */}
+                    <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Transfer Reason (Optional)</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Add a note for this transfer..."
+                            value={reason}
+                            onChangeText={setReason}
+                            multiline
                         />
                     </View>
 
@@ -122,11 +148,29 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     sectionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
         color: '#666',
         marginBottom: SPACING.sm,
         textTransform: 'uppercase',
+    },
+    inputContainer: {
+        marginBottom: SPACING.lg,
+    },
+    inputLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#666',
+        marginBottom: 6,
+        textTransform: 'uppercase',
+    },
+    textInput: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+        padding: 10,
+        fontSize: 14,
+        color: '#1F2937',
+        minHeight: 40,
     },
     listContent: {
         paddingBottom: 20,
@@ -144,6 +188,16 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         marginRight: 12,
         backgroundColor: '#E0E0E0',
+    },
+    avatarFallback: {
+        backgroundColor: COLORS.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
     info: {
         flex: 1,

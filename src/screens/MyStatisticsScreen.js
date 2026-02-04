@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, SafeAreaView, Platform, StatusBar as NativeStatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platform, StatusBar as NativeStatusBar, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart } from 'react-native-chart-kit';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { useContactStore } from '../store/contactStore';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchMyStats } from '../store/slices/statsSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { StatusBar } from 'expo-status-bar';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -10,24 +12,16 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
-    const contacts = useContactStore((state) => state.contacts);
-    const [dateFilter, setDateFilter] = useState(null); // Filter for stats cards
+    const dispatch = useDispatch();
+    const { stats, isLoading } = useSelector(state => state.stats);
+    const [dateFilter, setDateFilter] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
 
-    const [stats, setStats] = useState({
-        attempted: 0,
-        connected: 0,
-        notConnected: 0,
-        inProgress: 0,
-        converted: 0,
-        lost: 0,
-        whatsappSent: 0,
-        chartData: { labels: [], datasets: [{ data: [] }] }
-    });
-
     useEffect(() => {
-        calculateStats();
-    }, [contacts, dateFilter]);
+        // Fetch stats on mount and when date filter changes
+        const dateParam = dateFilter ? dateFilter.toISOString().split('T')[0] : null;
+        dispatch(fetchMyStats(dateParam));
+    }, [dateFilter, dispatch]);
 
     const handleDateChange = (event, selectedDate) => {
         if (Platform.OS === 'android') {
@@ -57,73 +51,17 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
         setDateFilter(null);
     };
 
-    const calculateStats = () => {
-        let attempted = 0;
-        let connected = 0;
-        let notConnected = 0;
-        let inProgress = 0;
-        let converted = 0;
-        let lost = 0;
-        let whatsappSent = 0;
-
-        const last7Days = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date();
-            d.setDate(d.getDate() - (6 - i));
-            return d.toISOString().split('T')[0];
-        });
-
-        const callsPerDay = last7Days.reduce((acc, date) => ({ ...acc, [date]: 0 }), {});
-
-        contacts.forEach(contact => {
-            let matchesFilter = true;
-            if (dateFilter) {
-                if (!contact.lastCallTime) {
-                    matchesFilter = false;
-                } else {
-                    const contactDate = new Date(contact.lastCallTime).toDateString();
-                    const filterDate = dateFilter.toDateString();
-                    matchesFilter = contactDate === filterDate;
-                }
-            }
-
-            if (matchesFilter) {
-                if (contact.callStatus === 'connected') connected++;
-                if (contact.callStatus === 'disconnected') notConnected++;
-                if (contact.callStatus === 'missed') notConnected++;
-                if (contact.status === 'hot' || contact.status === 'warm') inProgress++;
-                if (contact.status === 'converted') converted++;
-                if (contact.status === 'not_interested' || contact.status === 'cold') lost++;
-                if (contact.lastCallTime) attempted++;
-                if (contact.notes && contact.notes.some(n => n.text.toLowerCase().includes('whatsapp'))) whatsappSent++;
-            }
-
-            if (contact.lastCallTime) {
-                const callDate = new Date(contact.lastCallTime).toISOString().split('T')[0];
-                if (callsPerDay[callDate] !== undefined) {
-                    callsPerDay[callDate]++;
-                }
-            }
-        });
-
-        const chartLabels = last7Days.map(date => {
-            const d = new Date(date);
+    // Prepare chart data from API response
+    const chartData = {
+        labels: stats.dailyCalls.map(day => {
+            const d = new Date(day.date);
             return `${d.getDate()}/${d.getMonth() + 1}`;
-        });
-        const chartValues = last7Days.map(date => callsPerDay[date]);
-
-        setStats({
-            attempted,
-            connected,
-            notConnected,
-            inProgress,
-            converted,
-            lost,
-            whatsappSent,
-            chartData: {
-                labels: chartLabels,
-                datasets: [{ data: chartValues }]
-            }
-        });
+        }),
+        datasets: [{ 
+            data: stats.dailyCalls.length > 0 
+                ? stats.dailyCalls.map(day => day.count)
+                : [0] // Prevent chart error with empty data
+        }]
     };
 
     const StatCard = ({ title, value, icon, color }) => (
@@ -200,40 +138,50 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
                     </View>
                 )}
 
-                {/* Stats Grid */}
-                <Text style={styles.sectionTitle}>Performance Overview</Text>
-                <View style={styles.grid}>
-                    <StatCard title="Calls Attempted" value={stats.attempted} icon="phone-outgoing" color="#007AFF" />
-                    <StatCard title="Calls Connected" value={stats.connected} icon="phone-check" color="#34C759" />
-                    <StatCard title="Not Connected" value={stats.notConnected} icon="phone-missed" color="#FF3B30" />
-                    <StatCard title="In-Progress" value={stats.inProgress} icon="progress-clock" color="#FF9500" />
-                    <StatCard title="Converted" value={stats.converted} icon="check-decagram" color="#10B981" />
-                    <StatCard title="Lost Leads" value={stats.lost} icon="close-circle" color="#8E8E93" />
-                    <StatCard title="WhatsApp Sent" value={stats.whatsappSent} icon="whatsapp" color="#25D366" />
-                </View>
+                {/* Loading State */}
+                {isLoading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={COLORS.primary} />
+                        <Text style={styles.loadingText}>Loading statistics...</Text>
+                    </View>
+                ) : (
+                    <>
+                        {/* Stats Grid */}
+                        <Text style={styles.sectionTitle}>Performance Overview</Text>
+                        <View style={styles.grid}>
+                            <StatCard title="Calls Attempted" value={stats.calls.attempted} icon="phone-outgoing" color="#007AFF" />
+                            <StatCard title="Calls Connected" value={stats.calls.connected} icon="phone-check" color="#34C759" />
+                            <StatCard title="Not Connected" value={stats.calls.notConnected} icon="phone-missed" color="#FF3B30" />
+                            <StatCard title="In-Progress" value={stats.leads.inProgress} icon="progress-clock" color="#FF9500" />
+                            <StatCard title="Converted" value={stats.leads.converted} icon="check-decagram" color="#10B981" />
+                            <StatCard title="Lost Leads" value={stats.leads.lost} icon="close-circle" color="#8E8E93" />
+                            <StatCard title="WhatsApp Sent" value={stats.whatsapp} icon="whatsapp" color="#25D366" />
+                        </View>
 
-                {/* Chart Section */}
-                <Text style={styles.sectionTitle}>Daily Call Attempts (Last 7 Days)</Text>
-                <View style={styles.chartCard}>
-                    <BarChart
-                        data={stats.chartData}
-                        width={SCREEN_WIDTH - 48}
-                        height={220}
-                        yAxisLabel=""
-                        chartConfig={{
-                            backgroundColor: '#ffffff',
-                            backgroundGradientFrom: '#ffffff',
-                            backgroundGradientTo: '#ffffff',
-                            decimalPlaces: 0,
-                            color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-                            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                            barPercentage: 0.7,
-                        }}
-                        style={styles.chart}
-                        showValuesOnTopOfBars
-                        fromZero
-                    />
-                </View>
+                        {/* Chart Section */}
+                        <Text style={styles.sectionTitle}>Daily Call Attempts (Last 7 Days)</Text>
+                        <View style={styles.chartCard}>
+                            <BarChart
+                                data={chartData}
+                                width={SCREEN_WIDTH - 48}
+                                height={220}
+                                yAxisLabel=""
+                                chartConfig={{
+                                    backgroundColor: '#ffffff',
+                                    backgroundGradientFrom: '#ffffff',
+                                    backgroundGradientTo: '#ffffff',
+                                    decimalPlaces: 0,
+                                    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+                                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                                    barPercentage: 0.7,
+                                }}
+                                style={styles.chart}
+                                showValuesOnTopOfBars
+                                fromZero
+                            />
+                        </View>
+                    </>
+                )}
 
             </ScrollView>
         </SafeAreaView>
@@ -390,6 +338,17 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: COLORS.textSecondary,
         marginTop: 2,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 60,
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: COLORS.textSecondary,
     },
     chartCard: {
         backgroundColor: '#fff',

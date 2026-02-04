@@ -42,11 +42,11 @@ export async function registerForPushNotificationsAsync() {
     return true;
 }
 
-export async function schedulePushNotification(title, body, date) {
+export async function schedulePushNotification(title, body, date, extraData = {}) {
     // Android Expo Go safety check
     if (Platform.OS === 'android' && isExpoGo) {
         console.log('Skipping system notification in Expo Go (Android)');
-        return null;
+        return null; // In Expo Go, we rely on standard in-app handling or bypass
     }
 
     const trigger = date; // Date object serves as timestamp trigger
@@ -61,7 +61,7 @@ export async function schedulePushNotification(title, body, date) {
         content: {
             title: title,
             body: body,
-            data: { type: 'call_reminder' },
+            data: { type: 'call_reminder', ...extraData }, // Merge extraData (which contains type, reason, createdBy)
             sound: true,
         },
         trigger,

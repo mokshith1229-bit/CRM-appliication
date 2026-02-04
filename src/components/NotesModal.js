@@ -10,44 +10,50 @@ import {
     Alert,
 } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../constants/theme';
-import { useContactStore } from '../store/contactStore';
-import { useCampaignStore } from '../store/campaignStore';
+import { useDispatch } from 'react-redux';
+import { updateLead } from '../store/slices/leadSlice';
 
 const NotesModal = ({ visible, contact, onClose, campaignId }) => {
     const [newNoteText, setNewNoteText] = useState('');
     const [editingNoteId, setEditingNoteId] = useState(null);
     const [editText, setEditText] = useState('');
-
-    const contactStore = {
-        addNote: useContactStore((state) => state.addNote),
-        editNote: useContactStore((state) => state.editNote),
-        deleteNote: useContactStore((state) => state.deleteNote),
-    };
-
-    const campaignStore = {
-        addNote: useCampaignStore((state) => state.addNote),
-        // Note: campaignStore doesn't have edit/delete for notes yet, 
-        // but adding addNote for the primary requirement.
-    };
+    const dispatch = useDispatch(); // Added useDispatch
 
     if (!contact) return null;
 
     const handleAddNote = async () => {
         if (newNoteText.trim()) {
-            if (campaignId) {
-                await campaignStore.addNote(campaignId, contact.id, newNoteText.trim());
-            } else {
-                await contactStore.addNote(contact.id, newNoteText.trim());
+            const newNote = {
+                id: Date.now().toString(),
+                text: newNoteText.trim(),
+                timestamp: new Date().toISOString(),
+                edited: false
+            };
+            const updatedNotes = [...(contact.notes || []), newNote];
+            
+            try {
+                // Unified backend update
+                await dispatch(updateLead({ id: contact.id, data: { notes: updatedNotes } })).unwrap();
+                setNewNoteText('');
+            } catch (error) {
+                Alert.alert('Error', 'Failed to add note');
             }
-            setNewNoteText('');
         }
     };
 
     const handleEditNote = async (noteId) => {
         if (editText.trim()) {
-            await editNote(contact.id, noteId, editText.trim());
-            setEditingNoteId(null);
-            setEditText('');
+            const updatedNotes = (contact.notes || []).map(n => 
+                n.id === noteId ? { ...n, text: editText.trim(), edited: true } : n
+            );
+            
+            try {
+                await dispatch(updateLead({ id: contact.id, data: { notes: updatedNotes } })).unwrap();
+                setEditingNoteId(null);
+                setEditText('');
+            } catch (error) {
+                Alert.alert('Error', 'Failed to edit note');
+            }
         }
     };
 
@@ -60,7 +66,14 @@ const NotesModal = ({ visible, contact, onClose, campaignId }) => {
                 {
                     text: 'Delete',
                     style: 'destructive',
-                    onPress: () => deleteNote(contact.id, noteId),
+                    onPress: async () => {
+                        const updatedNotes = (contact.notes || []).filter(n => n.id !== noteId);
+                        try {
+                            await dispatch(updateLead({ id: contact.id, data: { notes: updatedNotes } })).unwrap();
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete note');
+                        }
+                    },
                 },
             ]
         );

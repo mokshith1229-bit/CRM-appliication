@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal, Platform, StatusBar as NativeStatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, StatusBar as NativeStatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
-import { useContactStore } from '../store/contactStore';
-import { useCampaignStore } from '../store/campaignStore';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateLead, createLead } from '../store/slices/leadSlice';
 
 const InAppCallScreen = ({ route, navigation }) => {
     const { contact: initialContact, number, leadSource = 'Manual', campaignId } = route.params || {};
-    const contacts = useContactStore(state => state.contacts);
+    const dispatch = useDispatch();
+    const leads = useSelector(state => state.leads.leads);
 
-    // If contact is missing but number is present, try to find matching contact
-    const contact = initialContact || (number ? contacts.find(c => c.phone === number) : null);
+    // Find contact in Redux store to ensure fresh data
+    const contact = initialContact ? leads.find(l => l._id === initialContact.id || l.id === initialContact.id) || initialContact : (number ? leads.find(c => c.phone === number) : null);
+    
+    // Fallback if contact structure differs (e.g. from route params vs leads store) - we normalize in HomeScreen but here we access raw or normalized?
+    // leads in store are backend objects (with _id, mobile_number, call_logs).
+    // initialContact passed from Home might be the normalized one (id, phone, callLogs).
+    // We should normalize access or use the backend object if found.
+    // Let's assume contact is the Redux object if found, else initialParam.
+    
     const displayPhone = contact?.phone || number || 'Unknown Number';
 
     const [callStatus, setCallStatus] = useState('Calling...');
@@ -44,10 +53,6 @@ const InAppCallScreen = ({ route, navigation }) => {
         }
     }, [duration]);
 
-    const addContact = useContactStore(state => state.addContact);
-    const addCallLog = useContactStore(state => state.addCallLog);
-    const addCallLogForLead = useCampaignStore(state => state.addCallLogForLead);
-
     const handleEndCall = async () => {
         const systemResult = duration > 0 ? 'Connected' : 'Disconnected';
         const callLog = {
@@ -58,38 +63,39 @@ const InAppCallScreen = ({ route, navigation }) => {
             duration: `${Math.floor(duration / 60)}m ${duration % 60}sec`,
             type: 'Outgoing',
             notes: '',
-            leadSource: leadSource, // Added leadSource
+            leadSource: leadSource, 
         };
 
-        if (campaignId && contact?.id) {
-            // Log to campaign lead
-            await addCallLogForLead(campaignId, contact.id, callLog);
-        } else if (contact?.id) {
-            // Log to existing contact
-            addCallLog(contact.id, callLog);
-        } else if (number) {
-            // Create new contact for unknown number
-            const newContact = {
-                id: `c${Date.now()}`,
-                name: number,
-                phone: number,
-                status: 'none',
-                source: leadSource, // Set source for new contact
-                callLogs: [callLog],
-                lastCallRecord: {
-                    id: callLog.id,
-                    contactId: null,
-                    phoneNumber: number,
-                    callStatus: callLog.status,
-                    systemCallResult: callLog.systemResult,
-                    duration: callLog.duration,
-                    timestamp: callLog.date,
-                    leadSource: leadSource, // Added leadSource to lastCallRecord
-                },
-                lastCallTime: callLog.date,
-                notes: []
-            };
-            await addContact(newContact);
+        try {
+            if (contact && (contact.id || contact._id)) {
+                // Update existing lead
+                // Need to handle both normalized 'callLogs' (from prop) and 'call_logs' (from backend object)
+                const existingLogs = contact.call_logs || contact.callLogs || [];
+                const updatedLogs = [callLog, ...existingLogs];
+
+                // Use _id if available (Redux), else id (Prop)
+                const leadId = contact._id || contact.id;
+                
+                await dispatch(updateLead({ 
+                    id: leadId, 
+                    data: { call_logs: updatedLogs } 
+                })).unwrap();
+            } else if (number) {
+                // Create new lead
+                // Map to backend schema
+                const newLeadData = {
+                    name: number, // Use number as name initially
+                    phone: number,
+                    lead_source: leadSource,
+                    status: 'New', // Default
+                    call_logs: [callLog]
+                };
+                
+                await dispatch(createLead(newLeadData)).unwrap();
+            }
+        } catch (error) {
+            console.error('Failed to log call:', error);
+            // We might want to alert user, but ending call should arguably just exit
         }
 
         // Navigate back to the appropriate screen

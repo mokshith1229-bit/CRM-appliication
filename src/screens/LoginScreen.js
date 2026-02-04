@@ -18,40 +18,42 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { StatusBar } from 'expo-status-bar';
 
+import { useDispatch, useSelector } from 'react-redux';
+import { login, clearError } from '../store/slices/authSlice';
+
 const { width, height } = Dimensions.get('window');
+// import { BASE_URL } from '../constants/api'; // Not needed here anymore, handled in slice
 
 const LoginScreen = ({ navigation }) => {
-    const [phone, setPhone] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    
+    const dispatch = useDispatch();
+    const { isLoading, error, isAuthenticated } = useSelector((state) => state.auth);
 
-    const handleLogin = async () => {
+    useEffect(() => {
+        if (error) {
+            Alert.alert('Login Failed', error, [
+                { text: 'OK', onPress: () => dispatch(clearError()) }
+            ]);
+        }
+        if (isAuthenticated) {
+            navigation.replace('Home');
+        }
+    }, [error, isAuthenticated, dispatch, navigation]);
+
+    const handleLogin = () => {
         // Validation
-        if (!phone.trim() || phone.length < 10) {
-            Alert.alert('Invalid Phone', 'Please enter a valid 10-digit phone number');
+        if (!identifier.trim()) {
+            Alert.alert('Invalid Input', 'Please enter your Email or Phone Number');
             return;
         }
-        if (!password.trim() || password.length < 6) {
-            Alert.alert('Invalid Password', 'Password must be at least 6 characters');
+        if (!password.trim()) {
+            Alert.alert('Invalid Password', 'Please enter your password');
             return;
         }
 
-        setIsLoading(true);
-
-        // Mock API Call
-        setTimeout(async () => {
-            setIsLoading(false);
-            try {
-                // Save session
-                await AsyncStorage.setItem('userToken', 'dummy-token-123');
-                await AsyncStorage.setItem('userPhone', phone);
-
-                // Navigate to Home
-                navigation.replace('Home');
-            } catch (e) {
-                Alert.alert('Error', 'Failed to save login session');
-            }
-        }, 2000);
+        dispatch(login({ identifier: identifier.trim(), password }));
     };
 
     return (
@@ -84,14 +86,14 @@ const LoginScreen = ({ navigation }) => {
                 {/* Form Card */}
                 <View style={styles.formCard}>
                     <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Phone Number</Text>
+                        <Text style={styles.label}>Email or Phone</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Enter 10-digit number"
+                            placeholder="Enter Email or 10-digit number"
                             placeholderTextColor="rgba(255,255,255,0.5)"
-                            keyboardType="phone-pad"
-                            value={phone}
-                            onChangeText={setPhone}
+                            keyboardType="email-address"
+                            value={identifier}
+                            onChangeText={setIdentifier}
                             autoCapitalize="none"
                         />
                     </View>

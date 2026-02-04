@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -9,141 +9,424 @@ import {
     StyleSheet,
     Platform,
     Alert,
+    Linking,
+    FlatList,
+    ActivityIndicator
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../constants/theme';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { openWhatsApp, sendSMS, sendEmail } from '../utils/intents';
-import { useContactStore } from '../store/contactStore';
-import { useCampaignStore } from '../store/campaignStore';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateLead, removeLead, fetchLeadDetails, clearLeadDetails } from '../store/slices/leadSlice';
+import { fetchTeamMembers } from '../store/slices/teamSlice';
+import axiosClient from '../api/axiosClient';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { schedulePushNotification } from '../utils/NotificationService';
+import * as Notifications from 'expo-notifications';
 import TransferLeadModal from './TransferLeadModal';
+import StatusPicker from './StatusPicker';
+
+// Helper to format date relative or absolute
+const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days === 0) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (days < 7) {
+        return `${days}d ago`;
+    } else {
+        return date.toLocaleDateString();
+    }
+};
 
 const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, campaignName }) => {
-    console.log('🟢 QuickActionsSheet render - visible:', visible, 'contact:', contact?.name || contact?.phone);
-    console.log('🔵 Site Visit Check - contact.siteVisitDoneBy:', contact?.siteVisitDoneBy);
-    console.log('🔵 Full contact object:', JSON.stringify(contact, null, 2));
+    // console.log('🟢 QuickActionsSheet render - visible:', visible, 'contact:', contact?.name || contact?.phone);
+    
+    const dispatch = useDispatch();
+    
+    // Get fresh contact data from Redux list
+    const leads = useSelector(state => state.leads.leads);
+    // Also get detailed info (history)
+    const detailedContact = useSelector(state => state.leads.currentLeadDetails);
+    
+    // Merge contact info: detailed takes precedence, then list item, then prop
+    const listContact = contact ? leads.find(l => (l._id || l.id) === (contact._id || contact.id)) : null;
+    const freshContact = detailedContact || listContact || contact;
 
+    const { sources, statuses } = useSelector(state => state.config);
+    const allTeamMembers = useSelector(state => state.team.members);
+    
+    const { user } = useSelector(state => state.auth);
+    
+    const teamMembers = allTeamMembers.filter(member => {
+        const isNotAdmin = member.role !== 'admin';
+        
+        // Resolve IDs to ensure we compare correctly even if one has _id and other has id
+        const memberId = member._id || member.id;
+        const userId = user ? (user._id || user.id) : null;
+        
+        const isNotSelf = userId ? (memberId !== userId) : true;
+        
+        return isNotAdmin && isNotSelf;
+    });
+
+    const [activeTab, setActiveTab] = useState('Details'); // 'Details' | 'History'
+    
+    const [callOutcome, setCallOutcome] = useState('');
+    const [remark, setRemark] = useState('');
     const [newNote, setNewNote] = useState('');
-    const [leadDesc, setLeadDesc] = useState(contact?.leadDescription || '');
-    const [isEditingLead, setIsEditingLead] = useState(false);
+    const [selectedTeamMember, setSelectedTeamMember] = useState(null);
     const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
-    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [isEditingLead, setIsEditingLead] = useState(false);
+    
+    const [showSourcePicker, setShowSourcePicker] = useState(false);
+    const [showStatusPicker, setShowStatusPicker] = useState(false);
+
+    // Status Change Note State
+    const [pendingStatus, setPendingStatus] = useState(null);
+    const [showStatusNoteModal, setShowStatusNoteModal] = useState(false);
+    const [statusNote, setStatusNote] = useState('');
+
+    // Reminder state
     const [callScheduleDate, setCallScheduleDate] = useState(new Date());
+    const [reminderReason, setReminderReason] = useState('');
+    const [showReminderSetupModal, setShowReminderSetupModal] = useState(false);
+    
+    // Legacy states kept if needed, but we essentially replace usage
+    const [showCallDatePicker, setShowCallDatePicker] = useState(false);
+    const [showCallTimePicker, setShowCallTimePicker] = useState(false);
 
-    // Contact Store Hooks
-    const addContactNote = useContactStore((state) => state.addNote);
-    const updateLeadDescription = useContactStore((state) => state.updateLeadDescription);
-    const updateContactAssignedTo = useContactStore((state) => state.updateContactAssignedTo);
-    const updateContactCallSchedule = useContactStore((state) => state.updateCallSchedule);
-    const contacts = useContactStore((state) => state.contacts);
+    // Local state for editing lead info
+    const [localLeadInfo, setLocalLeadInfo] = useState({
+        requirement: '',
+        remark: '',
+    });
 
-    // Campaign Store Hooks
-    const addCampaignNote = useCampaignStore((state) => state.addNote);
-    const updateCampaignDescription = useCampaignStore((state) => state.updateLeadDescription);
-    const updateCampaignCallSchedule = useCampaignStore((state) => state.updateCallSchedule);
-    const campaigns = useCampaignStore((state) => state.campaigns);
-
-    // Get the latest contact data from store
-    const [currentContact, setCurrentContact] = useState(contact);
+    // Fetch team members and detailed lead info when sheet becomes visible
+    useEffect(() => {
+        if (visible) {
+            dispatch(fetchTeamMembers());
+            if (contact?._id || contact?.id) {
+                dispatch(fetchLeadDetails(contact._id || contact.id));
+            }
+        } else {
+             dispatch(clearLeadDetails());
+             setActiveTab('Details');
+        }
+    }, [visible, dispatch, contact?._id, contact?.id]);
 
     useEffect(() => {
-        if (contact?.id) {
-            if (campaignId) {
-                // Get contact from campaign
-                const campaign = campaigns.find(c => c.id === campaignId);
-                const updatedContact = campaign?.leads?.find(l => l.id === contact.id);
-                if (updatedContact) {
-                    setCurrentContact(updatedContact);
-                    setLeadDesc(updatedContact.leadDescription || '');
-                    console.log('🟡 Updated currentContact from campaign:', updatedContact.name, 'siteVisitDoneBy:', updatedContact.siteVisitDoneBy);
-                }
-            } else {
-                // Get contact from contacts store
-                const updatedContact = contacts.find(c => c.id === contact.id);
-                if (updatedContact) {
-                    setCurrentContact(updatedContact);
-                    setLeadDesc(updatedContact.leadDescription || '');
-                    console.log('🟡 Updated currentContact from store:', updatedContact.name || updatedContact.phone, 'siteVisitDoneBy:', updatedContact.siteVisitDoneBy);
-                }
-            }
+        if (visible && freshContact) {
+            setLocalLeadInfo({
+                requirement: freshContact.requirement || '',
+                remark: freshContact.remark || '',
+            });
         }
-    }, [contact?.id, contacts, campaigns, campaignId]);
+    }, [visible, freshContact]);
 
-    const handleAddNote = () => {
+    const handleAddNote = async () => {
         if (newNote.trim() && contact) {
-            console.log('🟢 Adding note for contact:', contact.id);
-            console.log('🟢 Current notes before:', currentContact?.notes);
-
-            // Create the new note object
             const newNoteObj = {
                 id: Date.now().toString(),
                 text: newNote.trim(),
                 timestamp: new Date().toISOString(),
             };
 
-            console.log('🟢 New note object:', newNoteObj);
+            const updatedNotes = [...(contact.notes || []), newNoteObj];
 
-            // Immediately update currentContact to show the note instantly
-            setCurrentContact(prev => {
-                const updatedContact = {
-                    ...prev,
-                    notes: [...(prev?.notes || []), newNoteObj]
-                };
-                console.log('🟢 Updated contact with new note:', updatedContact.notes);
-                return updatedContact;
-            });
-
-            // Clear the input
-            setNewNote('');
-
-            // Update the store in the background
-            if (campaignId) {
-                console.log('🟢 Updating campaign note');
-                addCampaignNote(campaignId, contact.id, newNoteObj.text);
-            } else {
-                console.log('🟢 Updating contact note');
-                addContactNote(contact.id, newNoteObj.text);
+            try {
+               await dispatch(updateLead({ 
+                   id: contact.id || contact._id, 
+                   data: { notes: updatedNotes } 
+               })).unwrap();
+               setNewNote('');
+               // Optimistic/Local state update is automatic if parent re-renders with new redux state
+            } catch (error) {
+                Alert.alert("Error", "Failed to add note");
             }
-
-            // Sync with store after a short delay to ensure consistency
-            setTimeout(() => {
-                if (campaignId) {
-                    const campaign = campaigns.find(c => c.id === campaignId);
-                    const updatedContact = campaign?.leads?.find(l => l.id === contact.id);
-                    if (updatedContact) {
-                        console.log('🟢 Synced campaign contact notes:', updatedContact.notes);
-                        setCurrentContact(updatedContact);
-                    }
-                } else {
-                    const updatedContact = contacts.find(c => c.id === contact.id);
-                    if (updatedContact) {
-                        console.log('🟢 Synced contact notes:', updatedContact.notes);
-                        setCurrentContact(updatedContact);
-                    }
-                }
-            }, 100);
         }
     };
-
-    const handleSaveLeadDesc = () => {
+    const handleSaveLead = async () => {
         if (contact) {
-            if (campaignId) {
-                updateCampaignDescription(campaignId, contact.id, leadDesc);
-            } else {
-                updateLeadDescription(contact.id, leadDesc);
+            try {
+                await dispatch(updateLead({ 
+                    id: contact.id || contact._id, 
+                    data: { requirement: localLeadInfo.requirement } 
+                })).unwrap();
+                setIsEditingLead(false);
+            } catch (error) {
+                Alert.alert("Error", "Failed to update requirement");
             }
-            setIsEditingLead(false);
         }
     };
 
-    const handleTransfer = (teamMember) => {
-        if (contact && !campaignId) {
-            updateContactAssignedTo(contact.id, teamMember.name);
-            setIsTransferModalVisible(false);
-            onClose();
-            Alert.alert('Success', `Lead transferred to ${teamMember.name}`);
+    const handleTransfer = async (teamMember, reason) => {
+        if (contact) {
+            try {
+                // Use dedicated transfer endpoint
+                await axiosClient.post(`/leads/${contact.id || contact._id}/transfer`, {
+                    assigned_to: teamMember._id || teamMember.id,
+                    reason: reason
+                });
+                
+                // Remove lead from local state since it's no longer accessible
+                dispatch(removeLead(contact.id || contact._id));
+                
+                setIsTransferModalVisible(false);
+                onClose();
+                Alert.alert('Success', `Lead transferred to ${teamMember.name}`);
+            } catch (error) {
+                console.error('Failed to transfer lead:', error);
+                Alert.alert("Error", error.response?.data?.message || "Failed to transfer lead");
+            }
         }
+    };
+
+    const handleRemindPress = () => {
+        // Reset state and show custom modal
+        setCallScheduleDate(new Date());
+        setReminderReason('');
+        setShowReminderSetupModal(true);
+    };
+
+    const scheduleReminder = async (date, reason) => {
+        if (!freshContact) return;
+
+        try {
+            // Schedule notification
+            await schedulePushNotification(
+                `Reminder: ${freshContact.name || freshContact.phone}`,
+                reason || `Follow up with ${freshContact.name || 'Lead'}`,
+                date,
+                { 
+                    type: 'reminder',
+                    leadId: freshContact.id || freshContact._id, 
+                    reason: reason,
+                    createdBy: user ? {
+                        id: user.id || user._id,
+                        name: user.name,
+                        role: user.role
+                    } : null
+                }
+            );
+
+            // Update lead with reminder timestamp and attributes
+            await dispatch(updateLead({
+                id: freshContact.id || freshContact._id,
+                data: { 
+                    callbacks: { 
+                        scheduled_at: date.toISOString(),
+                        reason: reason,
+                        status: 'Pending',
+                        created_by: user ? {
+                            id: user.id || user._id,
+                            name: user.name, 
+                            email: user.email,
+                            role: user.role
+                        } : null
+                    } 
+                }
+            })).unwrap();
+
+            setShowReminderSetupModal(false);
+            Alert.alert('Success', `Reminder set for ${date.toLocaleString()}`);
+        } catch (error) {
+            console.error('Failed to schedule reminder:', error);
+            Alert.alert('Error', 'Failed to schedule reminder');
+        }
+    };
+
+    const handleUpdateSource = async (newSource) => {
+        if (contact) {
+            try {
+                // Strip source_ prefix if present
+                const cleanSource = newSource?.startsWith('source_') 
+                    ? newSource.replace('source_', '') 
+                    : newSource;
+                    
+                await dispatch(updateLead({ 
+                    id: contact.id || contact._id, 
+                    data: { lead_source: cleanSource } 
+                })).unwrap();
+            } catch (error) {
+                console.error('QuickActionsSheet: Failed to update lead source', error);
+                Alert.alert("Error", "Failed to update lead source");
+            }
+        }
+    };
+
+    const handleStatusSelect = (statusValue) => {
+        setPendingStatus(statusValue);
+        setStatusNote('');
+        setShowStatusNoteModal(true);
+    };
+
+    const handleConfirmStatus = async () => {
+        if (contact && pendingStatus) {
+            try {
+                // Strip status_ prefix if present
+                const cleanStatus = pendingStatus?.startsWith('status_')
+                    ? pendingStatus.replace('status_', '')
+                    : pendingStatus;
+
+                await dispatch(updateLead({
+                    id: contact.id || contact._id,
+                    data: { 
+                        status: cleanStatus,
+                        status_note: statusNote
+                    }
+                })).unwrap();
+                
+                setShowStatusNoteModal(false);
+                setPendingStatus(null);
+                setStatusNote('');
+            } catch (error) {
+                Alert.alert("Error", "Failed to update status");
+            }
+        }
+    };
+
+    // Compile History Items
+    const historyItems = useMemo(() => {
+        if (!freshContact) return [];
+        const items = [];
+
+        // Status History
+        if (freshContact.status_history) {
+            freshContact.status_history.forEach(item => {
+                // Format: Previous -> Current
+                const prev = item.previous_status || 'New';
+                const current = item.status;
+                
+                // Match status color
+                const statusKey = current?.toLowerCase();
+                const matchingStatus = statuses.find(s => {
+                    const cleanKey = s.key?.startsWith('status_') ? s.key.replace('status_', '') : s.key;
+                    return cleanKey?.toLowerCase() === statusKey || s.label?.toLowerCase() === statusKey;
+                });
+                const displayColor = matchingStatus?.color || COLORS.primary;
+
+                items.push({
+                    type: 'status',
+                    date: new Date(item.changed_at),
+                    title: `${prev} → ${current}`,
+                    subtitle: `Status Change`,
+                    user: item.changed_by, // Populated object
+                    // No note for status changes per request
+                    icon: 'swap-horizontal', // MaterialCommunityIcons "swap-horizontal" roughly matches swap_horiz
+                    color: displayColor
+                });
+            });
+        }
+
+        // Transfer History
+        if (freshContact.transfer_history) {
+            freshContact.transfer_history.forEach(item => {
+                const toUser = item.transferred_to;
+                const fromUser = item.transferred_from;
+                const byUser = item.transferred_by;
+
+                const toName = toUser ? (toUser.name || toUser.email || toUser.role || 'Unknown') : 'Unknown';
+                // const fromName = fromUser ? (fromUser.name || fromUser.email || fromUser.role || 'Unknown') : 'Unknown'; 
+                // We mainly care about who transferred it and to whom
+                
+                items.push({
+                    type: 'transfer',
+                    date: new Date(item.transferred_at),
+                    title: `Transferred to ${toName}`,
+                    // Detailed attribution in subtitle logic later
+                    user: byUser, 
+                    toUser: toUser, // explicit ref
+                    note: item.reason,
+                    icon: 'account-arrow-right',
+                    color: '#FF9800'
+                });
+            });
+        }
+
+        // Call Logs
+        if (freshContact.call_logs) {
+            freshContact.call_logs.forEach(item => {
+                items.push({
+                    type: 'call',
+                    date: new Date(item.date || item.timestamp), // Handle both formats
+                    title: `${item.type || 'Call'} - ${item.status}`,
+                    subtitle: `Duration: ${item.duration}`,
+                    note: item.notes,
+                    icon: 'phone',
+                    color: item.status === 'Missed' ? '#F44336' : '#4CAF50'
+                });
+            });
+        }
+        
+        // Notes (if treated as history items)
+        if (freshContact.notes) {
+            freshContact.notes.forEach(item => {
+                 items.push({
+                    type: 'note',
+                    date: new Date(item.timestamp),
+                    title: 'Note Added',
+                    note: item.text,
+                    icon: 'note-text',
+                    color: '#607D8B'
+                 });
+            });
+        }
+
+        return items.sort((a, b) => b.date - a.date);
+    }, [freshContact]);
+
+
+    // Rendering Helper for History
+    const renderHistoryItem = ({ item }) => {
+        // Robust user name resolution
+        const getUserName = (u) => u ? (u.name || u.email || u.role || 'Unknown') : 'Unknown';
+        
+        const isTransfer = item.type === 'transfer';
+        const isStatus = item.type === 'status';
+
+        // Custom formatting based on type
+        let subText = '';
+        if (isStatus) {
+            subText = `By ${getUserName(item.user)}`;
+        } else if (isTransfer) {
+             subText = `By ${getUserName(item.user)}`;
+        } else if (item.user) {
+             subText = `By ${getUserName(item.user)}`;
+        }
+
+        return (
+            <View style={styles.historyItem}>
+                <View style={[styles.historyIconContainer, { backgroundColor: item.color + '20' }]}>
+                    <MaterialCommunityIcons name={item.icon} size={20} color={item.color} />
+                </View>
+                <View style={styles.historyContent}>
+                    <View style={styles.historyHeader}>
+                         <Text style={styles.historyTitle}>{item.title}</Text>
+                         <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
+                    </View>
+                    
+                    {/* Subtitle / User Info */}
+                    {(item.subtitle || subText) && (
+                         <Text style={styles.historySubtitle}>
+                            {item.subtitle ? item.subtitle + ' • ' : ''}{subText}
+                         </Text>
+                    )}
+
+                    {/* Transfer Reason or Call Note */}
+                    {item.note && (
+                        <View style={styles.historyNoteContainer}>
+                            {isTransfer && <Text style={{fontSize:12, fontWeight:'600', color: '#555'}}>Reason:</Text>}
+                            <Text style={styles.historyNoteText}>{item.note}</Text>
+                        </View>
+                    )}
+                </View>
+            </View>
+        );
     };
 
     // Reminder functionality - matches ContactDetailScreen exactly
@@ -190,38 +473,36 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
     const handleSaveReminder = async (date) => {
         if (contact) {
-            // Update store
-            if (campaignId) {
-                updateCampaignCallSchedule(campaignId, contact.id, date.toISOString());
-            } else {
-                updateContactCallSchedule(contact.id, date.toISOString());
+            try {
+                await dispatch(updateLead({ 
+                    id: contact.id || contact._id, 
+                    data: { attributes: { ...contact.attributes, callSchedule: date.toISOString() } } 
+                })).unwrap();
+                
+                // Schedule push notification
+                await schedulePushNotification(
+                    `Call Reminder: ${contact.name || contact.phone}`,
+                    `It's time to follow up with this lead.`,
+                    date
+                );
+
+                Alert.alert(
+                    'Reminder Set',
+                    `You'll be reminded at ${date.toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    })}`
+                );
+            } catch (error) {
+                Alert.alert("Error", "Failed to set reminder");
             }
-
-            // Schedule push notification
-            await schedulePushNotification(
-                `Call Reminder: ${contact.name || contact.phone}`,
-                `It's time to follow up with this lead.`,
-                date
-            );
-
-            Alert.alert(
-                'Reminder Set',
-                `You'll be reminded at ${date.toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                })}`
-            );
         }
     };
 
-    const handleRemindPress = () => {
-        openDatePicker();
-    };
 
-    const notes = currentContact?.notes || [];
 
     return (
         <Modal
@@ -240,207 +521,639 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 <View style={styles.sheet}>
                     <View style={styles.dragHandle} />
 
-                    <ScrollView style={styles.content}>
-                        {/* Contact Info */}
-                        <View style={styles.contactInfo}>
+                    {/* Contact Header (Always Visible) */}
+                    <View style={styles.headerContainer}>
+                         <View style={styles.contactInfo}>
                             <View style={styles.contactNameRow}>
-                                <Text style={styles.contactName}>{contact?.name || contact?.phone || 'Unknown'}</Text>
-                                {currentContact?.siteVisitDoneBy && (
+                                <Text style={styles.contactName}>{freshContact?.name || freshContact?.phone || 'Unknown'}</Text>
+                                {freshContact?.site_visit_done && (
                                     <View style={styles.siteVisitBadge}>
                                         <MaterialCommunityIcons name="home-city" size={14} color="#0288D1" />
                                         <Text style={styles.siteVisitBadgeText}>Site Visit Done</Text>
                                     </View>
                                 )}
                             </View>
-                            {contact?.name && <Text style={styles.contactPhone}>{contact?.phone}</Text>}
+                            {freshContact?.name && <Text style={styles.contactPhone}>{freshContact?.phone}</Text>}
                         </View>
 
-                        {/* Action Buttons */}
-                        <View style={styles.actionsRow}>
-                            <TouchableOpacity
-                                style={styles.actionButton}
-                                onPress={() => contact?.phone && openWhatsApp(contact.phone)}
+                        {/* Tabs */}
+                        <View style={styles.tabContainer}>
+                            <TouchableOpacity 
+                                style={[styles.tab, activeTab === 'Details' && styles.activeTab]}
+                                onPress={() => setActiveTab('Details')}
                             >
-                                <View style={[styles.iconContainer, { backgroundColor: '#E8F5E9' }]}>
-                                    <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
-                                </View>
-                                <Text style={styles.actionLabel}>WhatsApp</Text>
+                                <Text style={[styles.tabText, activeTab === 'Details' && styles.activeTabText]}>Details</Text>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.actionButton}
-                                onPress={() => contact?.phone && sendSMS(contact.phone)}
+                            <TouchableOpacity 
+                                style={[styles.tab, activeTab === 'History' && styles.activeTab]}
+                                onPress={() => setActiveTab('History')}
                             >
-                                <View style={[styles.iconContainer, { backgroundColor: '#E3F2FD' }]}>
-                                    <MaterialCommunityIcons name="message-text" size={24} color="#007AFF" />
-                                </View>
-                                <Text style={styles.actionLabel}>Message</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.actionButton}
-                                onPress={() => sendEmail(contact?.email || '')}
-                            >
-                                <View style={[styles.iconContainer, { backgroundColor: '#FFEBEE' }]}>
-                                    <MaterialCommunityIcons name="email" size={24} color="#F44336" />
-                                </View>
-                                <Text style={styles.actionLabel}>Mail</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.actionButton}
-                                onPress={() => setIsTransferModalVisible(true)}
-                            >
-                                <View style={[styles.iconContainer, { backgroundColor: '#FFF3E0' }]}>
-                                    <MaterialCommunityIcons name="account-arrow-right" size={24} color="#FF9800" />
-                                </View>
-                                <Text style={styles.actionLabel}>Transfer</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.actionButton}
-                                onPress={handleRemindPress}
-                            >
-                                <View style={[styles.iconContainer, { backgroundColor: '#F3E5F5' }]}>
-                                    <MaterialCommunityIcons name="bell-outline" size={24} color="#9C27B0" />
-                                </View>
-                                <Text style={styles.actionLabel}>Remind</Text>
+                                <Text style={[styles.tabText, activeTab === 'History' && styles.activeTabText]}>History & Logs</Text>
                             </TouchableOpacity>
                         </View>
+                    </View>
 
-                        {/* Lead Requirement Section */}
-                        <View style={styles.leadSection}>
-                            <View style={styles.leadHeader}>
-                                <Text style={styles.sectionTitle}>Lead Requirement</Text>
-                                <TouchableOpacity onPress={() => setIsEditingLead(!isEditingLead)}>
-                                    <Text style={styles.editButton}>{isEditingLead ? 'Cancel' : 'Edit'}</Text>
+                    {activeTab === 'Details' ? (
+                        <ScrollView style={styles.content}>
+                            {/* Action Buttons */}
+                            <View style={styles.actionsRow}>
+                                <TouchableOpacity
+                                    style={styles.actionButton}
+                                    onPress={() => contact?.phone && openWhatsApp(contact.phone)}
+                                >
+                                    <View style={[styles.iconContainer, { backgroundColor: '#E8F5E9' }]}>
+                                        <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>WhatsApp</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.actionButton}
+                                    onPress={() => contact?.phone && sendSMS(contact.phone)}
+                                >
+                                    <View style={[styles.iconContainer, { backgroundColor: '#E3F2FD' }]}>
+                                        <MaterialCommunityIcons name="message-text" size={24} color="#007AFF" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Message</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.actionButton}
+                                    onPress={() => sendEmail(contact?.email || '')}
+                                >
+                                    <View style={[styles.iconContainer, { backgroundColor: '#FFEBEE' }]}>
+                                        <MaterialCommunityIcons name="email" size={24} color="#F44336" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Mail</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.actionButton}
+                                    onPress={() => setIsTransferModalVisible(true)}
+                                >
+                                    <View style={[styles.iconContainer, { backgroundColor: '#FFF3E0' }]}>
+                                        <MaterialCommunityIcons name="account-arrow-right" size={24} color="#FF9800" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Transfer</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.actionButton}
+                                    onPress={handleRemindPress}
+                                >
+                                    <View style={[styles.iconContainer, { backgroundColor: '#F3E5F5' }]}>
+                                        <MaterialCommunityIcons name="bell-outline" size={24} color="#9C27B0" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Remind</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            {isEditingLead ? (
-                                <View>
-                                    <TextInput
-                                        style={styles.leadInput}
-                                        value={leadDesc}
-                                        onChangeText={setLeadDesc}
-                                        placeholder="E.g., Looking for 3BHK villa in gated community. Budget 80L–1Cr."
-                                        multiline
-                                        numberOfLines={3}
-                                    />
-                                    <TouchableOpacity style={styles.saveButton} onPress={handleSaveLeadDesc}>
-                                        <Text style={styles.saveButtonText}>Save</Text>
+                             {/* Lead Status Selector */}
+                             <TouchableOpacity 
+                                style={styles.leadSection} 
+                                onPress={() => setShowStatusPicker(true)}
+                            >
+                                <View style={styles.leadHeader}>
+                                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                                        <MaterialCommunityIcons name="list-status" size={20} color={COLORS.primary} />
+                                        <Text style={styles.sectionTitle}>Lead Status</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={[styles.infoValue, { marginRight: 8, color: COLORS.primary }]}>
+                                            {(() => {
+                                                const statusValue = freshContact?.status;
+                                                if (!statusValue) return 'Select';
+                                                
+                                                const matchingStatus = statuses.find(s => {
+                                                    const keyWithoutPrefix = s.key?.startsWith('status_') 
+                                                        ? s.key.replace('status_', '') 
+                                                        : s.key;
+                                                    return keyWithoutPrefix === statusValue;
+                                                });
+                                                return matchingStatus?.label || statusValue;
+                                            })()}
+                                        </Text>
+                                        <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+
+
+                            {/* Lead Source Selector */}
+                            <TouchableOpacity 
+                                style={styles.leadSection} 
+                                onPress={() => setShowSourcePicker(true)}
+                            >
+                                <View style={styles.leadHeader}>
+                                     <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                                        <MaterialCommunityIcons name="source-branch" size={20} color={COLORS.primary} />
+                                        <Text style={styles.sectionTitle}>Lead Source</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={[styles.infoValue, { marginRight: 8, color: COLORS.primary }]}>
+                                            {(() => {
+                                                const sourceValue = freshContact?.leadSource || freshContact?.lead_source;
+                                                if (!sourceValue) return 'Select';
+                                                // Find matching source to display its label
+                                                const matchingSource = sources.find(s => {
+                                                    const keyWithoutPrefix = s.key?.startsWith('source_') 
+                                                        ? s.key.replace('source_', '') 
+                                                        : s.key;
+                                                    return keyWithoutPrefix === sourceValue;
+                                                });
+                                                return matchingSource?.label || sourceValue;
+                                            })()}
+                                        </Text>
+                                        <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* Lead Requirement Section */}
+                            <View style={styles.leadSection}>
+                                <View style={styles.leadHeader}>
+                                    <Text style={styles.sectionTitle}>Lead Requirement</Text>
+                                    <TouchableOpacity onPress={() => setIsEditingLead(!isEditingLead)}>
+                                        <Text style={styles.editButton}>{isEditingLead ? 'Cancel' : 'Edit'}</Text>
                                     </TouchableOpacity>
                                 </View>
-                            ) : (
-                                <Text style={styles.leadText}>
-                                    {leadDesc || 'No lead description added yet. Tap Edit to add.'}
-                                </Text>
-                            )}
-                        </View>
 
-                        {/* Site Visit Information - Only show if contact has site visit */}
-                        {currentContact?.siteVisitDoneBy && (
-                            <View style={styles.siteVisitInfoSection}>
-                                <Text style={styles.sectionTitle}>Site Visit Information</Text>
-                                <View style={styles.siteVisitInfoCard}>
-                                    {currentContact.leadOwner && (
-                                        <View style={styles.infoRow}>
-                                            <Text style={styles.infoLabel}>Lead Owner:</Text>
-                                            <Text style={styles.infoValue}>
-                                                {currentContact.leadOwner.charAt(0).toUpperCase() + currentContact.leadOwner.slice(1).replace('_', ' ')}
-                                            </Text>
-                                        </View>
-                                    )}
-                                    {currentContact.project && (
-                                        <View style={styles.infoRow}>
-                                            <Text style={styles.infoLabel}>Project:</Text>
-                                            <Text style={styles.infoValue}>
-                                                {currentContact.project.charAt(0).toUpperCase() + currentContact.project.slice(1).replace('_', ' ')}
-                                            </Text>
-                                        </View>
-                                    )}
-                                    <View style={styles.infoRow}>
-                                        <Text style={styles.infoLabel}>Site Visit Done By:</Text>
-                                        <Text style={styles.infoValue}>
-                                            {currentContact.siteVisitDoneBy.charAt(0).toUpperCase() + currentContact.siteVisitDoneBy.slice(1).replace('_', ' ')}
-                                        </Text>
+                                {isEditingLead ? (
+                                    <View>
+                                        <TextInput
+                                            style={styles.textInput}
+                                            multiline
+                                            numberOfLines={3}
+                                            value={localLeadInfo.requirement}
+                                            onChangeText={(text) => setLocalLeadInfo({ ...localLeadInfo, requirement: text })}
+                                            placeholder="Add lead description..."
+                                        />
+                                        <TouchableOpacity style={styles.saveButton} onPress={handleSaveLead}>
+                                            <Text style={styles.saveButtonText}>Save</Text>
+                                        </TouchableOpacity>
                                     </View>
-                                    {currentContact.siteVisitReview && (
-                                        <View style={styles.reviewRow}>
-                                            <Text style={styles.reviewLabel}>Review:</Text>
-                                            <Text style={styles.reviewText}>{currentContact.siteVisitReview}</Text>
-                                        </View>
-                                    )}
-                                </View>
+                                ) : (
+                                    <Text style={styles.leadDescText}>
+                                        {localLeadInfo.requirement || 'No lead description added yet. Tap Edit to add.'}
+                                    </Text>
+                                )}
                             </View>
-                        )}
 
-                        {/* Notes Section */}
-                        <View style={styles.notesSection}>
-                            <Text style={styles.sectionTitle}>Notes</Text>
-                            {notes.length === 0 ? (
-                                <Text style={styles.emptyNotes}>No notes yet.</Text>
-                            ) : (
-                                <ScrollView
-                                    style={styles.notesScrollView}
-                                    nestedScrollEnabled={true}
-                                    showsVerticalScrollIndicator={true}
-                                >
-                                    {notes.map((note) => (
-                                        <View key={note.id} style={styles.noteItem}>
-                                            <Text style={styles.noteText}>{note.text}</Text>
-                                            <Text style={styles.noteTime}>
-                                                {new Date(note.timestamp).toLocaleString()}
+                            {/* Site Visit Information */}
+                            {freshContact?.site_visit_done_by && (
+                                <View style={styles.siteVisitInfoSection}>
+                                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12}}>
+                                        <MaterialCommunityIcons name="home-city" size={20} color={COLORS.primary} />
+                                        <Text style={styles.sectionTitle}>Site Visit Information</Text>
+                                    </View>
+                                    <View style={styles.siteVisitInfoCard}>
+                                        {freshContact.lead_owner && (
+                                            <View style={styles.infoRow}>
+                                                <Text style={styles.infoLabel}>Lead Owner:</Text>
+                                                <Text style={styles.infoValue}>
+                                                    {typeof freshContact.lead_owner === 'object' ? freshContact.lead_owner.name : freshContact.lead_owner}
+                                                </Text>
+                                            </View>
+                                        )}
+                                        {freshContact.project_id && (
+                                            <View style={styles.infoRow}>
+                                                <Text style={styles.infoLabel}>Project:</Text>
+                                                <Text style={styles.infoValue}>
+                                                    {typeof freshContact.project_id === 'object' ? freshContact.project_id.name : freshContact.project_id}
+                                                </Text>
+                                            </View>
+                                        )}
+                                        <View style={styles.infoRow}>
+                                            <Text style={styles.infoLabel}>Site Visit Done By:</Text>
+                                            <Text style={styles.infoValue}>
+                                                {typeof freshContact.site_visit_done_by === 'object' ? freshContact.site_visit_done_by.name : freshContact.site_visit_done_by}
                                             </Text>
                                         </View>
-                                    ))}
-                                </ScrollView>
+                                        {freshContact.site_visit_review && (
+                                            <View style={styles.reviewRow}>
+                                                <Text style={styles.reviewLabel}>Review:</Text>
+                                                <Text style={styles.reviewText}>{freshContact.site_visit_review}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
                             )}
-                        </View>
 
-                        {/* Add Note */}
-                        <View style={styles.addNoteSection}>
-                            <TextInput
-                                style={styles.noteInput}
-                                value={newNote}
-                                onChangeText={setNewNote}
-                                placeholder="Add a note..."
-                                multiline
-                                numberOfLines={2}
-                            />
-                            <TouchableOpacity
-                                style={[styles.addNoteButton, !newNote.trim() && styles.addNoteButtonDisabled]}
-                                onPress={handleAddNote}
-                                disabled={!newNote.trim()}
-                            >
-                                <Text style={styles.addNoteButtonText}>Add Note</Text>
-                            </TouchableOpacity>
+                            {/* Notes Section */}
+                            <View style={styles.notesSection}>
+                                <Text style={styles.sectionTitle}>Notes</Text>
+                                {(!contact?.notes || contact.notes.length === 0) ? (
+                                    <Text style={styles.emptyNotes}>No notes yet.</Text>
+                                ) : (
+                                    <View>
+                                        {contact.notes.slice(0, 3).map((note) => (
+                                            <View key={note.id || Math.random()} style={styles.noteItem}>
+                                                <Text style={styles.noteText}>{note.text}</Text>
+                                                <Text style={styles.noteTime}>
+                                                    {new Date(note.timestamp).toLocaleString()}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                        {contact.notes.length > 3 && (
+                                            <TouchableOpacity onPress={() => setActiveTab('History')}>
+                                                <Text style={{color: COLORS.primary, textAlign: 'center', marginTop: 8}}>View All Notes in History</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* Add Note */}
+                            <View style={styles.addNoteSection}>
+                                <TextInput
+                                    style={styles.noteInput}
+                                    value={newNote}
+                                    onChangeText={setNewNote}
+                                    placeholder="Add a note..."
+                                    multiline
+                                    numberOfLines={2}
+                                />
+                                <TouchableOpacity
+                                    style={[styles.addNoteButton, !newNote.trim() && styles.addNoteButtonDisabled]}
+                                    onPress={handleAddNote}
+                                    disabled={!newNote.trim()}
+                                >
+                                    <Text style={styles.addNoteButtonText}>Add Note</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </ScrollView>
+                    ) : (
+                        <View style={styles.content}>
+                             {historyItems.length === 0 ? (
+                                 <View style={styles.emptyHistory}>
+                                     <MaterialCommunityIcons name="history" size={48} color="#CCC" />
+                                     <Text style={styles.emptyHistoryText}>No history available</Text>
+                                 </View>
+                             ) : (
+                                 <FlatList 
+                                    data={historyItems}
+                                    renderItem={renderHistoryItem}
+                                    keyExtractor={(item, index) => index.toString()}
+                                    contentContainerStyle={{ paddingVertical: 16 }}
+                                 />
+                             )}
                         </View>
-                    </ScrollView>
+                    )}
                 </View>
             </View>
 
-            {/* iOS Date Picker */}
-            {Platform.OS === 'ios' && showDatePicker && (
-                <DateTimePicker
-                    value={callScheduleDate}
-                    mode="datetime"
-                    display="default"
-                    onChange={handleScheduleChange}
-                    minimumDate={new Date()}
-                />
-            )}
+            {/* Replacement Reminder Setup Modal */}
+            <Modal
+                visible={showReminderSetupModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowReminderSetupModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.dialog}>
+                        <Text style={styles.dialogTitle}>Set Reminder</Text>
+                        
+                        <View style={{ width: '100%', marginBottom: 16 }}>
+                            <Text style={styles.inputLabel}>Date & Time</Text>
+                            {Platform.OS === 'android' ? (
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <TouchableOpacity 
+                                        style={styles.dateButton}
+                                        onPress={() => {
+                                            DateTimePickerAndroid.open({
+                                                value: callScheduleDate,
+                                                mode: 'date',
+                                                minimumDate: new Date(),
+                                                onChange: (_, date) => {
+                                                    if (date) {
+                                                        const newDate = new Date(callScheduleDate);
+                                                        newDate.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                                                        setCallScheduleDate(newDate);
+                                                    }
+                                                }
+                                            });
+                                        }}
+                                    >
+                                        <Text style={styles.dateButtonText}>{callScheduleDate.toLocaleDateString()}</Text>
+                                        <MaterialCommunityIcons name="calendar-today" size={20} color={COLORS.primary} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={styles.dateButton}
+                                        onPress={() => {
+                                            DateTimePickerAndroid.open({
+                                                value: callScheduleDate,
+                                                mode: 'time',
+                                                is24Hour: false,
+                                                onChange: (_, date) => {
+                                                    if (date) {
+                                                        const newDate = new Date(callScheduleDate);
+                                                        newDate.setHours(date.getHours(), date.getMinutes());
+                                                        setCallScheduleDate(newDate);
+                                                    }
+                                                }
+                                            });
+                                        }}
+                                    >
+                                        <Text style={styles.dateButtonText}>{callScheduleDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                                        <MaterialCommunityIcons name="clock-outline" size={20} color={COLORS.primary} />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <DateTimePicker
+                                    value={callScheduleDate}
+                                    mode="datetime"
+                                    display="spinner"
+                                    onChange={(event, date) => date && setCallScheduleDate(date)}
+                                    minimumDate={new Date()}
+                                    style={{ height: 120, width: '100%' }}
+                                />
+                            )}
+                        </View>
+
+                        <View style={{ width: '100%', marginBottom: 24 }}>
+                            <Text style={styles.inputLabel}>Reason</Text>
+                            <TextInput
+                                style={[styles.textInput, { height: 80 }]}
+                                placeholder="Why do you want to be reminded?"
+                                value={reminderReason}
+                                onChangeText={setReminderReason}
+                                multiline
+                            />
+                        </View>
+
+                        <View style={styles.dialogActions}>
+                            <TouchableOpacity 
+                                style={[styles.actionButtonOutline, {flex:1}]} 
+                                onPress={() => setShowReminderSetupModal(false)}
+                            >
+                                <Text style={styles.actionButtonOutlineText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.actionButtonPrimary, {flex:1}]} 
+                                onPress={() => scheduleReminder(callScheduleDate, reminderReason)}
+                            >
+                                <Text style={styles.actionButtonPrimaryText}>Set Reminder</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
 
             <TransferLeadModal
                 visible={isTransferModalVisible}
                 onClose={() => setIsTransferModalVisible(false)}
                 onTransfer={handleTransfer}
+                teamMembers={teamMembers}
             />
+            
+            {/* Source Picker */}
+            <StatusPicker
+                visible={showSourcePicker}
+                onClose={() => setShowSourcePicker(false)}
+                title="Select Lead Source"
+                options={sources.map(s => ({ 
+                    label: s.label, 
+                    value: s.key 
+                }))}
+                selectedValue={(() => {
+                    const sourceValue = freshContact?.leadSource || freshContact?.lead_source;
+                    const matchingSource = sources.find(s => {
+                        const keyWithoutPrefix = s.key?.startsWith('source_') ? s.key.replace('source_', '') : s.key;
+                        return keyWithoutPrefix === sourceValue;
+                    });
+                    return matchingSource?.key; 
+                })()}
+                onSelect={handleUpdateSource}
+            />
+
+            {/* Status Picker */}
+             <StatusPicker
+                visible={showStatusPicker}
+                onClose={() => setShowStatusPicker(false)}
+                title="Update Lead Status"
+                options={statuses.map(s => ({ 
+                    label: s.label, 
+                    value: s.key 
+                }))}
+                selectedValue={(() => {
+                    const statusValue = freshContact?.status;
+                    const matchingStatus = statuses.find(s => {
+                        const keyWithoutPrefix = s.key?.startsWith('status_') ? s.key.replace('status_', '') : s.key;
+                        return keyWithoutPrefix === statusValue;
+                    });
+                    return matchingStatus?.key; 
+                })()}
+                onSelect={handleStatusSelect}
+            />
+
+            {/* Status Note Modal */}
+            <Modal
+                visible={showStatusNoteModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowStatusNoteModal(false)}
+            >
+                <View style={styles.statusModalOverlay}>
+                    <View style={styles.statusModalContent}>
+                        <Text style={styles.statusModalTitle}>Add Note (Optional)</Text>
+                         <Text style={styles.statusModalSubtitle}>
+                            Adding a note to this status change helps track the lead journey.
+                        </Text>
+                        <TextInput
+                            style={styles.statusNoteInput}
+                            multiline
+                            numberOfLines={3}
+                            placeholder="Reason for change or additional details..."
+                            value={statusNote}
+                            onChangeText={setStatusNote}
+                        />
+                        <View style={styles.statusModalButtons}>
+                             <TouchableOpacity 
+                                style={styles.statusModalCancel}
+                                onPress={() => setShowStatusNoteModal(false)}
+                             >
+                                <Text style={styles.statusModalCancelText}>Cancel</Text>
+                             </TouchableOpacity>
+                             <TouchableOpacity 
+                                style={styles.statusModalConfirm}
+                                onPress={handleConfirmStatus}
+                             >
+                                <Text style={styles.statusModalConfirmText}>Update Status</Text>
+                             </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </Modal>
     );
 };
 
 const styles = StyleSheet.create({
+    headerContainer: {
+        paddingHorizontal: 20,
+        marginBottom: 10
+    },
+    tabContainer: {
+        flexDirection: 'row',
+        marginTop: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEE',
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+    },
+    activeTab: {
+        borderBottomColor: COLORS.primary,
+    },
+    tabText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#999',
+    },
+    activeTabText: {
+        color: COLORS.primary,
+    },
+    // History Styles
+    historyItem: {
+        flexDirection: 'row',
+        marginBottom: 20,
+        paddingHorizontal: 10,
+    },
+    historyIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    historyContent: {
+        flex: 1,
+        backgroundColor: '#F9F9F9',
+        borderRadius: 12,
+        padding: 12,
+    },
+    historyHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 4,
+    },
+    historyTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        flex: 1,
+    },
+    historyDate: {
+        fontSize: 11,
+        color: '#999',
+        marginLeft: 8,
+    },
+    historySubtitle: {
+        fontSize: 13,
+        color: '#666',
+        marginBottom: 4,
+    },
+    historyUser: {
+        fontSize: 11,
+        color: '#0288D1',
+        marginBottom: 4,
+    },
+    historyNoteContainer: {
+        marginTop: 6,
+        padding: 8,
+        backgroundColor: '#FFF',
+        borderRadius: 8,
+        borderLeftWidth: 2,
+        borderLeftColor: '#DDD',
+    },
+    historyNoteText: {
+        fontSize: 13,
+        color: '#555',
+        fontStyle: 'italic',
+    },
+    emptyHistory: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 40,
+    },
+    emptyHistoryText: {
+        marginTop: 10,
+        color: '#999',
+        fontSize: 16,
+    },
+    // Status Modal Styles
+    statusModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    statusModalContent: {
+        backgroundColor: '#FFF',
+        width: '100%',
+        maxWidth: 340,
+        borderRadius: 16,
+        padding: 24,
+    },
+    statusModalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 8,
+        color: '#333',
+        textAlign: 'center',
+    },
+    statusModalSubtitle: {
+        fontSize: 13,
+        color: '#666',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    statusNoteInput: {
+        backgroundColor: '#F5F5F5',
+        borderRadius: 12,
+        padding: 16,
+        minHeight: 100,
+        textAlignVertical: 'top',
+        fontSize: 15,
+        marginBottom: 20,
+    },
+    statusModalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    statusModalCancel: {
+        flex: 1,
+        padding: 14,
+        borderRadius: 10,
+        backgroundColor: '#F0F0F0',
+        alignItems: 'center',
+    },
+    statusModalConfirm: {
+        flex: 1,
+        padding: 14,
+        borderRadius: 10,
+        backgroundColor: COLORS.primary,
+        alignItems: 'center',
+    },
+    statusModalCancelText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#666',
+    },
+    statusModalConfirmText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#FFF',
+    },
+    
+    // Existing styles below (overlay, backdrop, etc already exist but we need to keep them or merge)
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -453,7 +1166,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        maxHeight: '80%',
+        maxHeight: '90%', // Increased slightly
         paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     },
     dragHandle: {
@@ -469,12 +1182,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     contactInfo: {
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEE',
+        paddingVertical: 10, // Reduced top padding
+        // borderBottomWidth: 1, // Moved to header
+        // borderBottomColor: '#EEE',
     },
     contactName: {
-        fontSize: 24,
+        fontSize: 22, // Slightly smaller to fit header
         fontWeight: 'bold',
         color: '#000',
     },
@@ -530,7 +1243,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         color: '#000',
-        marginBottom: 12,
+        // marginBottom: 12, // Handled in header rows
     },
     emptyNotes: {
         fontSize: 14,
@@ -582,25 +1295,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    iosPickerContainer: {
-        backgroundColor: '#F5F5F5',
-        padding: 16,
-        borderRadius: 12,
-        marginHorizontal: 20,
-        marginBottom: 16,
-    },
-    pickerDoneBtn: {
-        backgroundColor: COLORS.primary,
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    pickerDoneText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: '600',
-    },
+    // iosPickerContainer styles removed as they referenced React Native Picker which is not used
+    // StatusPicker uses its own modal
+    
     leadSection: {
         marginTop: 20,
         paddingBottom: 16,
@@ -618,7 +1315,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    leadInput: {
+    leadInput: { // Removed separate input style, reusing textInput
         borderWidth: 1,
         borderColor: '#DDD',
         borderRadius: 8,
@@ -628,11 +1325,94 @@ const styles = StyleSheet.create({
         textAlignVertical: 'top',
         marginBottom: 12,
     },
-    leadText: {
+    textInput: {
+         borderWidth: 1,
+        borderColor: '#DDD',
+        borderRadius: 8,
+        padding: 12,
         fontSize: 14,
-        color: '#666',
-        lineHeight: 20,
+        minHeight: 80,
+        textAlignVertical: 'top',
+        marginBottom: 12,
     },
+    
+    // Dialog / Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.lg
+    },
+    dialog: {
+        backgroundColor: '#FFF',
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10
+    },
+    dialogTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: COLORS.text,
+        marginBottom: 20
+    },
+    inputLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+        marginBottom: 8,
+        alignSelf: 'flex-start'
+    },
+    dateButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F5F5F5',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#EEE'
+    },
+    dateButtonText: {
+        fontSize: 14,
+        color: COLORS.text
+    },
+    dialogActions: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%'
+    },
+    actionButtonOutline: {
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#DDD',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    actionButtonOutlineText: {
+        fontSize: 16,
+        color: COLORS.textSecondary,
+        fontWeight: '600'
+    },
+    actionButtonPrimary: {
+        padding: 12,
+        borderRadius: 8,
+        backgroundColor: COLORS.primary,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    actionButtonPrimaryText: {
+        fontSize: 16,
+        color: '#FFF',
+        fontWeight: '600'
+    },
+
     saveButton: {
         backgroundColor: COLORS.primary,
         padding: 12,
@@ -689,12 +1469,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#1C1C1E',
         lineHeight: 20,
-    },
-    notesSection: {
-        marginTop: 20,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEE',
     },
     notesScrollView: {
         maxHeight: 200,

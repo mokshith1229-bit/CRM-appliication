@@ -1,19 +1,32 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSelector } from 'react-redux';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../constants/theme';
 
 const StatusOverlay = ({ visible, contact, onSelect, onClose }) => {
+    const { statuses } = useSelector(state => state.config);
     if (!contact) return null;
 
+    const getIconForStatus = (label) => {
+         const l = label.toLowerCase();
+         if (l.includes('hot')) return 'whatshot';
+         if (l.includes('warm')) return 'wb-sunny';
+         if (l.includes('cold')) return 'ac-unit';
+         if (l.includes('interested')) return 'check-circle';
+         if (l.includes('not')) return 'block';
+         if (l.includes('call')) return 'phone-callback';
+         return 'label';
+    };
+
     const overlayOptions = [
-        { id: 'hot', label: 'Hot Call', color: '#FF3B30', icon: 'whatshot' },
-        { id: 'warm', label: 'Warm Call', color: '#FF9500', icon: 'wb-sunny' },
-        { id: 'cold', label: 'Cold Call', color: '#007AFF', icon: 'ac-unit' },
-        { id: 'callback', label: 'Call Back', color: '#5856D6', icon: 'phone-callback' },
-        { id: 'interested', label: 'Interested', color: '#34C759', icon: 'check-circle' },
-        { id: 'not_interested', label: 'Not Interested', color: '#8E8E93', icon: 'block' },
-        { id: 'none', label: 'Clear Status', color: '#333333', icon: 'delete-outline' },
+        ...statuses.map(s => ({
+            id: s.key,
+            label: s.label,
+            color: s.color || '#333',
+            icon: getIconForStatus(s.label)
+        })),
+        { id: 'none', label: 'Clear Status', color: '#333333', icon: 'delete-outline' }
     ];
 
     return (

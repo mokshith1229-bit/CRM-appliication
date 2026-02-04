@@ -6,16 +6,18 @@ import {
     StyleSheet,
     RefreshControl,
     ActivityIndicator,
-    SafeAreaView,
+    
     Platform,
     StatusBar as NativeStatusBar,
     TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useCampaignStore } from '../store/campaignStore';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateLeadStatus, updateLead, setActiveFilter, fetchLeads, fetchCampaignRecords, clearLeads, clearCampaignLeads } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
-import FilterBar from '../components/FilterBar';
+import ContactCardSkeleton from '../components/ContactCardSkeleton'; // Import Skeleton
 import SearchBar from '../components/SearchBar';
 import QuickActionsSheet from '../components/QuickActionsSheet';
 import StatusOverlay from '../components/StatusOverlay';
@@ -39,16 +41,22 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [reminderContact, setReminderContact] = useState(null);
 
-    const getFilteredLeads = useCampaignStore((state) => state.getFilteredLeads);
-    const activeFilter = useCampaignStore((state) => state.activeFilter);
-    const setActiveFilter = useCampaignStore((state) => state.setActiveFilter);
-    const fetchCampaigns = useCampaignStore((state) => state.fetchCampaigns);
-    const isLoading = useCampaignStore((state) => state.isLoading);
-    const updateLeadStatus = useCampaignStore((state) => state.updateLeadStatus);
-    const updateCallSchedule = useCampaignStore((state) => state.updateCallSchedule);
+    const dispatch = useDispatch();
+    const leads = useSelector(state => state.leads.campaignLeads);
+    const isLoading = useSelector(state => state.leads.isLoading);
+    const pagination = useSelector(state => state.leads.campaignPagination);
 
-    // Get leads based on store's activeFilter
-    const leads = getFilteredLeads(campaignId);
+    // Filter leads by campaignId
+    // Data is now isolated in campaignLeads state
+    // We use 'leads' variable directly as selected above
+    
+    // Active filter state
+    const activeFilter = useSelector(state => state.leads.activeFilter);
+    const setActiveFilterAction = (filter) => dispatch(setActiveFilter(filter));
+    
+    // We import { setActiveFilter } from leadSlice actions, so:
+    // const setActiveFilterAction = (filter) => dispatch(setActiveFilter(filter));
+    // Implementation below.
 
     // Derived selected lead
     const selectedContact = selectedContactId ? leads.find(l => l.id === selectedContactId) : null;
@@ -94,63 +102,54 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         }
     }, [route.params, leads]);
 
-    const filteredLeads = leads.filter(lead => {
-        let matchesSearch = true;
-        let matchesDate = true;
+    // Display leads directly from store
+    // Use mapped version if specific fields needed, but 'allLeads' usually has what we need
+    // We map to ensure consistent structure if backend response varies
+    const displayedLeads = leads; // Assuming leads are already in correct format from fetchLeads
+    
+    // Unified Fetch Logic
+    const fetchWithFilters = (pageOrReset = 1) => {
+        const filters = { 
+            campaignId,
+            page: pageOrReset,
+        };
 
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            matchesSearch = (
-                lead.name?.toLowerCase().includes(query) ||
-                lead.phone.toLowerCase().includes(query)
-            );
-        }
-
-        // Date Filter (Single or Range)
+        if (searchQuery) filters.search = searchQuery;
+        
+        // Date filters might not be supported on CampaignRecord yet in controller but passing anyway
         if (dateFilter) {
-            if (!lead.lastCallTime) {
-                matchesDate = false;
-            } else {
-                const leadDate = new Date(lead.lastCallTime).toDateString();
-                const filterDate = dateFilter.toDateString();
-                matchesDate = leadDate === filterDate;
-            }
+            filters.startDate = dateFilter.toISOString();
+            filters.endDate = dateFilter.toISOString();
         } else if (dateRange) {
-            if (!lead.lastCallTime) {
-                matchesDate = false;
-            } else {
-                const leadTime = new Date(lead.lastCallTime).getTime();
-                const startTime = dateRange.start.getTime();
-                const endTime = dateRange.end.getTime();
-                matchesDate = leadTime >= startTime && leadTime <= endTime;
-            }
+            filters.startDate = dateRange.start.toISOString();
+            filters.endDate = dateRange.end.toISOString();
         }
 
-        return matchesSearch && matchesDate;
-    });
-
-    const handleCallAction = (contact) => {
-        setShowQuickActions(false);
-        navigation.navigate('InAppCall', {
-            contact: { ...contact, source: campaignName },
-            leadSource: campaignName,
-            campaignId: campaignId,
-            campaignName: campaignName
-        });
+        dispatch(fetchCampaignRecords(filters));
     };
 
-    const handleAvatarPress = (contact) => {
-        if (!contact) return;
-        navigation.navigate('QuickContact', {
-            contact: { ...contact, source: campaignName },
-            campaignId: campaignId,
-            campaignName: campaignName
-        });
-    };
+    // Debounce Search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+             fetchWithFilters(1);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery, dateFilter, dateRange]);
+    
+    // Initial Fetch
+    useEffect(() => {
+        dispatch(clearCampaignLeads());
+        if (campaignId) {
+            fetchWithFilters(1);
+        }
+        return () => { dispatch(clearCampaignLeads()); };
+    }, [campaignId, dispatch]);
 
     const handleRefresh = async () => {
         setRefreshing(true);
-        await fetchCampaigns();
+        if (campaignId) {
+            fetchWithFilters(1);
+        }
         setRefreshing(false);
     };
 
@@ -167,6 +166,19 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     const clearDateFilter = () => {
         setDateFilter(null);
         setDateRange(null);
+    };
+
+    const handleCallAction = (contact) => {
+        navigation.navigate('QuickContact', { 
+            contact,
+            campaignId,
+            campaignName
+        });
+    };
+
+    const handleAvatarPress = (contact) => {
+        setSelectedContactId(contact.id);
+        setShowQuickActions(true);
     };
 
     const renderContactCard = ({ item }) => (
@@ -187,10 +199,28 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     if (isLoading && !refreshing) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={styles.loadingText}>Loading leads...</Text>
-            </View>
+            <SafeAreaView style={styles.container}>
+                <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
+                <View style={styles.header}>
+                     <View style={styles.headerTop}>
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                            <MaterialIcons name="arrow-back" size={28} color={COLORS.text} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle} numberOfLines={1}>{campaignName}</Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+                    <SearchBar
+                         searchQuery={searchQuery}
+                         onSearchChange={setSearchQuery}
+                         hideMenuIcon={true}
+                    />
+                </View>
+                <View style={styles.listContent}>
+                    {[1, 2, 3, 4, 5, 6].map((key) => (
+                        <ContactCardSkeleton key={key} />
+                    ))}
+                </View>
+            </SafeAreaView>
         );
     }
 
@@ -229,19 +259,16 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 </View>
             )}
 
-            <FilterBar
-                activeFilter={activeFilter}
-                onFilterChange={setActiveFilter}
-            />
+
 
             <FlatList
-                data={filteredLeads}
+                data={displayedLeads}
                 renderItem={renderContactCard}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item._id || item.id}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={() => (
                     <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No leads matched your filters</Text>
+                        <Text style={styles.emptyText}>No leads found in this campaign</Text>
                     </View>
                 )}
                 refreshControl={
@@ -251,6 +278,28 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                         colors={[COLORS.primary]}
                     />
                 }
+                onEndReached={() => {
+                     if (!isLoading && pagination && pagination.page < pagination.pages) {
+                         // Load next page
+                         const filters = { 
+                            page: pagination.page + 1,
+                            campaignId: campaignId 
+                        };
+
+                        if (searchQuery) filters.search = searchQuery;
+                        
+                        if (dateFilter) {
+                            filters.startDate = dateFilter.toISOString();
+                            filters.endDate = dateFilter.toISOString();
+                        } else if (dateRange) {
+                            filters.startDate = dateRange.start.toISOString();
+                            filters.endDate = dateRange.end.toISOString();
+                        }
+
+                        dispatch(fetchCampaignRecords(filters));
+                     }
+                }}
+                onEndReachedThreshold={0.5}
             />
 
             <QuickActionsSheet
@@ -266,7 +315,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
             <StatusOverlay
                 contact={selectedContact}
                 visible={showStatusOverlay}
-                onSelect={(status) => selectedContact && updateLeadStatus(campaignId, selectedContact.id, status)}
+                onSelect={(status) => selectedContact && dispatch(updateLeadStatus({ id: selectedContact.id, status }))}
                 onClose={() => setShowStatusOverlay(false)}
             />
 
@@ -292,7 +341,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 onCall={() => {
                     const contact = reminderContact;
                     if (contact) {
-                        updateCallSchedule(campaignId, contact.id, null);
+                        dispatch(updateLead({ id: contact.id, data: { attributes: { ...contact.attributes, callSchedule: null } } }));
                         setReminderContact(null);
                         setTimeout(() => {
                             handleCallAction(contact);
@@ -301,7 +350,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 }}
                 onDismiss={() => {
                     if (reminderContact) {
-                        updateCallSchedule(campaignId, reminderContact.id, null);
+                        dispatch(updateLead({ id: reminderContact.id, data: { attributes: { ...reminderContact.attributes, callSchedule: null } } }));
                     }
                     setReminderContact(null);
                 }}

@@ -6,12 +6,13 @@ import {
     FlatList,
     TouchableOpacity,
     TextInput,
-    SafeAreaView,
+    
     StatusBar,
     Platform,
     ActivityIndicator,
     Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useContactStore } from '../store/contactStore';
 import { COLORS, SPACING } from '../constants/theme';

@@ -1,12 +1,15 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSelector } from 'react-redux';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { makeCall } from '../utils/intents';
 import defaultAvatar from '../assets/default_avatar.jpg';
 import customCallIcon from '../assets/custom_call_icon.jpg';
 
 const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress }) => {
+    const { statuses } = useSelector(state => state.config);
+
     const handleCallPress = (e) => {
         e.stopPropagation();
         if (onCallPress) {
@@ -65,7 +68,7 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
         if (diffMins < 60) {
             return `${diffMins} min ago`;
         } else if (diffHours < 24) {
-            return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+            return `${diffHours} hour${diffHours > 1 ? 's' : ''}  ago`;
         } else if (diffDays === 0) {
             return callTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
         } else {
@@ -75,25 +78,41 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
         }
     };
 
-    // Get status badge color and text
+    // Get status badge color and text - DYNAMIC
     const getStatusBadge = () => {
         // For New Enquiries, always show "New" status
         if (contact.isNewLead) {
             return { label: 'New', color: '#34C759', bg: '#E8F5E9' };
         }
 
-        const statusMap = {
-            'none': { label: 'None', color: '#9CA3AF', bg: '#F3F4F6' },
-            'callback': { label: 'Call Back', color: '#5856D6', bg: '#F0EFFF' },
-            'hot': { label: 'Hot', color: '#FF3B30', bg: '#FFE5E5' },
-            'warm': { label: 'Warm', color: '#FF9500', bg: '#FFF3E0' },
-            'cold': { label: 'Cold', color: '#007AFF', bg: '#E3F2FD' },
-            'interested': { label: 'Interested', color: '#34C759', bg: '#E8F5E9' },
-            'not_interested': { label: 'Not Interested', color: '#8E8E93', bg: '#F5F5F5' },
-            'personal': { label: 'Personal', color: '#AF52DE', bg: '#F3E5F5' },
-            'converted': { label: 'Converted', color: '#4CAF50', bg: '#E8F5E9' },
-        };
-        return statusMap[contact.status] || statusMap['none'];
+        // Safety check for statuses array
+        if (!statuses || statuses.length === 0) {
+            console.warn('ContactCard: statuses config is empty or undefined');
+            return { label: contact?.status || 'None', color: '#9CA3AF', bg: '#F3F4F6' };
+        }
+
+        // Find matching status in dynamic config
+        // Keys in config have format: "status_Cold", but contact.status is just "Cold"
+        const statusValue = contact?.status;
+        
+        if (!statusValue) {
+            return { label: 'None', color: '#9CA3AF', bg: '#F3F4F6' };
+        }
+
+        const matchingStatus = statuses.find(s => {
+            return s.label?.toLowerCase() === statusValue?.toLowerCase();
+        });
+        if (matchingStatus) {
+            return {
+                label: matchingStatus.label,
+                color: matchingStatus.color || '#9CA3AF',
+                bg: matchingStatus.color ? `${matchingStatus.color}20` : '#F3F4F6' // 20% opacity
+            };
+        }
+
+        // Default fallback - show the status value even if not in config
+        console.warn(`ContactCard: No matching status found for "${statusValue}"`);
+        return { label: statusValue, color: '#9CA3AF', bg: '#F3F4F6' };
     };
 
     const statusBadge = getStatusBadge();
@@ -104,6 +123,37 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
             d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     };
+
+    const formatBudget = (amount) => {
+        if (!amount) return '';
+        // Format in Indian Rupee style (Lakhs/Crores)
+        if (amount >= 10000000) {
+            return `₹${(amount / 10000000).toFixed(2)}Cr`;
+        } else if (amount >= 100000) {
+            return `₹${(amount / 100000).toFixed(2)}L`;
+        }
+        return `₹${amount.toLocaleString('en-IN')}`;
+    };
+
+    const formatSiteVisitDate = (dateString) => {
+        if (!dateString) return '';
+        const d = new Date(dateString);
+        const now = new Date();
+        const diffMs = d - now;
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffDays < 0) {
+            return `${Math.abs(diffDays)}d ago`;
+        } else if (diffDays === 0) {
+            return 'Today';
+        } else if (diffDays === 1) {
+            return 'Tomorrow';
+        } else if (diffDays <= 7) {
+            return `in ${diffDays}d`;
+        }
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
 
     return (
         <TouchableOpacity
@@ -138,25 +188,35 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                     {/* Phone Number */}
                     <Text style={styles.phoneText}>{contact.phone}</Text>
 
-                    {/* Lead Source & Assignment Info - New Enquiries Feature */}
-                    {contact.transferredBy ? (
-                        // Transferred lead: Show lead source and transferred by
-                        <>
-                            {contact.leadSource && (
-                                <Text style={styles.leadSourceText}>
-                                    {contact.leadSource}
-                                </Text>
-                            )}
-                            <Text style={styles.transferredByText}>
-                                Transferred by: {contact.transferredBy}
+                    {/* Lead Source & Assignment Info */}
+                    <View>
+                        {contact.leadSource && (
+                            <Text style={styles.leadSourceText}>
+                                {contact.leadSource}
                             </Text>
-                        </>
-                    ) : contact.assignedBy ? (
-                        // Assigned lead: Show assigned by
-                        <Text style={styles.assignedByText}>
-                            Assigned by: {contact.assignedBy}
-                        </Text>
-                    ) : null}
+                        )}
+                        
+                        {contact.transferredBy ? (
+                            <Text style={styles.transferredByText}>
+                                Transferred by: {
+                                    typeof contact.transferredBy === 'object' 
+                                        ? contact.transferredBy.name  || contact.transferredBy.role
+                                        : contact.transferredBy
+                                }
+                            </Text>
+                        ) : (
+                            <Text style={styles.assignedByText}>
+                                Assigned by: {
+                                    contact.assigned_by
+                                        ? (typeof contact.assigned_by === 'object'
+                                            ? contact.assigned_by.name || contact.assigned_by.role
+                                            : contact.assigned_by)
+                                        : (contact.assignedBy || 'System')
+                                }
+                            </Text>
+                        )}
+                    </View>
+
 
                     {/* Search Result / Status Row */}
                     {/* Hide for New Enquiries - only show for regular contacts */}
@@ -168,17 +228,9 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                                         {`${contact.lastCallRecord.duration || '0s'}`}
                                     </Text>
 
-                                    {/* Only show separator if NO campaign info */}
-                                    {!(contact.isCampaignLead || contact.campaignName) && (
-                                        <Text style={styles.bullet}> · </Text>
-                                    )}
-                                    {/* If campaign info exists, add a small space instead of bullet */}
-                                    {(contact.isCampaignLead || contact.campaignName) && (
-                                        <Text> </Text>
-                                    )}
-
+                                    <Text style={styles.bullet}> · </Text>
                                     <Text style={styles.timeText}>
-                                        {formatOutcomeDate(contact.lastCallRecord.timestamp)}
+                                        {formatOutcomeDate(contact.lastCallRecord.date)}
                                     </Text>
                                     {(contact.isCampaignLead || contact.campaignName) && (
                                         <>
@@ -342,6 +394,23 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#8E8E93',
         marginTop: 1,
+    },
+    attributesContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 4,
+        gap: 6,
+    },
+    attributeChip: {
+        backgroundColor: '#F3F4F6',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    attributeText: {
+        fontSize: 11,
+        color: '#374151',
+        fontWeight: '500',
     },
 });
 

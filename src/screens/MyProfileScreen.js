@@ -9,37 +9,42 @@ import {
     Alert,
     ActivityIndicator,
     Platform,
-    SafeAreaView,
+    
     Image,
     StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useProfileStore } from '../store/profileStore';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateProfile } from '../store/slices/authSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import defaultAvatar from '../assets/default_avatar.jpg';
+import ProfileSkeleton from '../components/ProfileSkeleton';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
-    const profile = useProfileStore((state) => state.profile);
-    const isLoading = useProfileStore((state) => state.isLoading);
-    const initializeProfile = useProfileStore((state) => state.initializeProfile);
-    const updateProfile = useProfileStore((state) => state.updateProfile);
+    const dispatch = useDispatch();
+    const { user, isLoading } = useSelector(state => state.auth);
 
     // Local state for editing
     const [editedProfile, setEditedProfile] = useState({});
     const [isDirty, setIsDirty] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
 
+    // Sync local state with Redux user when it loads
     useEffect(() => {
-        initializeProfile();
-    }, []);
-
-    // Sync local state with store when profile loads
-    useEffect(() => {
-        if (profile) {
-            setEditedProfile({ ...profile });
+        if (user) {
+            setEditedProfile({
+                name: user.name || '',
+                email: user.email || '',
+                phone: user.phone || '',
+                photo: user.photo || null,
+                role: user.role || '',
+            });
             setIsDirty(false);
         }
-    }, [profile]);
+    }, [user]);
 
     const handleUpdateField = (field, value) => {
         setEditedProfile(prev => ({ ...prev, [field]: value }));
@@ -47,12 +52,14 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
     };
 
     const handleSave = async () => {
-        const success = await updateProfile(editedProfile);
-        if (success) {
+        try {
+            // Don't send role in updates (read-only from mobile)
+            const { role, ...updates } = editedProfile;
+            await dispatch(updateProfile(updates)).unwrap();
             setIsDirty(false);
             Alert.alert('Success', 'Profile updated successfully');
-        } else {
-            Alert.alert('Error', 'Failed to update profile');
+        } catch (error) {
+            Alert.alert('Error', error || 'Failed to update profile');
         }
     };
 
@@ -75,13 +82,7 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
     };
 
     if (isLoading) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={COLORS.primary} />
-                </View>
-            </SafeAreaView>
-        );
+        return <ProfileSkeleton />;
     }
 
     return (
@@ -177,26 +178,23 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
                     </View>
                     <View style={styles.divider} />
 
-                    {/* Role */}
+                    {/* Role - Read Only */}
                     <View style={styles.fieldRow}>
                         <View style={styles.iconContainer}>
                             <MaterialCommunityIcons name="briefcase-outline" size={22} color="#64748B" />
                         </View>
                         <View style={styles.fieldContent}>
                             <Text style={styles.fieldLabel}>Role</Text>
-                            <TextInput
-                                style={styles.fieldInput}
-                                value={editedProfile.role}
-                                onChangeText={(val) => handleUpdateField('role', val)}
-                                placeholder="Enter role"
-                                placeholderTextColor={COLORS.textSecondary}
-                            />
+                            <Text style={styles.fieldValue}>{editedProfile.role || 'N/A'}</Text>
                         </View>
                     </View>
                 </View>
 
                 {/* Change Password Button */}
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => setShowPasswordModal(true)}
+                >
                     <View style={styles.actionContent}>
                         <View style={styles.iconContainer}>
                             <MaterialCommunityIcons name="lock-outline" size={22} color="#64748B" />
@@ -207,6 +205,12 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
                 </TouchableOpacity>
 
             </ScrollView>
+
+            {/* Change Password Modal */}
+            <ChangePasswordModal
+                visible={showPasswordModal}
+                onClose={() => setShowPasswordModal(false)}
+            />
         </SafeAreaView>
     );
 };
@@ -327,6 +331,12 @@ const styles = StyleSheet.create({
         color: '#1E293B', // Dark slate for strong readability
         fontWeight: '500',
         padding: 0, // Remove default padding for clean look
+    },
+    fieldValue: {
+        fontSize: 16,
+        color: '#64748B', // Lighter color for read-only
+        fontWeight: '500',
+        padding: 0,
     },
     divider: {
         height: 1,

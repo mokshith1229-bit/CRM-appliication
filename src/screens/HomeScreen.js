@@ -6,22 +6,27 @@ import {
     StyleSheet,
     RefreshControl,
     ActivityIndicator,
-    SafeAreaView,
+    
     Modal,
     Platform,
     StatusBar as NativeStatusBar,
     TouchableOpacity, // Ensure TouchableOpacity is imported
     Alert, // Import Alert
+    TextInput, // Added for search input
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { StatusBar } from 'expo-status-bar';
-import { useContactStore } from '../store/contactStore';
-import { useCampaignStore } from '../store/campaignStore';
+// import { useContactStore } from '../store/contactStore'; // Replaced by Redux
+// import { useCampaignStore } from '../store/campaignStore'; // Replaced by Redux
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchLeads, fetchEnquiries, setActiveFilter, updateLeadStatus } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
 import FilterBar from '../components/FilterBar';
 import SearchBar from '../components/SearchBar';
 import QuickActionsSheet from '../components/QuickActionsSheet';
+import ContactCardSkeleton from '../components/ContactCardSkeleton'; // Import Skeleton
 import StatusOverlay from '../components/StatusOverlay';
 import NotesModal from '../components/NotesModal';
 import ContactDetailScreen from './ContactDetailScreen';
@@ -29,6 +34,7 @@ import ReminderModal from '../components/ReminderModal';
 import DateRangeModal from '../components/DateRangeModal';
 import { registerForPushNotificationsAsync } from '../utils/NotificationService';
 import { useRoute } from '@react-navigation/native';
+import { MaterialIcons } from '@expo/vector-icons'; // Added for icons
 
 const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     // State for selected contact (direct object for immediate access)
@@ -45,82 +51,98 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     const [reminderContact, setReminderContact] = useState(null); // Contact for active reminder modal
     const [showTestModal, setShowTestModal] = useState(false); // DEBUG: Test modal
 
-    // Contact Store
-    const contacts = useContactStore((state) => state.contacts);
-    const activeFilter = useContactStore((state) => state.activeFilter);
-    const isLoading = useContactStore((state) => state.isLoading);
-    const initializeContacts = useContactStore((state) => state.initializeContacts);
-    const setActiveFilter = useContactStore((state) => state.setActiveFilter);
-    const updateContactStatus = useContactStore((state) => state.updateContactStatus);
-    const updateCallSchedule = useContactStore((state) => state.updateCallSchedule);
-    const updateNewLeadStatus = useContactStore((state) => state.updateNewLeadStatus);
+    // Redux
+    const dispatch = useDispatch();
+    const { leads, isLoading, activeFilter, pagination } = useSelector((state) => state.leads);
+    const { user } = useSelector((state) => state.auth);
 
-    // Campaign Store
-    const campaignLeads = useCampaignStore((state) => state.leads);
-    const campaigns = useCampaignStore((state) => state.campaigns);
-    const initializeCampaigns = useCampaignStore((state) => state.initializeCampaigns);
-    const updateLeadStatus = useCampaignStore((state) => state.updateLeadStatus);
-
-    // Flatten and normalize campaign leads for display
-    const mergedContacts = React.useMemo(() => {
-        const leadSources = ['Google', 'Facebook', 'Instagram', 'LinkedIn', 'Website', 'Referral'];
-        const assigners = ['Admin', 'Manager', 'System', 'Sales Team'];
-
-        // 1. Process Campaign Leads
-        const flattenedLeads = Object.entries(campaignLeads).flatMap(([cId, leads]) => {
-            const campaign = campaigns.find(c => c.id === cId);
-            return leads.map((lead, index) => ({
-                ...lead,
-                campaignId: cId,
-                campaignName: campaign?.name,
-                isCampaignLead: true,
-                // Normalize callStatus for unified filtering
-                callStatus: (lead.lastCallRecord?.systemCallResult || 'none').toLowerCase(),
-                // Mock Logic: ALL unprocessed contacts are New Enquiries
-                isNewLead: (lead.isNewLead !== undefined ? lead.isNewLead : true) && (!lead.status || lead.status === 'none'),
-                // Assign mock source/transfer info to EVERYONE to ensure data quality
-                ...(index % 2 === 0 ? {
-                    // Transferred lead
-                    leadSource: leadSources[index % leadSources.length],
-                    transferredBy: assigners[index % assigners.length],
-                } : {
-                    // Assigned lead
-                    assignedBy: assigners[index % assigners.length],
-                }),
-            }));
-        });
-
-        // 2. Add mock data to Personal Contacts
-        const contactsWithMockData = contacts.map((contact, index) => ({
-            ...contact,
-            // Mock Logic: ALL unprocessed contacts are New Enquiries
-            isNewLead: (contact.isNewLead !== undefined ? contact.isNewLead : true) && (!contact.status || contact.status === 'none'),
-            // Assign mock source/transfer info to EVERYONE
-            ...(index % 2 === 0 ? {
-                // Transferred lead
-                leadSource: contact.leadSource || leadSources[index % leadSources.length],
-                transferredBy: contact.transferredBy || assigners[index % assigners.length],
-            } : {
-                // Assigned lead
-                assignedBy: contact.assignedBy || assigners[index % assigners.length],
-            }),
-        }));
-
-        // 3. Combine and sort by latest activity/time
-        return [...contactsWithMockData, ...flattenedLeads].sort((a, b) => {
-            const tA = new Date(a.lastCallTime || a.timestamp || 0).getTime();
-            const tB = new Date(b.lastCallTime || b.timestamp || 0).getTime();
-            return tB - tA; // Newest first
-        });
-    }, [contacts, campaignLeads, campaigns]);
+    // Filter leads on frontend for display logic if needed or rely on backend.
+    // Backend `fetchLeads` returns generic list.
+    // We map them to match expected 'contact' shape for UI.
+    
+    // Map leads from store directly for display
+    // We rely on backend filtering now.
+    const displayedContacts = React.useMemo(() => {
+        return leads.map(lead => ({
+            id: lead._id, // Map _id to id
+            name: lead.name,
+            phone: lead.phone,
+            email: lead.email,
+            status: lead.status, 
+            leadSource: lead.lead_source || lead.source,
+            assignedTo: lead.assigned_to?.name || 'Unknown',
+            assigned_by: lead.assigned_by, // Pass full user object (or string for legacy)
+            transferredBy: lead.transfer_history && lead.transfer_history.length > 0 
+                ? lead.transfer_history[lead.transfer_history.length - 1].transferred_by 
+                : null, // Extract most recent transfer
+            photo: lead.photo, // Map photo
+            callLogs: lead.call_logs || [], // Map call_logs
+            notes: lead.notes || [], // Map notes
+            lastCallTime: lead.last_call_at || lead.updatedAt || lead.received_at, 
+            callStatus: lead.attributes?.callStatus || 'none', 
+            callSchedule: lead.attributes?.callSchedule,
+            isNewLead: lead.status === 'New' || lead.status === 'Unprocessed',
+            attributes: lead.attributes || {},
+            campaignId: lead.campaign_id, // Ensure campaignId is mapped
+            campaignName: lead.attributes?.campaignName, // Ensure campaignName is mapped
+            site_visit_done: lead.site_visit_done, 
+            lastCallRecord: lead.call_logs && lead.call_logs.length > 0 
+                ? lead.call_logs[lead.call_logs.length - 1] 
+                : null
+        })); // Removed sort, relying on backend sort
+    }, [leads]);
 
 
+    // Unified Fetch Logic
+    const fetchWithFilters = React.useCallback((pageOrReset = 1) => {
+        const filters = { page: pageOrReset };
+        
+        // Add Active Filter (Status/Source)
+        if (activeFilter !== 'all' && activeFilter !== 'new_leads') {
+             // Map activeFilter to backend keys if needed
+             if (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold') {
+                 filters.status = activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1);
+             } else {
+                 // Fallback or specific mapping
+                 filters.status = activeFilter;
+             }
+        }
 
+        // Add Search
+        if (searchQuery) {
+            filters.search = searchQuery;
+        }
+
+        // Add Date Filters
+        if (dateFilter) {
+            filters.startDate = dateFilter.toISOString();
+            filters.endDate = dateFilter.toISOString();
+        } else if (dateRange) {
+            filters.startDate = dateRange.start.toISOString();
+            filters.endDate = dateRange.end.toISOString();
+        }
+
+        if (activeFilter === 'new_leads') {
+           // For new leads (Enquiries), usually separate endpoint or 'New' status
+           // If using fetchEnquiries, it might need search params too if backend supports it
+           dispatch(fetchEnquiries(filters)); 
+        } else {
+           dispatch(fetchLeads(filters));
+        }
+    }, [activeFilter, searchQuery, dateFilter, dateRange, dispatch]);
+
+    // Debounce Search
     useEffect(() => {
-        initializeContacts();
-        initializeCampaigns(); // Ensure campaigns are loaded too
+        const timer = setTimeout(() => {
+             fetchWithFilters(1);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery, activeFilter, dateFilter, dateRange, fetchWithFilters]);
+
+    // Register Notifications
+    useEffect(() => {
         registerForPushNotificationsAsync();
-    }, [initializeContacts, initializeCampaigns]);
+    }, []);
 
     // Check for due reminders every 10 seconds (Checking merged list would duplicate if we not careful, 
     // but effectively we should check all. For now checking `contacts` is existing behavior, 
@@ -129,8 +151,9 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         const checkReminders = () => {
             // Find first contact with a past due schedule
             const now = new Date();
-            const dueContact = mergedContacts.find(c =>
-                c.callSchedule && new Date(c.callSchedule) <= now
+            // TODO: Ensure 'callSchedule' is populated from backend lead attributes or dedicated field
+            const dueContact = displayedContacts.find(c =>
+                c.attributes?.callSchedule && new Date(c.attributes.callSchedule) <= now
             );
 
             // Only show if there's a due contact and no reminder is currently showing
@@ -143,13 +166,13 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         checkReminders(); // Check immediately on mount/update
 
         return () => clearInterval(intervalId);
-    }, [mergedContacts, reminderContact]);
+    }, [displayedContacts, reminderContact]);
 
     // Handle deep linking from InAppCallScreen
     useEffect(() => {
         if (route.params?.openContactDetail) {
             const contactId = route.params.openContactDetail;
-            const contact = mergedContacts.find(c => c.id === contactId);
+            const contact = displayedContacts.find(c => c.id === contactId);
             if (contact) {
                 setSelectedContact(contact);
                 setShowDetailScreen(true);
@@ -167,78 +190,13 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             setReminderContact(null);
             navigation.setParams({ closeModals: undefined, openContactDetail: undefined });
         }
-    }, [route.params, mergedContacts]);
+    }, [route.params, displayedContacts]);
 
 
 
-    // Unified Filtering Logic
-    const filteredContacts = React.useMemo(() => {
-        // All Calls: Exclude New Enquiries (isNewLead = true)
-        if (activeFilter === 'all') {
-            return mergedContacts.filter(contact => !contact.isNewLead);
-        }
-
-        // New Leads filter - show only contacts with isNewLead = true
-        if (activeFilter === 'new_leads') {
-            return mergedContacts.filter(contact => contact.isNewLead === true);
-        }
-
-        return mergedContacts.filter(contact => {
-            // Normalize status values for comparison
-            // Personal contacts use 'connected', 'missed' in callStatus. campaigns might use 'Connected' (case diff)
-            const cStatus = (contact.callStatus || '').toLowerCase();
-            const lStatus = (contact.status || '').toLowerCase();
-
-            if (activeFilter === 'connected') return cStatus === 'connected';
-            if (activeFilter === 'missed') return cStatus === 'disconnected' || cStatus === 'missed'; // Broaden match
-
-            // For lead statuses (hot, warm, etc)
-            // contactStore uses lowercase (hot, warm)
-            // campaignStore usually lowercase too
-            return lStatus === activeFilter.toLowerCase();
-        });
-    }, [mergedContacts, activeFilter]);
-
-
-    // Apply search and date filter
-    const searchFilteredContacts = filteredContacts.filter(contact => {
-        let matchesSearch = true;
-        let matchesDate = true;
-
-        // Search Filter
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            matchesSearch = (
-                (contact.name || '').toLowerCase().includes(query) ||
-                (contact.phone || '').toLowerCase().includes(query)
-            );
-        }
-
-        // Date Filter (Single or Range)
-        if (dateFilter) {
-            // Single Date
-            if (!contact.lastCallTime) {
-                matchesDate = false;
-            } else {
-                const contactDate = new Date(contact.lastCallTime).toDateString();
-                const filterDate = dateFilter.toDateString();
-                matchesDate = contactDate === filterDate;
-            }
-        } else if (dateRange) {
-            // Date Range
-            if (!contact.lastCallTime) {
-                matchesDate = false;
-            } else {
-                const contactTime = new Date(contact.lastCallTime).getTime();
-                const startTime = dateRange.start.getTime();
-                const endTime = dateRange.end.getTime();
-                // Check if within range (inclusive)
-                matchesDate = contactTime >= startTime && contactTime <= endTime;
-            }
-        }
-
-        return matchesSearch && matchesDate;
-    });
+    // REMOVED Client-Side Filtering blocks (filteredContacts, searchFilteredContacts)
+    // We now use displayedContacts which is directly mapped from Redux 'leads' state
+    // which is populated by server-side filtered results.
 
     const handleCalendarPress = () => {
         setShowDateRangeModal(true);
@@ -285,25 +243,18 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
 
     const handleStatusSelect = async (status) => {
         if (selectedContact) {
-            if (selectedContact.isCampaignLead && selectedContact.campaignId) {
-                await updateLeadStatus(selectedContact.campaignId, selectedContact.id, status);
-            } else {
-                await updateContactStatus(selectedContact.id, status);
-                // Auto-remove from New Enquiries only when:
-                // 1. Contact is currently a new lead (isNewLead = true)
-                // 2. User is changing status from default (which would be 'none' or undefined)
-                // This means contact stays in New Enquiries until BOTH call is made AND status is changed
-                if (selectedContact.isNewLead && status !== 'none') {
-                    await updateNewLeadStatus(selectedContact.id, false);
-                }
-            }
-            // No local state update needed as store update triggers re-render via useMemo
+            // Replaced legacy store logic with Redux
+            await dispatch(updateLeadStatus({ id: selectedContact.id, status }));
+            
+            // Auto-remove logic handled by backend or re-fetch if needed
+            // For immediate UI update, Redux slice handles the state update
+            await dispatch(fetchLeads());
         }
     };
 
     const handleRefresh = async () => {
         setRefreshing(true);
-        await Promise.all([initializeContacts(), initializeCampaigns()]);
+        fetchWithFilters(1);
         setRefreshing(false);
     };
 
@@ -314,15 +265,16 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         navigation.navigate('InAppCall', { contact });
     };
 
-    const renderContactCard = ({ item }) => (
-        <ContactCard
+    const renderContactCard = ({ item }) => {
+        
+        return <ContactCard
             contact={item}
             onPress={handleContactPress}
             onLongPress={handleContactLongPress}
             onAvatarPress={handleAvatarPress}
             onCallPress={handleCallAction}
         />
-    );
+    };
 
     const renderEmptyState = () => (
         <View style={styles.emptyState}>
@@ -335,61 +287,93 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         </View>
     );
 
-    if (isLoading && (!contacts.length && !Object.keys(campaignLeads).length)) {
+    // Skeleton Loading View
+    const renderSkeletons = () => {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={styles.loadingText}>Loading contacts...</Text>
+            <View style={styles.listContent}>
+                {[1, 2, 3, 4, 5, 6].map((key) => (
+                    <ContactCardSkeleton key={key} />
+                ))}
             </View>
         );
-    }
-
-
+    };
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
-
-            <SearchBar
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                onMenuPress={onOpenDrawer}
-                onCalendarPress={handleCalendarPress}
-                isDateFiltered={!!dateFilter || !!dateRange}
-            />
-
-            {(dateFilter || dateRange) && (
-                <View style={styles.filterChipContainer}>
-                    <TouchableOpacity onPress={clearDateFilter} style={styles.filterChip}>
-                        <Text style={styles.filterChipText}>
-                            {dateFilter
-                                ? `📅 ${dateFilter.toLocaleDateString()} ✕`
-                                : `📅 ${dateRange.start.toLocaleDateString()} - ${dateRange.end.toLocaleDateString()} ✕`
-                            }
-                        </Text>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            
+            <View style={styles.header}>
+                <View style={styles.headerTop}>
+                    <TouchableOpacity onPress={onOpenDrawer} style={{ padding: 4 }}>
+                        <MaterialIcons name="menu" size={28} color={COLORS.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { marginLeft: 16 }]}>Contacts</Text>
+                    <TouchableOpacity onPress={handleCalendarPress}>
+                        <View>
+                            <MaterialIcons name="date-range" size={24} color={COLORS.text} />
+                            {(dateFilter || dateRange) && <View style={{ position: 'absolute', right: -2, top: -2, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary }} />}
+                        </View>
                     </TouchableOpacity>
                 </View>
-            )}
 
-            <FilterBar
-                activeFilter={activeFilter}
-                onFilterChange={setActiveFilter}
-            />
-
-            <FlatList
-                data={searchFilteredContacts}
-                renderItem={renderContactCard}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={renderEmptyState}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={handleRefresh}
-                        colors={[COLORS.primary]}
+                {/* Search Bar */}
+                <View style={styles.searchContainer}>
+                    <MaterialIcons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search leads..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholderTextColor="#9CA3AF"
                     />
+                </View>
+
+                {/* Filter Bar */}
+                 <FilterBar
+                    activeFilter={activeFilter}
+                    onFilterChange={(filter) => dispatch(setActiveFilter(filter))} // Corrected prop name
+                />
+            </View>
+
+            {/* Content Area */}
+            {isLoading && pagination.page === 1 ? (
+                 renderSkeletons()
+            ) : (
+                <FlatList
+                    data={displayedContacts}
+                    renderItem={renderContactCard}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={renderEmptyState}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={handleRefresh}
+                            colors={[COLORS.primary]}
+                        />
+                    }
+                    onEndReached={() => {
+                         if (activeFilter !== 'new_leads' && !isLoading && pagination.page < pagination.pages) {
+                             dispatch(fetchLeads({ 
+                                 page: pagination.page + 1,
+                                 // Include current filters
+                                 search: searchQuery,
+                                 startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
+                                 endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
+                                 status: (activeFilter !== 'all' && activeFilter !== 'new_leads') ? (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold' ? activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1) : activeFilter) : undefined
+                             }));
+                         }
+                    }}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={
+                    isLoading && pagination.page > 1 ? (
+                        <View style={{ paddingHorizontal: 16 }}>
+                            <ContactCardSkeleton />
+                        </View>
+                    ) : null
                 }
-            />
+                />
+            )}
 
             <QuickActionsSheet
                 contact={selectedContact}
@@ -571,6 +555,30 @@ const styles = StyleSheet.create({
         ...TYPOGRAPHY.body,
         color: COLORS.textSecondary,
         marginTop: SPACING.sm,
+    },
+    headerTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 12, // More rounded
+        paddingHorizontal: 12,
+        height: 44, // Slightly taller
+        marginBottom: 12,
+    },
+    searchIcon: {
+        marginRight: 8,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        color: COLORS.text,
+        height: '100%',
     },
 });
 

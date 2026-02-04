@@ -7,30 +7,35 @@ import {
     ScrollView,
     Modal,
     Animated,
-    SafeAreaView,
+    
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useProfileStore } from '../store/profileStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchCampaigns, } from '../store/slices/leadSlice';
+import { logout } from '../store/slices/authSlice';
+import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { useContactStore } from '../store/contactStore';
-import { useCampaignStore } from '../store/campaignStore';
 import LogoutModal from '../components/LogoutModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CustomDrawer = ({ visible, onClose, navigation }) => {
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [showTestCallModal, setShowTestCallModal] = useState(false);
     const contacts = useContactStore(state => state.contacts);
-    const { campaigns, initializeCampaigns } = useCampaignStore();
+    const dispatch = useDispatch();
+    const campaigns = useSelector(state => state.leads.campaigns);
+    const { sources, statuses } = useSelector(state => state.config);
     const clearProfile = useProfileStore((state) => state.clearProfile);
     const clearSubscription = useSubscriptionStore((state) => state.clearSubscription);
     const slideAnim = React.useRef(new Animated.Value(-300)).current;
 
     React.useEffect(() => {
-        initializeCampaigns();
-    }, []);
+        dispatch(fetchCampaigns());
+    }, [dispatch]);
 
     React.useEffect(() => {
         if (visible) {
@@ -53,9 +58,9 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
         try {
             await clearProfile();
             await clearSubscription();
-            // Clear Auth Token
-            await AsyncStorage.removeItem('userToken');
-            await AsyncStorage.removeItem('userPhone');
+            
+            // Dispatch Logout Action (Handlers Server Logout + Storage Clear + Redux State Update)
+            await dispatch(logout()).unwrap();
 
             setShowLogoutModal(false);
             onClose();
@@ -150,7 +155,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                     >
                         <SafeAreaView style={styles.drawerContent}>
                             <View style={styles.header}>
-                                <Text style={styles.headerTitle}>Menu</Text>
+                                <Text style={styles.headerTitle}>Main Menu</Text>
                                 <TouchableOpacity onPress={onClose}>
                                     <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
                                 </TouchableOpacity>
@@ -173,12 +178,12 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
 
                                 {campaigns.map((campaign) => (
                                     <TouchableOpacity
-                                        key={campaign.id}
+                                        key={campaign._id}
                                         style={styles.menuItem}
                                         onPress={() => {
                                             onClose();
                                             navigation.navigate('CampaignLeads', {
-                                                campaignId: campaign.id,
+                                                campaignId: campaign._id,
                                                 campaignName: campaign.name
                                             });
                                         }}
@@ -191,58 +196,78 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                 <View style={styles.sectionDivider} />
                                 <Text style={styles.sectionHeader}>Filters</Text>
 
-                                {[
-                                    { id: 'hot', label: 'Hot Call', icon: 'local-fire-department' },
-                                    { id: 'warm', label: 'Warm Call', icon: 'wb-sunny' },
-                                    { id: 'cold', label: 'Cold Call', icon: 'ac-unit' },
-                                    { id: 'callback', label: 'Call Back', icon: 'phone-callback' },
-                                    { id: 'interested', label: 'Interested', icon: 'star' },
-                                    { id: 'not_interested', label: 'Not Interested', icon: 'block' },
-                                    { id: 'site_visit_done', label: 'Site Visit Done', icon: 'check-circle' },
-                                ].map((filter) => (
-                                    <TouchableOpacity
-                                        key={filter.id}
-                                        style={styles.menuItem}
-                                        onPress={() => {
-                                            onClose();
-                                            navigation.navigate('FilteredContacts', {
-                                                filterId: filter.id,
-                                                filterLabel: filter.label
-                                            });
-                                        }}
-                                    >
-                                        <MaterialIcons name={filter.icon} size={24} color={COLORS.text} style={styles.menuIcon} />
-                                        <Text style={styles.menuText}>{filter.label}</Text>
-                                    </TouchableOpacity>
-                                ))}
+                                {statuses.length > 0 ? (
+                                    statuses.map((status) => (
+                                        <TouchableOpacity
+                                            key={status.key}
+                                            style={styles.menuItem}
+                                            onPress={() => {
+                                                onClose();
+                                                navigation.navigate('FilteredContacts', {
+                                                    filterId: `status_${status.key}`,
+                                                    filterLabel: status.label,
+                                                    timestamp: Date.now()
+                                                });
+                                            }}
+                                        >
+                                            <MaterialIcons 
+                                                name={
+                                                    status.label.includes('Hot') ? 'local-fire-department' :
+                                                    status.label.includes('Warm') ? 'wb-sunny' :
+                                                    status.label.includes('Cold') ? 'ac-unit' :
+                                                    status.label.includes('Interested') ? 'star' :
+                                                    status.label.includes('Not Interested') ? 'block' :
+                                                    'label'
+                                                } 
+                                                size={24} 
+                                                color={status.color || COLORS.text} 
+                                                style={styles.menuIcon} 
+                                            />
+                                            <Text style={styles.menuText}>{status.label}</Text>
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <Text style={[styles.menuText, { padding: 16, color: COLORS.textSecondary }]}>No statuses found</Text>
+                                )}
 
                                 <View style={styles.sectionDivider} />
                                 <Text style={styles.sectionHeader}>Lead Source</Text>
-                                {[
-                                    { id: 'source_Google', label: 'Google', icon: 'public' },
-                                    { id: 'source_Facebook', label: 'Facebook', icon: 'facebook' },
-                                    { id: 'source_Instagram', label: 'Instagram', icon: 'camera-alt' },
-                                    { id: 'source_LinkedIn', label: 'LinkedIn', icon: 'business' },
-                                    { id: 'source_Website', label: 'Website', icon: 'web' },
-                                    { id: 'source_Referral', label: 'Referral', icon: 'people' },
-                                ].map((filter) => (
-                                    <TouchableOpacity
-                                        key={filter.id}
-                                        style={styles.menuItem}
-                                        onPress={() => {
-                                            onClose();
-                                            navigation.navigate('FilteredContacts', {
-                                                filterId: filter.id,
-                                                filterLabel: filter.label
-                                            });
-                                        }}
-                                    >
-                                        <MaterialIcons name={filter.icon} size={24} color={COLORS.text} style={styles.menuIcon} />
-                                        <Text style={styles.menuText}>{filter.label}</Text>
-                                    </TouchableOpacity>
-                                ))}
+                                {sources.length > 0 ? (
+                                    sources.map((source) => (
+                                        <TouchableOpacity
+                                            key={source.key}
+                                            style={styles.menuItem}
+                                            onPress={() => {
+                                                onClose();
+                                                navigation.navigate('FilteredContacts', {
+                                                    filterId: `source_${source.key}`,
+                                                    filterLabel: source.label,
+                                                    timestamp: Date.now()
+                                                });
+                                            }}
+                                        >
+                                            <MaterialIcons 
+                                                name={
+                                                    source.key === 'Facebook' ? 'facebook' :
+                                                    source.key === 'Google' ? 'public' :
+                                                    source.key === 'Instagram' ? 'camera-alt' :
+                                                    source.key === 'LinkedIn' ? 'business' :
+                                                    source.key === 'Website' ? 'web' :
+                                                    source.key === 'Referral' ? 'people' :
+                                                    'link'
+                                                } 
+                                                size={24} 
+                                                color={COLORS.text} 
+                                                style={styles.menuIcon} 
+                                            />
+                                            <Text style={styles.menuText}>{source.label}</Text>
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <Text style={[styles.menuText, { padding: 16, color: COLORS.textSecondary }]}>No sources found</Text>
+                                )}
 
-                                <View style={styles.sectionDivider} />
+                                {/* <View style={styles.sectionDivider} />
                                 <Text style={styles.sectionHeader}>Transferred By</Text>
                                 {[
                                     { id: 'transferred_Admin', label: 'Admin', icon: 'admin-panel-settings' },
@@ -254,17 +279,19 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                         key={filter.id}
                                         style={styles.menuItem}
                                         onPress={() => {
+                                            // toggleDrawer(); // Close drawer first? onClose handles it.
                                             onClose();
                                             navigation.navigate('FilteredContacts', {
                                                 filterId: filter.id,
-                                                filterLabel: filter.label
+                                                filterLabel: filter.label,
+                                                timestamp: Date.now() // Force update
                                             });
                                         }}
                                     >
                                         <MaterialIcons name={filter.icon} size={24} color={COLORS.text} style={styles.menuIcon} />
                                         <Text style={styles.menuText}>{filter.label}</Text>
                                     </TouchableOpacity>
-                                ))}
+                                ))} */}
                             </ScrollView>
 
                             <View style={styles.footer}>

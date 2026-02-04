@@ -7,12 +7,13 @@ import {
     Image,
     Animated,
     StatusBar,
-    SafeAreaView,
+    
     Modal,
     TextInput,
     Linking,
     Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../constants/theme';
 import { useContactStore } from '../store/contactStore';

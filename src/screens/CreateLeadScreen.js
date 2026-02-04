@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,16 +9,31 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
+    ActivityIndicator,
     StatusBar,
 } from 'react-native';
-import { useContactStore } from '../store/contactStore';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDispatch, useSelector } from 'react-redux';
+import { createLead, searchLeads, clearSearchResults, updateLead } from '../store/slices/leadSlice';
 import StatusPicker from '../components/StatusPicker';
+import SearchDropdown from '../components/SearchDropdown';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 
 const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const { initialPhone, initialName } = route.params || {};
+    const dispatch = useDispatch();
+    const { searchResults, isSearching, createLoading, error, tenantConfig } = useSelector(state => state.leads);
+
+    // Update mode state
+    const [isUpdateMode, setIsUpdateMode] = useState(false);
+    const [selectedLeadId, setSelectedLeadId] = useState(null);
+
+    // Field-specific search results
+    const [nameSearchResults, setNameSearchResults] = useState([]);
+    const [emailSearchResults, setEmailSearchResults] = useState([]);
+    const [phoneSearchResults, setPhoneSearchResults] = useState([]);
+    const [activeSearchField, setActiveSearchField] = useState(null);
 
     const [name, setName] = useState(initialName || '');
     const [email, setEmail] = useState('');
@@ -28,7 +43,7 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const [occupation, setOccupation] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [leadSource, setLeadSource] = useState('self');
-    const [leadStatus, setLeadStatus] = useState('none');
+    const [leadStatus, setLeadStatus] = useState('New');
     const [requirement, setRequirement] = useState('');
     const [customFields, setCustomFields] = useState([]);
     const [showAddField, setShowAddField] = useState(false);
@@ -39,24 +54,29 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const [showSourcePicker, setShowSourcePicker] = useState(false);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
 
-    const addContact = useContactStore((state) => state.addContact);
+    // Debounce timers
+    const nameDebounceTimer = useRef(null);
+    const emailDebounceTimer = useRef(null);
+    const phoneDebounceTimer = useRef(null);
 
-    const sourceOptions = [
-        { label: 'Facebook', value: 'facebook' },
-        { label: 'Google', value: 'google' },
-        { label: 'Manager', value: 'manager' },
-        { label: 'Self', value: 'self' },
-        { label: 'Walk in', value: 'walk_in' },
-        { label: 'WhatsApp', value: 'whatsapp' },
-    ];
+    // Fetch tenant config on mount
+    useEffect(() => {
+        if (!tenantConfig) {
+            const { fetchTenantConfig } = require('../store/slices/leadSlice');
+            dispatch(fetchTenantConfig());
+        }
+    }, []);
 
-    const statusOptions = [
-        { label: 'None', value: 'none' },
-        { label: 'Hot', value: 'hot' },
-        { label: 'Warm', value: 'warm' },
-        { label: 'Cold', value: 'cold' },
-        { label: 'Not Interested', value: 'not_interested' },
-    ];
+    // Derived options from tenantConfig
+    const sourceOptions = tenantConfig?.lead_sources?.map(s => ({
+        label: s.label,
+        value: s.key
+    })) || [];
+
+    const statusOptions = tenantConfig?.lead_statuses?.map(s => ({
+        label: s.label,
+        value: s.label // Use label to avoid 'status_' prefix
+    })) || [];
 
     const handleAddCustomField = () => {
         if (newFieldName.trim() && newFieldValue.trim()) {
@@ -74,40 +94,157 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
         setCustomFields(customFields.filter((field) => field.id !== id));
     };
 
+    // Update search results based on field
+    useEffect(() => {
+        if (activeSearchField === 'name') {
+            setNameSearchResults(searchResults);
+        } else if (activeSearchField === 'email') {
+            setEmailSearchResults(searchResults);
+        } else if (activeSearchField === 'phone') {
+            setPhoneSearchResults(searchResults);
+        }
+    }, [searchResults, activeSearchField]);
+
+    // Auto-fill form with selected lead data
+    const handleSelectLead = (lead) => {
+        setIsUpdateMode(true);
+        setSelectedLeadId(lead._id);
+        
+        // Fill all fields
+        setName(lead.name || '');
+        setEmail(lead.email || '');
+        setPhone(lead.phone || ''); 
+        setSecondaryPhone(lead.secondary_mobile || '');
+        setWhatsappNumber(lead.whatsapp_number || lead.phone || '');
+        setOccupation(lead.occupation || '');
+        setCompanyName(lead.company_name || '');
+        setLeadSource(lead.lead_source || '');
+        setLeadStatus(lead.status || 'New');
+        setRequirement(lead.requirement || '');
+        
+        // Handle custom fields if they exist
+        if (lead.custom_fields && typeof lead.custom_fields === 'object') {
+            const customFieldsArray = Object.entries(lead.custom_fields).map(([key, value]) => ({
+                id: Date.now() + Math.random(),
+                name: key,
+                value: String(value)
+            }));
+            setCustomFields(customFieldsArray);
+        } else {
+            setCustomFields([]);
+        }
+
+        // Clear all search results
+        setNameSearchResults([]);
+        setEmailSearchResults([]);
+        setPhoneSearchResults([]);
+        setActiveSearchField(null);
+        dispatch(clearSearchResults());
+    };
+
+    // Debounced search function
+    const debouncedSearch = useCallback((query, field, timer) => {
+        if (timer.current) {
+            clearTimeout(timer.current);
+        }
+
+        if (query && query.length >= 2) {
+            setActiveSearchField(field);
+            timer.current = setTimeout(() => {
+                dispatch(searchLeads({ query, field }));
+            }, 500); // 500ms debounce
+        } else {
+            // Clear field-specific results
+            if (field === 'name') setNameSearchResults([]);
+            if (field === 'email') setEmailSearchResults([]);
+            if (field === 'phone') setPhoneSearchResults([]);
+            setActiveSearchField(null);
+            dispatch(clearSearchResults());
+        }
+    }, [dispatch]);
+
+    // Handle name change with search
+    const handleNameChange = (text) => {
+        setName(text);
+        debouncedSearch(text, 'name', nameDebounceTimer);
+    };
+
+    // Handle email change with search
+    const handleEmailChange = (text) => {
+        setEmail(text);
+        debouncedSearch(text, 'email', emailDebounceTimer);
+    };
+
+    // Handle phone change with search
+    const handlePhoneChange = (text) => {
+        setPhone(text);
+        // Auto-fill WhatsApp number if it's empty
+        if (!whatsappNumber) {
+            setWhatsappNumber(text);
+        }
+        debouncedSearch(text, 'phone', phoneDebounceTimer);
+    };
+
+    // Cleanup timers on unmount
+    useEffect(() => {
+        return () => {
+            if (nameDebounceTimer.current) clearTimeout(nameDebounceTimer.current);
+            if (emailDebounceTimer.current) clearTimeout(emailDebounceTimer.current);
+            if (phoneDebounceTimer.current) clearTimeout(phoneDebounceTimer.current);
+        };
+    }, []);
+
     const handleSaveLead = async () => {
         if (!phone.trim()) {
             Alert.alert('Error', 'Mobile number is required');
             return;
         }
 
-        const newLead = {
-            id: Date.now().toString(),
+        const leadData = {
             name: name.trim() || '',
             phone: phone.trim(),
-            secondaryPhone: secondaryPhone.trim() || '',
-            whatsappNumber: whatsappNumber.trim() || phone.trim(),
+            secondary_mobile: secondaryPhone.trim() || '',
+            whatsapp_number: whatsappNumber.trim() || phone.trim(),
             email: email.trim() || '',
             occupation: occupation.trim() || '',
-            companyName: companyName.trim() || '',
-            source: leadSource,
+            company_name: companyName.trim() || '',
+            lead_source: leadSource,
             status: leadStatus,
             requirement: requirement.trim() || '',
-            customFields,
-            assignedTo: '',
-            callStatus: 'disconnected',
-            callDirection: 'outgoing',
-            lastCallTime: new Date().toISOString(),
-            leadDescription: requirement.trim() || '',
-            notes: [],
+            custom_fields: customFields.reduce((acc, field) => {
+                acc[field.name] = field.value;
+                return acc;
+            }, {}),
         };
 
-        const success = await addContact(newLead);
-        if (success) {
-            Alert.alert('Success', 'Lead created successfully', [
-                { text: 'OK', onPress: () => { navigation.navigate('Home'); if (onOpenDrawer) onOpenDrawer(); } },
-            ]);
-        } else {
-            Alert.alert('Error', 'Failed to create lead');
+        try {
+            if (isUpdateMode && selectedLeadId) {
+                // Update existing lead
+                await dispatch(updateLead({ id: selectedLeadId, data: leadData })).unwrap();
+                Alert.alert('Success', 'Lead updated successfully', [
+                    { 
+                        text: 'OK', 
+                        onPress: () => { 
+                            navigation.navigate('Home'); 
+                            if (onOpenDrawer) onOpenDrawer(); 
+                        } 
+                    },
+                ]);
+            } else {
+                // Create new lead
+                await dispatch(createLead(leadData)).unwrap();
+                Alert.alert('Success', 'Lead created successfully', [
+                    { 
+                        text: 'OK', 
+                        onPress: () => { 
+                            navigation.navigate('Home'); 
+                            if (onOpenDrawer) onOpenDrawer(); 
+                        } 
+                    },
+                ]);
+            }
+        } catch (err) {
+            Alert.alert('Error', err || `Failed to ${isUpdateMode ? 'update' : 'create'} lead`);
         }
     };
 
@@ -128,56 +265,74 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
-                            <MaterialIcons name="arrow-back" size={24} color={COLORS.primary} />
+                        <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
+                            <MaterialIcons name="arrow-back" size={24} color={COLORS.text} />
                         </TouchableOpacity>
-                        <Text style={styles.title}>Create New Lead</Text>
+                        <Text style={styles.headerTitle}>{isUpdateMode ? 'Update Lead' : 'Create Lead'}</Text>
+                        <View style={{ width: 44 }} />
                     </View>
-
                     <View style={styles.form}>
                         {/* Name */}
                         <View style={styles.fieldContainer}>
                             <Text style={styles.label}>Name</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={name}
-                                onChangeText={setName}
-                                placeholder="Enter name"
-                                placeholderTextColor={COLORS.textSecondary}
-                            />
+                            <View style={{ position: 'relative', zIndex: 3 }}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={name}
+                                    onChangeText={handleNameChange}
+                                    placeholder="Enter name"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                />
+                                <SearchDropdown
+                                    results={nameSearchResults}
+                                    isSearching={isSearching && activeSearchField === 'name'}
+                                    onSelectLead={handleSelectLead}
+                                    field="name"
+                                />
+                            </View>
                         </View>
 
                         {/* Email */}
                         <View style={styles.fieldContainer}>
                             <Text style={styles.label}>Email</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="Enter email"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                placeholderTextColor={COLORS.textSecondary}
-                            />
+                            <View style={{ position: 'relative', zIndex: 2 }}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={email}
+                                    onChangeText={handleEmailChange}
+                                    placeholder="Enter email"
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                />
+                                <SearchDropdown
+                                    results={emailSearchResults}
+                                    isSearching={isSearching && activeSearchField === 'email'}
+                                    onSelectLead={handleSelectLead}
+                                    field="email"
+                                />
+                            </View>
                         </View>
 
                         {/* Mobile Number */}
                         <View style={styles.fieldContainer}>
                             <Text style={styles.label}>Mobile Number *</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={phone}
-                                onChangeText={(text) => {
-                                    setPhone(text);
-                                    // Auto-fill WhatsApp number if it's empty
-                                    if (!whatsappNumber) {
-                                        setWhatsappNumber(text);
-                                    }
-                                }}
-                                placeholder="Enter mobile number"
-                                keyboardType="phone-pad"
-                                placeholderTextColor={COLORS.textSecondary}
-                            />
+                            <View style={{ position: 'relative', zIndex: 1 }}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={phone}
+                                    onChangeText={handlePhoneChange}
+                                    placeholder="Enter mobile number"
+                                    keyboardType="phone-pad"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                />
+                                <SearchDropdown
+                                    results={phoneSearchResults}
+                                    isSearching={isSearching && activeSearchField === 'phone'}
+                                    onSelectLead={handleSelectLead}
+                                    field="phone"
+                                />
+                            </View>
                         </View>
 
                         {/* Secondary Mobile Number */}
@@ -302,8 +457,15 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
                     <TouchableOpacity
                         style={[styles.button, styles.primaryButton, { flex: 1 }]}
                         onPress={handleSaveLead}
+                        disabled={createLoading}
                     >
-                        <Text style={styles.primaryButtonText}>Save Lead</Text>
+                        {createLoading ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                            <Text style={styles.primaryButtonText}>
+                                {isUpdateMode ? 'Update Lead' : 'Save Lead'}
+                            </Text>
+                        )}
                     </TouchableOpacity>
                 </View>
                 {/* Pickers */}
@@ -345,10 +507,26 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     header: {
-        paddingHorizontal: 16,
-        paddingVertical: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 12,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.cardBackground,
+    },
+    headerButton: {
+        padding: 8,
+        width: 44,
+        alignItems: 'center',
+    },
+    headerTitle: {
+        ...TYPOGRAPHY.title,
+        fontSize: 20,
+        fontWeight: '700',
+        flex: 1,
+        textAlign: 'center',
+        color: COLORS.text,
     },
     backButton: {
         marginBottom: SPACING.sm,

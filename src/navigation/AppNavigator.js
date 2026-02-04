@@ -21,34 +21,55 @@ import BottomTabs from '../components/BottomTabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator } from 'react-native';
 
+import { useDispatch, useSelector } from 'react-redux';
+import { checkAuth } from '../store/slices/authSlice';
+
 const AppNavigator = () => {
-    const [currentScreen, setCurrentScreen] = useState(null); // Null initially for loading
+    const [currentScreen, setCurrentScreen] = useState(null);
     const [screenStack, setScreenStack] = useState([]);
     const [drawerVisible, setDrawerVisible] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    
+    // Use Redux state
+    const dispatch = useDispatch();
+    const { isAuthenticated, isLoading: isAuthLoading } = useSelector(state => state.auth);
+    const [isNavReady, setIsNavReady] = useState(false); // To prevent flickering
 
     const [currentParams, setCurrentParams] = useState({});
 
+    // 1. Check Auth on Mount
     useEffect(() => {
-        const checkAuth = async () => {
-            try {
-                const token = await AsyncStorage.getItem('userToken');
-                if (token) {
+        dispatch(checkAuth());
+    }, [dispatch]);
+
+    // 2. React to Auth State Changes
+    useEffect(() => {
+        if (!isAuthLoading) {
+            if (isAuthenticated) {
+                // Only navigate if not already there to avoid reset loops if possible, 
+                // but for this custom navigator, setting state is fine.
+                if (currentScreen !== 'Home' && !isNavReady) {
                     setCurrentScreen('Home');
                     setScreenStack(['Home']);
-                } else {
+                    setIsNavReady(true);
+                }
+            } else {
+                if (currentScreen !== 'Login') {
                     setCurrentScreen('Login');
                     setScreenStack(['Login']);
+                    setIsNavReady(true);
                 }
-            } catch (e) {
-                setCurrentScreen('Login');
-                setScreenStack(['Login']);
-            } finally {
-                setIsLoading(false);
             }
-        };
-        checkAuth();
-    }, []);
+        }
+    }, [isAuthLoading, isAuthenticated]);
+
+    // Show loading while checking auth
+    if (isAuthLoading || !isNavReady) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#0000ff" />
+            </View>
+        );
+    }
 
     const navigation = {
         navigate: (screenName, params = {}) => {
@@ -79,13 +100,7 @@ const AppNavigator = () => {
         },
     };
 
-    if (isLoading) {
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#0000ff" />
-            </View>
-        );
-    }
+    // Loading handled above
 
     const renderScreen = () => {
         const commonProps = {
