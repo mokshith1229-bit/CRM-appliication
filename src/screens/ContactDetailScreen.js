@@ -16,11 +16,12 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateLead, syncCallLogs } from '../store/slices/leadSlice';
+import { updateLead, syncCallLogs, createLead } from '../store/slices/leadSlice';
 import EditableField from '../components/EditableField';
 import CustomFieldModal from '../components/CustomFieldModal';
 import StatusPicker from '../components/StatusPicker';
 import CallLogItem from '../components/CallLogItem';
+import CallLogService from '../services/CallLogService';
 import defaultAvatar from '../assets/default_avatar.jpg';
 import { registerForPushNotificationsAsync, schedulePushNotification } from '../utils/NotificationService';
 
@@ -31,6 +32,7 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
     const [showLeadSourcePicker, setShowLeadSourcePicker] = useState(false);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
     const [showCallLogs, setShowCallLogs] = useState(true);
+    const [localDeviceLogs, setLocalDeviceLogs] = useState([]);
 
     // Batch editing state
     const [editedContact, setEditedContact] = useState(null);
@@ -51,6 +53,26 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
             setEditedContact({ ...contact });
             setCallScheduleDate(contact.callSchedule ? new Date(contact.callSchedule) : new Date());
             setIsDirty(false);
+
+            // Fetch local logs for device logs
+            if (visible && contact._source === 'log' && contact.phone) {
+                CallLogService.getLogsForNumber(contact.phone, 500)
+                    .then(logs => {
+                        const mappedLogs = logs.map(log => ({
+                            id: log.timestamp,
+                            date: new Date(parseInt(log.timestamp)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + 
+                                  ' ' + new Date(parseInt(log.timestamp)).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                            status: log.type === 'MISSED' || log.type === '3' ? 'Missed' : (log.type === 'INCOMING' || log.type === '1' ? 'Received' : 'Dialed'),
+                            duration: log.duration + 's',
+                            notes: 'Local Device Log',
+                            type: 'Call'
+                        }));
+                        setLocalDeviceLogs(mappedLogs);
+                    })
+                    .catch(err => console.error('ContactDetailScreen: Failed to fetch local logs', err));
+            } else {
+                setLocalDeviceLogs([]);
+            }
         }
     }, [contact, visible]);
 
@@ -59,39 +81,68 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
         registerForPushNotificationsAsync();
     }, []);
 
-    // Sync call logs when screen opens
+    // Sync call logs when screen opens (skip for device logs)
     React.useEffect(() => {
-        if (visible && contact?.id) {
+        if (visible && contact?.id && contact?._source !== 'log') {
             dispatch(syncCallLogs(contact.id));
         }
-    }, [visible, contact?.id]);
+    }, [visible, contact?.id, contact?._source]);
 
     const handleSaveAll = async () => {
-        if (!isDirty || !editedContact) {
+        if (!editedContact) {
             onClose();
             return;
         }
 
         try {
+            // Check if this is a device log being saved as a new lead
+            if (contact._source === 'log') {
+                // Create new lead from device log
+                const payload = {
+                    name: editedContact.name,
+                    phone: editedContact.phone,
+                    email: editedContact.email || '',
+                    whatsapp_number: editedContact.whatsapp || editedContact.phone,
+                    status: editedContact.status || 'new',
+                    lead_source: editedContact.lead_source || 'device_log',
+                    call_logs: contact.lastCallRecord ? [{
+                        id: Date.now().toString(),
+                        date: contact.lastCallRecord.date,
+                        status: contact.callStatus === 'missed' ? 'Missed' : 'Connected',
+                        duration: contact.lastCallRecord.duration,
+                        notes: 'Auto-imported from device',
+                        type: 'Call',
+                        agentName: 'System'
+                    }] : []
+                };
+                
+                await dispatch(createLead(payload)).unwrap();
+                Alert.alert('Success', 'Contact saved as lead successfully!');
+                onClose();
+                return;
+            }
+
+            // Regular lead update flow
+            if (!isDirty) {
+                onClose();
+                return;
+            }
+
             // Prepare update payload
-            // For campaigns or regular leads, the backend is unified now (assuming campaignId is just a filter attribute or separate collection relation)
-            // If the user is just editing the lead, we send the updated fields.
-            
-            // Map flat fields to backend schema
             const payload = {
                 name: editedContact.name,
-                phone: editedContact.phone, // Standard phone key
+                phone: editedContact.phone,
                 email: editedContact.email,
-                whatsapp_number: editedContact.whatsapp, // Map whatsapp -> whatsapp_number
-                status: editedContact.status, // Standard status key
-                lead_source: editedContact.lead_source || editedContact.source, // Prioritize lead_source
-                photo: editedContact.photo, // Add photo
-                call_logs: editedContact.callLogs, // Add call_logs
+                whatsapp_number: editedContact.whatsapp,
+                status: editedContact.status,
+                lead_source: editedContact.lead_source || editedContact.source,
+                photo: editedContact.photo,
+                call_logs: editedContact.callLogs,
                 attributes: {
                     ...editedContact.attributes,
-                    callSchedule: editedContact.callSchedule, // Store schedule in attributes as per schema investigation or convention
+                    callSchedule: editedContact.callSchedule,
                     callScheduleNote: editedContact.callScheduleNote,
-                    customFields: editedContact.customFields // Store custom fields in attributes
+                    customFields: editedContact.customFields
                 }
             };
             
@@ -108,13 +159,6 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
 
             setIsDirty(false);
             onClose();
-            if (navigation) {
-                // Navigate if needed, or just stay since it's a modal closure usually
-                // The original code navigated. I will preserve it but check stack.
-                // navigation.navigate('Home'); 
-                // Since it's a modal, usually we don't navigate away. The original code did navigate.
-                // I will keep behavior but maybe optional.
-            }
         } catch (error) {
             console.error(error);
             Alert.alert('Error', error.message || 'Failed to save changes. Please try again.');
@@ -122,6 +166,9 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
     };
 
     if (!contact || !editedContact) return null;
+
+    // Check if this is a device log
+    const isDeviceLog = contact._source === 'log';
 
     const handleAvatarPress = async () => {
         Alert.alert(
@@ -223,10 +270,12 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                     <TouchableOpacity onPress={onClose} style={styles.backButton}>
                         <Text style={styles.backText}>←</Text>
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Contact Details</Text>
+                    <Text style={styles.headerTitle}>
+                        {isDeviceLog ? 'Save as Lead' : 'Contact Details'}
+                    </Text>
                     <TouchableOpacity onPress={handleSaveAll} style={styles.saveButton}>
-                        <Text style={[styles.saveText, !isDirty && { color: '#8E8E93' }]}>
-                            {isDirty ? 'Save' : 'Done'}
+                        <Text style={[styles.saveText, !isDirty && !isDeviceLog && { color: '#8E8E93' }]}>
+                            {isDeviceLog ? 'Save' : (isDirty ? 'Save' : 'Done')}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -286,8 +335,8 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                         />
                     </View>
 
-                    {/* Custom Fields */}
-                    {(editedContact.customFields || []).map((field) => (
+                    {/* Custom Fields - Hide for device logs */}
+                    {!isDeviceLog && (editedContact.customFields || []).map((field) => (
                         <View key={field.id} style={styles.infoCard}>
                             <View style={styles.infoRow}>
                                 <Text style={styles.infoLabel}>
@@ -302,31 +351,35 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                         </View>
                     ))}
 
-                    <TouchableOpacity
-                        style={styles.addFieldButton}
-                        onPress={() => setShowCustomFieldModal(true)}
-                    >
-                        <Text style={styles.addFieldText}>Add Field</Text>
-                    </TouchableOpacity>
+                    {!isDeviceLog && (
+                        <TouchableOpacity
+                            style={styles.addFieldButton}
+                            onPress={() => setShowCustomFieldModal(true)}
+                        >
+                            <Text style={styles.addFieldText}>Add Field</Text>
+                        </TouchableOpacity>
+                    )}
 
-                    {/* Reminder & Status */}
-                    <View style={styles.infoCard}>
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>
-                                Call Reminder : {formatScheduleDate(editedContact.callSchedule)}
-                            </Text>
-                            <TouchableOpacity onPress={openDatePicker}>
-                                <Text style={styles.calendarIcon}>🔔</Text>
-                            </TouchableOpacity>
+                    {/* Reminder & Status - Hide reminder for device logs */}
+                    {!isDeviceLog && (
+                        <View style={styles.infoCard}>
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoLabel}>
+                                    Call Reminder : {formatScheduleDate(editedContact.callSchedule)}
+                                </Text>
+                                <TouchableOpacity onPress={openDatePicker}>
+                                    <Text style={styles.calendarIcon}>🔔</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.dividerLine} />
+                            <EditableField
+                                value={editedContact.callScheduleNote}
+                                onSave={(val) => handleUpdateLocal('callScheduleNote', val)}
+                                placeholder="Why this call? (e.g. Discuss pricing)"
+                                showButtons={false}
+                            />
                         </View>
-                        <View style={styles.dividerLine} />
-                        <EditableField
-                            value={editedContact.callScheduleNote}
-                            onSave={(val) => handleUpdateLocal('callScheduleNote', val)}
-                            placeholder="Why this call? (e.g. Discuss pricing)"
-                            showButtons={false}
-                        />
-                    </View>
+                    )}
 
                     <View style={styles.infoCard}>
                         <TouchableOpacity style={styles.infoRow} onPress={() => setShowStatusPicker(true)}>
@@ -347,36 +400,38 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                     </View>
 
                     {/* Call Description Toggle */}
-                    <TouchableOpacity
-                        style={[styles.sectionHeader, { backgroundColor: showCallLogs ? '#F0F0F2' : '#F5F5F7' }]}
-                        onPress={() => setShowCallLogs(!showCallLogs)}
-                        activeOpacity={0.8}
-                    >
-                        <View style={styles.infoRow}>
-                            <Text style={styles.sectionTitle}>Call Description</Text>
-                            <Text style={styles.dropdownIcon}>{showCallLogs ? '▲' : '▼'}</Text>
-                        </View>
-                    </TouchableOpacity>
+                    <>
+                        <TouchableOpacity
+                            style={[styles.sectionHeader, { backgroundColor: showCallLogs ? '#F0F0F2' : '#F5F5F7' }]}
+                            onPress={() => setShowCallLogs(!showCallLogs)}
+                            activeOpacity={0.8}
+                        >
+                            <View style={styles.infoRow}>
+                                <Text style={styles.sectionTitle}>Call Description</Text>
+                                <Text style={styles.dropdownIcon}>{showCallLogs ? '▲' : '▼'}</Text>
+                            </View>
+                        </TouchableOpacity>
 
-                    {showCallLogs && (
-                        <View>
-                            {(editedContact.callLogs || [
-                                { id: 'c1', date: 'Dec 4, 14:05', status: 'Connected', duration: '8m 45sec', notes: 'Discussed property requirements', type: 'Outgoing' },
-                                { id: 'c2', date: 'Dec 4, 10:15', status: 'Disconnected', duration: '0m 0sec', notes: '', type: 'Outgoing' },
-                            ]).map((call) => (
-                                <CallLogItem
-                                    key={call.id}
-                                    call={call}
-                                    onUpdateNote={(callId, note) => {
-                                        const updatedLogs = editedContact.callLogs?.map(c => 
-                                            c.id === callId ? { ...c, notes: note } : c
-                                        ) || [];
-                                        handleUpdateLocal('callLogs', updatedLogs);
-                                    }}
-                                />
-                            ))}
-                        </View>
-                    )}
+                        {showCallLogs && (
+                            <View>
+                                {((isDeviceLog ? localDeviceLogs : editedContact.callLogs) || [
+                                    { id: 'c1', date: 'Dec 4, 14:05', status: 'Connected', duration: '8m 45sec', notes: 'Discussed property requirements', type: 'Outgoing' },
+                                    { id: 'c2', date: 'Dec 4, 10:15', status: 'Disconnected', duration: '0m 0sec', notes: '', type: 'Outgoing' },
+                                ]).map((call) => (
+                                    <CallLogItem
+                                        key={call.id}
+                                        call={call}
+                                        onUpdateNote={isDeviceLog ? undefined : (callId, note) => {
+                                            const updatedLogs = editedContact.callLogs?.map(c => 
+                                                c.id === callId ? { ...c, notes: note } : c
+                                            ) || [];
+                                            handleUpdateLocal('callLogs', updatedLogs);
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                    </>
                 </ScrollView>
 
                 {/* Modals & Pickers */}

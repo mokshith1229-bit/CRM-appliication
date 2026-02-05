@@ -112,20 +112,17 @@ export const updateLead = createAsyncThunk(
             // First perform the update
             // Payload is sent as is, status key is already standard
             const payload = { ...data };
-            await axiosClient.put(`/leads/${id}`, payload);
+            const response = await axiosClient.put(`/leads/${id}`, payload);
             
-            // Now re-fetch the specific lead to get the updated data
-            const getResponse = await axiosClient.get(`/leads/${id}`);
-
-            if (getResponse.success || getResponse.data) {
+            if (response.success || response.data) {
                 // Support both result and data keys based on apiResponse utility
-                const updatedLead = getResponse.result || getResponse.data;
+                const updatedLead = response.result || response.data;
                 return {
                     ...updatedLead,
-                    status: updatedLead.status || updatedLead.status
+                    status: updatedLead.status // Normalize
                 }; 
             } else {
-                return rejectWithValue(getResponse.message || 'Failed to fetch updated lead');
+                return rejectWithValue(response.message || 'Failed to update lead');
             }
         } catch (error) {
             return rejectWithValue(error.message || 'Failed to update lead');
@@ -378,9 +375,29 @@ const leadSlice = createSlice({
                 }
             })
             .addCase(updateLead.fulfilled, (state, action) => {
-                const index = state.leads.findIndex(l => l._id === action.payload._id);
-                if (index !== -1) {
-                    state.leads[index] = action.payload;
+                const originalId = action.meta.arg.id;
+                const newLead = action.payload;
+                
+                // If ID changed (Conversion occurred)
+                if (originalId !== newLead._id) {
+                    // 1. Remove from leads/enquiries
+                    state.leads = state.leads.filter(l => l._id !== originalId);
+                    // 2. Remove from campaign records if it was there
+                    state.campaignLeads = state.campaignLeads.filter(l => l._id !== originalId);
+                    
+                    // 3. Add to leads if not already there (shouldn't be, but safe)
+                    const existingIndex = state.leads.findIndex(l => l._id === newLead._id);
+                    if (existingIndex === -1) {
+                        state.leads.unshift(newLead); // Add new lead to top
+                    } else {
+                        state.leads[existingIndex] = newLead;
+                    }
+                } else {
+                    // Normal update
+                    const index = state.leads.findIndex(l => l._id === newLead._id);
+                    if (index !== -1) {
+                        state.leads[index] = newLead;
+                    }
                 }
             })
             .addCase(fetchEnquiries.pending, (state) => {

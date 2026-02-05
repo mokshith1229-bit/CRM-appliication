@@ -25,6 +25,7 @@ import { schedulePushNotification } from '../utils/NotificationService';
 import * as Notifications from 'expo-notifications';
 import TransferLeadModal from './TransferLeadModal';
 import StatusPicker from './StatusPicker';
+import CallLogService from '../services/CallLogService';
 
 // Helper to format date relative or absolute
 const formatDate = (dateString) => {
@@ -99,6 +100,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     // Legacy states kept if needed, but we essentially replace usage
     const [showCallDatePicker, setShowCallDatePicker] = useState(false);
     const [showCallTimePicker, setShowCallTimePicker] = useState(false);
+    const [localDeviceLogs, setLocalDeviceLogs] = useState([]);
 
     // Local state for editing lead info
     const [localLeadInfo, setLocalLeadInfo] = useState({
@@ -110,14 +112,21 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     useEffect(() => {
         if (visible) {
             dispatch(fetchTeamMembers());
-            if (contact?._id || contact?.id) {
-                dispatch(fetchLeadDetails(contact._id || contact.id));
+            
+            if (freshContact?._source === 'log' && freshContact?.phone) {
+                // Fetch local logs for device log contact
+                CallLogService.getLogsForNumber(freshContact.phone, 500)
+                    .then(logs => setLocalDeviceLogs(logs))
+                    .catch(err => console.error('QuickActionsSheet: Failed to fetch local logs', err));
+            } else if (freshContact?._id || freshContact?.id) {
+                dispatch(fetchLeadDetails(freshContact._id || freshContact.id));
             }
         } else {
              dispatch(clearLeadDetails());
+             setLocalDeviceLogs([]);
              setActiveTab('Details');
         }
-    }, [visible, dispatch, contact?._id, contact?.id]);
+    }, [visible, dispatch, freshContact?._id, freshContact?.id, freshContact?._source, freshContact?.phone]);
 
     useEffect(() => {
         if (visible && freshContact) {
@@ -377,8 +386,32 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
             });
         }
 
+        // Device Local Logs (specifically for contacts with _source === 'log')
+        if (freshContact._source === 'log' && localDeviceLogs && localDeviceLogs.length > 0) {
+            localDeviceLogs.forEach(item => {
+                // Check if this log is already accounted for (unlikely for unsaved, but good practice)
+                const logTime = parseInt(item.timestamp);
+                
+                // Map device log types to readable status
+                let callStatus = 'Connected';
+                if (item.type === 'MISSED' || item.type === '3') callStatus = 'Missed';
+                else if (item.type === 'INCOMING' || item.type === '1') callStatus = 'Received';
+                else if (item.type === 'OUTGOING' || item.type === '2') callStatus = 'Dialed';
+
+                items.push({
+                    type: 'call',
+                    date: new Date(logTime),
+                    title: `${callStatus} Call`,
+                    subtitle: `Duration: ${item.duration}s`,
+                    icon: 'phone',
+                    color: callStatus === 'Missed' ? '#F44336' : '#4CAF50',
+                    isDeviceSource: true
+                });
+            });
+        }
+
         return items.sort((a, b) => b.date - a.date);
-    }, [freshContact]);
+    }, [freshContact, localDeviceLogs]);
 
 
     // Rendering Helper for History
@@ -1036,6 +1069,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#F9F9F9',
         borderRadius: 12,
         padding: 12,
+        minHeight: 60, // Maintain uniform height
     },
     historyHeader: {
         flexDirection: 'row',
@@ -1166,7 +1200,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        maxHeight: '90%', // Increased slightly
+        height: '80%', // Fixed height to prevent jumping
         paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     },
     dragHandle: {
@@ -1179,6 +1213,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     content: {
+        flex: 1, // Fill available space
         paddingHorizontal: 20,
     },
     contactInfo: {

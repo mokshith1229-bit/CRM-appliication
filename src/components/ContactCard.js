@@ -85,6 +85,11 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
             return { label: 'New', color: '#34C759', bg: '#E8F5E9' };
         }
 
+        // Handle "Unsaved" status for device logs
+        if (contact?.status === 'Unsaved' || contact._source === 'log') {
+            return { label: 'Unsaved', color: '#FF9500', bg: '#FFF3E0' };
+        }
+
         // Safety check for statuses array
         if (!statuses || statuses.length === 0) {
             console.warn('ContactCard: statuses config is empty or undefined');
@@ -196,24 +201,29 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                             </Text>
                         )}
                         
-                        {contact.transferredBy ? (
-                            <Text style={styles.transferredByText}>
-                                Transferred by: {
-                                    typeof contact.transferredBy === 'object' 
-                                        ? contact.transferredBy.name  || contact.transferredBy.role
-                                        : contact.transferredBy
-                                }
-                            </Text>
-                        ) : (
-                            <Text style={styles.assignedByText}>
-                                Assigned by: {
-                                    contact.assigned_by
-                                        ? (typeof contact.assigned_by === 'object'
-                                            ? contact.assigned_by.name || contact.assigned_by.role
-                                            : contact.assigned_by)
-                                        : (contact.assignedBy || 'System')
-                                }
-                            </Text>
+                        {/* Only show assignment info for CRM leads, not device logs */}
+                        {contact._source !== 'log' && (
+                            <>
+                                {contact.transferredBy ? (
+                                    <Text style={styles.transferredByText}>
+                                        Transferred by: {
+                                            typeof contact.transferredBy === 'object' 
+                                                ? contact.transferredBy.name  || contact.transferredBy.role
+                                                : contact.transferredBy
+                                        }
+                                    </Text>
+                                ) : (
+                                    <Text style={styles.assignedByText}>
+                                        Assigned by: {
+                                            contact.assigned_by
+                                                ? (typeof contact.assigned_by === 'object'
+                                                    ? contact.assigned_by.name || contact.assigned_by.role
+                                                    : contact.assigned_by)
+                                                : (contact.assignedBy || 'System')
+                                        }
+                                    </Text>
+                                )}
+                            </>
                         )}
                     </View>
 

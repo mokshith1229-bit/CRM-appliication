@@ -15,6 +15,7 @@ import MaintenanceScreen from './src/screens/MaintenanceScreen';
 import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen';
 import SubscriptionExpiredScreen from './src/screens/SubscriptionExpiredScreen';
 import { setupAxiosInterceptors } from './src/api/axiosClient';
+import CallLogService from './src/services/CallLogService';
 
 // Setup Interceptors
 setupAxiosInterceptors(store);
@@ -47,6 +48,15 @@ const AppContent = () => {
     useEffect(() => {
         if (isAuthenticated) {
             dispatch(fetchMetadata());
+            // Request permissions on startup
+            const requestPermissions = async () => {
+                 try {
+                    await CallLogService.requestPermission();
+                 } catch (err) {
+                    console.log("Permission request failed", err);
+                 }
+            };
+            requestPermissions();
         }
         dispatch(checkAppConfig());
     }, [dispatch, isAuthenticated]);

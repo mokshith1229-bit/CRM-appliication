@@ -21,6 +21,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { updateLead, fetchLeadDetails, clearLeadDetails, checkLeadByPhone, createLead } from '../store/slices/leadSlice';
 import defaultAvatar from '../assets/default_avatar.jpg';
 import { fetchTeamMembers } from '../store/slices/teamSlice';
+import CallLogService from '../services/CallLogService';
 
 const QuickContactScreen = ({ route, navigation }) => {
     const insets = useSafeAreaInsets();
@@ -59,15 +60,35 @@ const QuickContactScreen = ({ route, navigation }) => {
     // Collapsible states
     const [expandStatus, setExpandStatus] = useState(false);
     const [expandTransfers, setExpandTransfers] = useState(false);
+    const [localDeviceLogs, setLocalDeviceLogs] = useState([]);
 
 
     useEffect(() => {
         dispatch(fetchTeamMembers());
-        if (initialContact?.id || initialContact?._id) {
+        
+        if (initialContact?._source === 'log' && initialContact?.phone) {
+            // Fetch local logs for device log contact
+            CallLogService.getLogsForNumber(initialContact.phone, 500)
+                .then(logs => {
+                    const mappedLogs = logs.map(log => ({
+                        id: log.timestamp,
+                        date: new Date(parseInt(log.timestamp)).toISOString(),
+                        status: log.type === 'MISSED' || log.type === '3' ? 'Missed' : (log.type === 'INCOMING' || log.type === '1' ? 'Received' : 'Dialed'),
+                        duration: log.duration + 's',
+                        notes: 'Local Device Log',
+                        type: 'Call',
+                        agentName: 'System'
+                    }));
+                    setLocalDeviceLogs(mappedLogs);
+                })
+                .catch(err => console.error('QuickContactScreen: Failed to fetch local logs', err));
+        } else if (initialContact?.id || initialContact?._id) {
             dispatch(fetchLeadDetails(initialContact.id || initialContact._id));
         }
+
         return () => {
              dispatch(clearLeadDetails());
+             setLocalDeviceLogs([]);
         }
     }, [dispatch, initialContact]);
     const handleWhatsApp = () => {
@@ -423,8 +444,8 @@ const QuickContactScreen = ({ route, navigation }) => {
                          </View>
                     </View>
                     <View style={styles.historyList}>
-                        {(contact.call_logs || contact.callLogs) && (contact.call_logs || contact.callLogs).length > 0 ? (
-                            (contact.call_logs || contact.callLogs).slice().reverse().map((log, idx) => (
+                        {((contact?._source === 'log' ? localDeviceLogs : (contact.call_logs || contact.callLogs)) || []).length > 0 ? (
+                            (contact?._source === 'log' ? localDeviceLogs : (contact.call_logs || contact.callLogs)).slice().reverse().map((log, idx) => (
                                 <View key={log.id || idx} style={[styles.logItemContainer, idx > 0 && styles.logBorder]}>
                                     <View style={styles.logMainRow}>
                                         <MaterialIcons
@@ -438,35 +459,36 @@ const QuickContactScreen = ({ route, navigation }) => {
                                         </View>
                                         <Text style={styles.logDate}>{formatLogDate(log.date || log.timestamp)}</Text>
                                     </View>
-
-                                    {/* Notes Section */}
-                                    <TouchableOpacity
-                                        style={styles.notesSection}
-                                        onPress={() => handleStartEditingNote(log)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={styles.notesHeader}>
-                                            <Text style={styles.notesLabel}>Notes:</Text>
-                                            {editingNoteId === log.id && (
-                                                <TouchableOpacity onPress={handleSaveNote}>
-                                                    <Text style={styles.saveBtnText}>Save</Text>
-                                                </TouchableOpacity>
+                                    
+                                    {contact?._source !== 'log' && (
+                                        <TouchableOpacity
+                                            style={styles.notesSection}
+                                            onPress={() => handleStartEditingNote(log)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <View style={styles.notesHeader}>
+                                                <Text style={styles.notesLabel}>Notes:</Text>
+                                                {editingNoteId === log.id && (
+                                                    <TouchableOpacity onPress={handleSaveNote}>
+                                                        <Text style={styles.saveBtnText}>Save</Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                            {editingNoteId === log.id ? (
+                                                <TextInput
+                                                    style={styles.notesInput}
+                                                    value={editingNoteValue}
+                                                    onChangeText={setEditingNoteValue}
+                                                    placeholder="Write a note..."
+                                                    multiline
+                                                    autoFocus
+                                                    onBlur={handleSaveNote}
+                                                />
+                                            ) : (
+                                                <Text style={styles.notesText}>{log.notes || 'Tap to add notes...'}</Text>
                                             )}
-                                        </View>
-                                        {editingNoteId === log.id ? (
-                                            <TextInput
-                                                style={styles.notesInput}
-                                                value={editingNoteValue}
-                                                onChangeText={setEditingNoteValue}
-                                                placeholder="Write a note..."
-                                                multiline
-                                                autoFocus
-                                                onBlur={handleSaveNote}
-                                            />
-                                        ) : (
-                                            <Text style={styles.notesText}>{log.notes || 'Tap to add notes...'}</Text>
-                                        )}
-                                    </TouchableOpacity>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             ))
                         ) : (

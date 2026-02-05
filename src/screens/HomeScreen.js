@@ -36,6 +36,8 @@ import { registerForPushNotificationsAsync } from '../utils/NotificationService'
 import { useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons'; // Added for icons
 
+import CallLogService from '../services/CallLogService';
+
 const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     // State for selected contact (direct object for immediate access)
     const [selectedContact, setSelectedContact] = useState(null);
@@ -50,11 +52,52 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [reminderContact, setReminderContact] = useState(null); // Contact for active reminder modal
     const [showTestModal, setShowTestModal] = useState(false); // DEBUG: Test modal
+    const [localCallLogs, setLocalCallLogs] = useState([]); // State for local call logs
+    const [callLogsPage, setCallLogsPage] = useState(1); // Pagination for call logs
+    const [hasMoreLogs, setHasMoreLogs] = useState(true); // Track if more logs available
+    const [loadingMoreLogs, setLoadingMoreLogs] = useState(false); // Loading state for pagination
 
     // Redux
     const dispatch = useDispatch();
     const { leads, isLoading, activeFilter, pagination } = useSelector((state) => state.leads);
     const { user } = useSelector((state) => state.auth);
+
+    // Fetch logs when filter is 'all'
+    useEffect(() => {
+        if (activeFilter === 'all') {
+            const loadLogs = async () => {
+                try {
+                    setCallLogsPage(1);
+                    const logsPerPage = 50;
+                    const logs = await CallLogService.getAllRecentLogs(logsPerPage);
+                    console.log("logs fetched:", logs);
+                    setLocalCallLogs(logs);
+                    setHasMoreLogs(logs.length === logsPerPage);
+                    
+                    // Auto-sync call logs to server (only for numbers in leads collection)
+                    if (logs.length > 0) {
+                        CallLogService.syncCallLogsToServer(logs).then(result => {
+                            if (result.success) {
+                                console.log(`Synced ${result.data?.updated || 0} call logs to server`);
+                            }
+                        }).catch(err => {
+                            console.warn('Failed to sync call logs:', err);
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error loading logs:", error);
+                    setLocalCallLogs([]);
+                    setHasMoreLogs(false);
+                }
+            };
+            loadLogs();
+        } else {
+            // Reset call logs when switching away from 'all' filter
+            setLocalCallLogs([]);
+            setCallLogsPage(1);
+            setHasMoreLogs(true);
+        }
+    }, [activeFilter, refreshing]);
 
     // Filter leads on frontend for display logic if needed or rely on backend.
     // Backend `fetchLeads` returns generic list.
@@ -63,7 +106,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     // Map leads from store directly for display
     // We rely on backend filtering now.
     const displayedContacts = React.useMemo(() => {
-        return leads.map(lead => ({
+        const mapLead = (lead) => ({
             id: lead._id, // Map _id to id
             name: lead.name,
             phone: lead.phone,
@@ -89,8 +132,79 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             lastCallRecord: lead.call_logs && lead.call_logs.length > 0 
                 ? lead.call_logs[lead.call_logs.length - 1] 
                 : null
-        })); // Removed sort, relying on backend sort
-    }, [leads]);
+        });
+
+        if (activeFilter === 'all') {
+            const uniqueContacts = new Map();
+
+            // 1. Add all Leads first
+            leads.forEach(lead => {
+                 const mapped = mapLead(lead);
+                 const normalizedPhone = mapped.phone?.replace(/[^0-9]/g, '');
+                 if(normalizedPhone) {
+                     uniqueContacts.set(normalizedPhone, { ...mapped, _source: 'lead' });
+                 }
+            });
+
+            // 2. Merge Logs
+            localCallLogs.forEach(log => {
+                 const normalizedPhone = log.phoneNumber?.replace(/[^0-9]/g, '');
+                 if (!normalizedPhone) return;
+
+                 const existing = uniqueContacts.get(normalizedPhone);
+                 // Using timestamp from call log lib (usually ms or string)
+                 const logTimeStr = log.timestamp; 
+                 // Ensure logTime is valid date object
+                 const logDate = new Date(parseInt(logTimeStr));
+                 const logIso = logDate.toISOString();
+
+                 if (existing) {
+                     // Update existing if log is newer
+                     const existingTime = new Date(existing.lastCallTime || 0).getTime();
+                     if (logDate.getTime() > existingTime) {
+                         existing.lastCallTime = logIso;
+                         existing.callStatus = log.type === 'MISSED' ? 'missed' : 'connected';
+                         existing.lastCallRecord = {
+                            duration: log.duration + 's',
+                            date: logIso
+                         };
+                     }
+                     uniqueContacts.set(normalizedPhone, existing);
+                 } else {
+                     // Create transient contact from log
+                     // Check specific types from react-native-call-log: 1=INCOMING, 2=OUTGOING, 3=MISSED
+                     let callStatus = 'none';
+                     if (log.type === 'MISSED' || log.type === '3') callStatus = 'missed';
+                     else callStatus = 'connected'; // Assume connected for others roughly
+
+                     uniqueContacts.set(normalizedPhone, {
+                         id: `log-${log.timestamp}-${normalizedPhone}`,
+                         name: log.name || log.phoneNumber,
+                         phone: log.phoneNumber,
+                         status: 'Unsaved',
+                         leadSource: 'Device Log',
+                         callStatus: callStatus,
+                         lastCallTime: logIso,
+                         lastCallRecord: {
+                             duration: log.duration + 's',
+                             date: logIso
+                         },
+                         isNewLead: false,
+                         _source: 'log',
+                         photo: null
+                     });
+                 }
+            });
+
+            return Array.from(uniqueContacts.values()).sort((a, b) => 
+                new Date(b.lastCallTime || 0) - new Date(a.lastCallTime || 0)
+            );
+
+        } else {
+            // Standard mapping for other filters
+            return leads.map(mapLead);
+        }
+    }, [leads, localCallLogs, activeFilter]);
 
 
     // Unified Fetch Logic
@@ -98,7 +212,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         const filters = { page: pageOrReset };
         
         // Add Active Filter (Status/Source)
-        if (activeFilter !== 'all' && activeFilter !== 'new_leads') {
+        if (activeFilter !== 'all' && activeFilter !== 'new_leads' && activeFilter !== 'contacts') {
              // Map activeFilter to backend keys if needed
              if (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold') {
                  filters.status = activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1);
@@ -107,6 +221,10 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                  filters.status = activeFilter;
              }
         }
+        
+        // For 'contacts' filter, we just fetch all leads standardly
+        // For 'all' filter, we ALSO fetch leads to merge them
+        // So no special exclusion needed for 'all' or 'contacts' regarding status
 
         // Add Search
         if (searchQuery) {
@@ -123,11 +241,15 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         }
 
         if (activeFilter === 'new_leads') {
-           // For new leads (Enquiries), usually separate endpoint or 'New' status
-           // If using fetchEnquiries, it might need search params too if backend supports it
            dispatch(fetchEnquiries(filters)); 
         } else {
+           // Fetch leads for 'all', 'contacts', and status filters
            dispatch(fetchLeads(filters));
+           
+           if (activeFilter === 'all') {
+               // Trigger log refresh explicitly if needed, though useEffect handles it on filter change
+               // Here purely for pagination if we wanted to fetch more logs? (Logs usually fixed size for now)
+           }
         }
     }, [activeFilter, searchQuery, dateFilter, dateRange, dispatch]);
 
@@ -265,6 +387,42 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         navigation.navigate('InAppCall', { contact });
     };
 
+    const loadMoreCallLogs = async () => {
+        if (!hasMoreLogs || loadingMoreLogs || activeFilter !== 'all') return;
+        
+        setLoadingMoreLogs(true);
+        try {
+            const logsPerPage = 50;
+            const nextPage = callLogsPage + 1;
+            const previousCount = localCallLogs.length;
+            
+            // react-native-call-log doesn't support offset, so we fetch more total logs
+            const totalToFetch = nextPage * logsPerPage;
+            const allLogs = await CallLogService.getAllRecentLogs(totalToFetch);
+            
+            console.log(`Loaded ${allLogs.length} total call logs (page ${nextPage})`);
+            setLocalCallLogs(allLogs);
+            setCallLogsPage(nextPage);
+            setHasMoreLogs(allLogs.length === totalToFetch);
+            
+            // Auto-sync call logs to server (only for numbers in leads collection)
+            if (allLogs.length > 0) {
+                CallLogService.syncCallLogsToServer(allLogs).then(result => {
+                    if (result.success && result.data?.updated > 0) {
+                        console.log(`Synced ${result.data?.updated || 0} call logs to server`);
+                    }
+                }).catch(err => {
+                    console.warn('Failed to sync call logs:', err);
+                });
+            }
+        } catch (error) {
+            console.error("Error loading more logs:", error);
+            setHasMoreLogs(false);
+        } finally {
+            setLoadingMoreLogs(false);
+        }
+    };
+
     const renderContactCard = ({ item }) => {
         
         return <ContactCard
@@ -353,10 +511,26 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                         />
                     }
                     onEndReached={() => {
-                         if (activeFilter !== 'new_leads' && !isLoading && pagination.page < pagination.pages) {
+                         // For 'all' filter, fetch both leads and call logs
+                         if (activeFilter === 'all') {
+                             // Fetch more leads from API
+                             if (!isLoading && pagination.page < pagination.pages) {
+                                 dispatch(fetchLeads({ 
+                                     page: pagination.page + 1,
+                                     search: searchQuery,
+                                     startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
+                                     endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
+                                 }));
+                             }
+                             // Fetch more call logs from device
+                             if (hasMoreLogs && !loadingMoreLogs) {
+                                 loadMoreCallLogs();
+                             }
+                         }
+                         // For other filters, just fetch leads
+                         else if (activeFilter !== 'new_leads' && !isLoading && pagination.page < pagination.pages) {
                              dispatch(fetchLeads({ 
                                  page: pagination.page + 1,
-                                 // Include current filters
                                  search: searchQuery,
                                  startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
                                  endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
@@ -366,12 +540,45 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                     }}
                     onEndReachedThreshold={0.5}
                     ListFooterComponent={
-                    isLoading && pagination.page > 1 ? (
-                        <View style={{ paddingHorizontal: 16 }}>
-                            <ContactCardSkeleton />
-                        </View>
-                    ) : null
-                }
+                        activeFilter === 'all' ? (
+                            // Footer for 'all' filter - show both leads and call logs loading
+                            <View>
+                                {isLoading && pagination.page > 1 && (
+                                    <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+                                        <ActivityIndicator size="small" color={COLORS.primary} />
+                                        <Text style={{ textAlign: 'center', marginTop: 8, color: COLORS.textSecondary }}>
+                                            Loading more leads...
+                                        </Text>
+                                    </View>
+                                )}
+                                {loadingMoreLogs && (
+                                    <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+                                        <ActivityIndicator size="small" color={COLORS.primary} />
+                                        <Text style={{ textAlign: 'center', marginTop: 8, color: COLORS.textSecondary }}>
+                                            Loading more calls...
+                                        </Text>
+                                    </View>
+                                )}
+                                {!loadingMoreLogs && hasMoreLogs && (
+                                    <TouchableOpacity 
+                                        style={{ paddingHorizontal: 16, paddingVertical: 15, alignItems: 'center' }}
+                                        onPress={loadMoreCallLogs}
+                                    >
+                                        <Text style={{ color: COLORS.primary, fontWeight: '600' }}>
+                                            Load More Calls
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ) : (
+                            // Regular leads footer
+                            isLoading && pagination.page > 1 ? (
+                                <View style={{ paddingHorizontal: 16 }}>
+                                    <ContactCardSkeleton />
+                                </View>
+                            ) : null
+                        )
+                    }
                 />
             )}
 
@@ -489,7 +696,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
-        paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight : 0,
     },
     loadingContainer: {
         flex: 1,
