@@ -15,14 +15,16 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vivtej.telecrm"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.caller.app",
+      "package": "com.vivtej.telecrm",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
@@ -36,7 +38,9 @@
     },
     "plugins": [
       "@react-native-community/datetimepicker",
-      "./plugins/withCallLogPermissions"
+      "./plugins/withCallLogPermissions",
+      "./plugins/withFirebaseConfig",
+      "./plugins/withCallModule"
     ]
   }
 }

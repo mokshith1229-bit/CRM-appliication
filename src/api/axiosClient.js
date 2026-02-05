@@ -2,8 +2,12 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../constants/api';
 
-import { store } from '../store/store';
-import { logout } from '../store/slices/authSlice';
+// Store reference to be injected
+let store;
+
+export const setupAxiosInterceptors = (storeInstance) => {
+    store = storeInstance;
+};
 
 const axiosClient = axios.create({
     baseURL: BASE_URL,
@@ -33,8 +37,13 @@ axiosClient.interceptors.response.use(
         // Handle 401 Unauthorized (Token Expired) - simple logout for now
         // Advanced: Implement Refresh Token logic here if needed
         if (error.response && error.response.status === 401) {
-             // Dispatch logout action via Redux store
-             store.dispatch(logout());
+             // Dispatch logout action via Redux store if available
+             if (store) {
+                 const { logout } = require('../store/slices/authSlice'); // Lazy load to avoid cycle in imports if needed, 
+                 // actually standard import might still cycle if at top level, but here inside function it is safer?
+                 // Wait, require inside function is better for cycles.
+                 store.dispatch(logout());
+             }
         }
         
         return Promise.reject(error);

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "18389102170",
+    "project_id": "vivtejcrm",
+    "storage_bucket": "vivtejcrm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:18389102170:android:fe3d03baafadff4104b263",
+        "android_client_info": {
+          "package_name": "com.vivtej.telecrm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApKk-GbublRQh8ZE6etcx97rTtyF0lYus"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
