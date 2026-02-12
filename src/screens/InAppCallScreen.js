@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F2F2F7',
-        paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight : 0,
+        // paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight : 0,
     },
     topSection: {
         alignItems: 'center',

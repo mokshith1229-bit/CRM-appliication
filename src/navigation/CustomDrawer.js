@@ -33,6 +33,60 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
     const clearSubscription = useSubscriptionStore((state) => state.clearSubscription);
     const slideAnim = React.useRef(new Animated.Value(-300)).current;
 
+    const groupedSources = React.useMemo(() => {
+        const groups = {};
+        const baseTypes = [
+            { id: 'facebook', label: 'Facebook', icon: 'facebook' },
+            { id: 'google', label: 'Google Ads', icon: 'public' },
+            { id: 'instagram', label: 'Instagram', icon: 'camera-alt' },
+            { id: 'linkedin', label: 'LinkedIn', icon: 'business' },
+            { id: 'indiamart', label: 'IndiaMART', icon: 'shopping-cart' },
+            { id: '99acres', label: '99 Acres', icon: 'home' },
+            { id: 'housing', label: 'Housing.com', icon: 'apartment' },
+            { id: 'magicbricks', label: 'Magic Bricks', icon: 'domain' },
+            { id: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
+            { id: 'referral', label: 'Referral', icon: 'people' },
+            { id: 'website', label: 'Website', icon: 'web' }
+        ];
+        
+        sources.forEach(source => {
+            const lowKey = source.key?.toLowerCase() || '';
+            const lowLabel = source.label?.toLowerCase() || '';
+            let matchedBase = null;
+            
+            // Check if it matches a base type (prefix or contains in label, but NOT exact match)
+            for (const base of baseTypes) {
+                // Only match instances, not the base source itself
+                if (lowKey.startsWith(`${base.id}_`) || 
+                    lowKey.startsWith(`${base.id} `) ||
+                    lowKey.startsWith(`${base.id}(`) ||
+                    (lowLabel.includes(base.id) && lowKey !== base.id)) {
+                    matchedBase = base;
+                    break;
+                }
+            }
+
+            if (matchedBase) {
+                const typeKey = `type:${matchedBase.id}`;
+                if (!groups[typeKey]) {
+                    groups[typeKey] = {
+                        key: typeKey,
+                        baseType: matchedBase.id,
+                        label: matchedBase.label,
+                        icon: matchedBase.icon,
+                        isGroup: true,
+                        count: 0
+                    };
+                }
+                groups[typeKey].count += 1;
+            } else {
+                // Regular static or unknown source
+                groups[source.key] = { ...source, isGroup: false };
+            }
+        });
+        return Object.values(groups);
+    }, [sources]);
+
     React.useEffect(() => {
         dispatch(fetchCampaigns());
     }, [dispatch]);
@@ -232,8 +286,8 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
 
                                 <View style={styles.sectionDivider} />
                                 <Text style={styles.sectionHeader}>Lead Source</Text>
-                                {sources.length > 0 ? (
-                                    sources.map((source) => (
+                                {groupedSources.length > 0 ? (
+                                    groupedSources.map((source) => (
                                         <TouchableOpacity
                                             key={source.key}
                                             style={styles.menuItem}
@@ -247,51 +301,19 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                             }}
                                         >
                                             <MaterialIcons 
-                                                name={
-                                                    source.key === 'Facebook' ? 'facebook' :
-                                                    source.key === 'Google' ? 'public' :
-                                                    source.key === 'Instagram' ? 'camera-alt' :
-                                                    source.key === 'LinkedIn' ? 'business' :
-                                                    source.key === 'Website' ? 'web' :
-                                                    source.key === 'Referral' ? 'people' :
-                                                    'link'
+                                                name={source.icon || 'link'
                                                 } 
                                                 size={24} 
                                                 color={COLORS.text} 
                                                 style={styles.menuIcon} 
                                             />
-                                            <Text style={styles.menuText}>{source.label}</Text>
+                                            <Text style={styles.menuText}>{source.label}{source.isGroup && source.count > 1 && <Text style={{ fontSize: 12, color: COLORS.textSecondary }}> ({source.count} accounts)</Text>}</Text>
                                         </TouchableOpacity>
                                     ))
                                 ) : (
                                     <Text style={[styles.menuText, { padding: 16, color: COLORS.textSecondary }]}>No sources found</Text>
                                 )}
 
-                                {/* <View style={styles.sectionDivider} />
-                                <Text style={styles.sectionHeader}>Transferred By</Text>
-                                {[
-                                    { id: 'transferred_Admin', label: 'Admin', icon: 'admin-panel-settings' },
-                                    { id: 'transferred_Manager', label: 'Manager', icon: 'supervisor-account' },
-                                    { id: 'transferred_System', label: 'System', icon: 'computer' },
-                                    { id: 'transferred_Sales Team', label: 'Sales Team', icon: 'groups' },
-                                ].map((filter) => (
-                                    <TouchableOpacity
-                                        key={filter.id}
-                                        style={styles.menuItem}
-                                        onPress={() => {
-                                            // toggleDrawer(); // Close drawer first? onClose handles it.
-                                            onClose();
-                                            navigation.navigate('FilteredContacts', {
-                                                filterId: filter.id,
-                                                filterLabel: filter.label,
-                                                timestamp: Date.now() // Force update
-                                            });
-                                        }}
-                                    >
-                                        <MaterialIcons name={filter.icon} size={24} color={COLORS.text} style={styles.menuIcon} />
-                                        <Text style={styles.menuText}>{filter.label}</Text>
-                                    </TouchableOpacity>
-                                ))} */}
                             </ScrollView>
 
                             <View style={styles.footer}>

@@ -41,10 +41,31 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     const [dateRange, setDateRange] = useState(null);
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [reminderContact, setReminderContact] = useState(null);
+    const [selectedInstance, setSelectedInstance] = useState(null); // { key, label }
 
     const dispatch = useDispatch();
     const allLeads = useSelector(state => state.leads.leads);
     const isLoading = useSelector(state => state.leads.isLoading);
+    const { sources } = useSelector(state => state.config);
+
+    // Identify if the current filter is a grouped source type
+    const sourceGroupType = filterId?.startsWith('source_type:') ? filterId.replace('source_type:', '') : null;
+    
+    // Get all instances for this type
+    const availableInstances = React.useMemo(() => {
+        if (!sourceGroupType) return [];
+        return sources.filter(s => {
+            const lowKey = s.key?.toLowerCase() || '';
+            const lowLabel = s.label?.toLowerCase() || '';
+            const type = sourceGroupType.toLowerCase();
+            
+            return lowKey === type || 
+                   lowKey.startsWith(`${type}_`) || 
+                   lowKey.startsWith(`${type} `) ||
+                   lowKey.startsWith(`${type}(`) ||
+                   lowLabel.includes(type);
+        });
+    }, [sources, sourceGroupType]);
 
     // Map leads from store directly
     // Map leads from store directly
@@ -83,7 +104,17 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
          if (filterId) {
              // Dynamic filter parsing
              if (filterId.startsWith('source_')) {
-                 filters.lead_source = filterId.replace('source_', '');
+                 const sourceKey = filterId.replace('source_', '');
+                 if (sourceKey.startsWith('type:')) {
+                     // Check if a specific instance is selected
+                     if (selectedInstance) {
+                         filters.lead_source = selectedInstance.key;
+                     } else {
+                         filters.lead_source = sourceKey; // Will be e.g. "type:facebook"
+                     }
+                 } else {
+                     filters.lead_source = sourceKey;
+                 }
              } else if (filterId.startsWith('status_')) {
                  filters.status = filterId.replace('status_', '');
              } else if (filterId.startsWith('transferred_')) {
@@ -110,6 +141,10 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
          if (route.params?.isEnquiryMode) {
              dispatch(fetchEnquiries(filters));
          } else {
+             // Include enquiries only when filtering by lead source from CustomDrawer
+             if (filterId && filterId.startsWith('source_')) {
+                 filters.includeEnquiries = 'true';
+             }
              dispatch(fetchLeads(filters));
          }
     }, [filterId, searchQuery, dateFilter, dateRange, route.params?.isEnquiryMode, dispatch]);
@@ -207,7 +242,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
              fetchWithFilters();
         }, 500);
         return () => clearTimeout(timer);
-    }, [searchQuery, filterId, dateFilter, dateRange]); // Triggers fetch on any filter change including search debounce
+    }, [searchQuery, filterId, dateFilter, dateRange, selectedInstance]); // Added selectedInstance
 
     const handleDateRangeApply = (result) => {
         if (result.type === 'single') {
@@ -296,6 +331,38 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
                     hideMenuIcon={true}
                 />
             </View>
+            
+            {/* Instance Selector for Grouped Sources */}
+            {sourceGroupType && availableInstances.length > 1 && (
+                <View style={styles.instanceSelector}>
+                    <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.instanceScrollContent}
+                    >
+                        <TouchableOpacity 
+                            style={[styles.instanceChip, !selectedInstance && styles.instanceChipActive]}
+                            onPress={() => setSelectedInstance(null)}
+                        >
+                            <Text style={[styles.instanceChipText, !selectedInstance && styles.instanceChipTextActive]}>
+                                All Leads
+                            </Text>
+                        </TouchableOpacity>
+
+                        {availableInstances.map((instance) => (
+                            <TouchableOpacity 
+                                key={instance.key}
+                                style={[styles.instanceChip, selectedInstance?.key === instance.key && styles.instanceChipActive]}
+                                onPress={() => setSelectedInstance(instance)}
+                            >
+                                <Text style={[styles.instanceChipText, selectedInstance?.key === instance.key && styles.instanceChipTextActive]}>
+                                    {instance.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
 
             {(dateFilter || dateRange) && (
                 <View style={styles.filterChipContainer}>
@@ -396,7 +463,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
-        paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight : 0,
+        // paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight : 0,
     },
     loadingContainer: {
         flex: 1,
@@ -463,6 +530,37 @@ const styles = StyleSheet.create({
     emptyText: {
         ...TYPOGRAPHY.body,
         color: COLORS.textSecondary,
+    },
+    instanceSelector: {
+        backgroundColor: COLORS.cardBackground,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    instanceScrollContent: {
+        paddingHorizontal: 16,
+        paddingTop: 8,
+    },
+    instanceChip: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: '#F5F5F5',
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    instanceChipActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    instanceChipText: {
+        color: COLORS.textSecondary,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    instanceChipTextActive: {
+        color: '#FFF',
     },
 });
 
