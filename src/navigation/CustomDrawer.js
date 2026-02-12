@@ -118,14 +118,14 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
             },
         },
 
-        {
-            id: 'test-call',
-            title: 'Test Incoming Call',
-            icon: 'phone-callback',
-            onPress: () => {
-                setShowTestCallModal(true);
-            },
-        },
+        // {
+        //     id: 'test-call',
+        //     title: 'Test Incoming Call',
+        //     icon: 'phone-callback',
+        //     onPress: () => {
+        //         setShowTestCallModal(true);
+        //     },
+        // },
     ];
 
     if (!visible) return null;

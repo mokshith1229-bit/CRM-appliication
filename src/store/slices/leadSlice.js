@@ -138,7 +138,8 @@ export const fetchEnquiries = createAsyncThunk(
             const response = await axiosClient.get('/enquiries', { params: filters });
             console.log('API FETCH ENQUIRIES RESPONSE:', response.data ? response.data.length : 'No Data'); 
             if (response.success || response.data) {
-                return response.data || response.result; 
+                // Return full response to handle pagination in reducer
+                return response;
             } else {
                 return rejectWithValue(response.message);
             }
@@ -266,6 +267,78 @@ export const fetchTenantConfig = createAsyncThunk(
     }
 );
 
+// Helper Thunk: Ensure a lead exists (convert from log if needed)
+export const ensureLead = createAsyncThunk(
+    'leads/ensureLead',
+    async (payload, { dispatch, getState, rejectWithValue }) => {
+        try {
+            // Handle both calling patterns:
+            // 1. ensureLead(contact) - direct contact object
+            // 2. ensureLead({ contact, initialStatus }) - destructured object
+            const contact = payload?.contact || payload;
+            const initialStatus = payload?.initialStatus;
+            
+            // Validate contact exists
+            if (!contact) {
+                return rejectWithValue('Contact is required');
+            }
+            
+            // Check if it's a device log or temporary contact
+            if (contact._source === 'log' || (typeof contact.id === 'string' && contact.id.startsWith('log-'))) {
+                // VALIDATION: Ignore service numbers / IVR
+                if (!contact.phone || contact.phone.length < 10) {
+                     return rejectWithValue('Cannot convert service numbers (IVR) to leads.');
+                }
+
+                // Get current user info
+                const state = getState();
+                const currentUser = state.auth?.user;
+                const agentName = currentUser ? currentUser.name : 'System';
+                
+                // Create payload for new lead
+                const leadPayload = {
+                    name: contact.name || contact.phone,
+                    phone: contact.phone,
+                    lead_source: '',
+                    status: initialStatus || 'New', // Use provided status or default to 'New'
+                    // Add other fields if available
+                    email: contact.email,
+                    whatsapp_number: contact.whatsapp || contact.phone,
+                    call_logs: contact.lastCallRecord ? [{
+                        date: contact.lastCallRecord.date || new Date().toISOString(),
+                        status: contact.callStatus === 'missed' ? 'Missed' : 'Received',
+                        duration: contact.lastCallRecord.duration || '0s',
+                        notes: 'Auto-imported from device',
+                        type: 'Call',
+                        agentName: agentName
+                    }] : []
+                };
+                console.log('ensureLead: Creating lead...', leadPayload);
+                // Dispatch createLead
+                const result = await dispatch(createLead(leadPayload)).unwrap();
+                return result; // This is the new lead with _id
+            }
+            
+            // Already a lead
+            return contact;
+        } catch (error) {
+            // If duplicate error, try to fetch the existing lead
+            if (error.message && error.message.includes('already exists')) {
+                const contact = payload?.contact || payload;
+                console.log('ensureLead: Lead already exists, fetching...', contact?.phone);
+                if (contact?.phone) {
+                    const existingResult = await dispatch(checkLeadByPhone(contact.phone)).unwrap();
+                    if (existingResult && existingResult.lead) {
+                        return existingResult.lead;
+                    }
+                }
+            }
+            console.error('ensureLead failed:', error);
+            return rejectWithValue(error.message || 'Failed to ensure lead existence');
+        }
+    }
+);
+
 // Thunk to check if lead exists by phone
 export const checkLeadByPhone = createAsyncThunk(
     'leads/checkLeadByPhone',
@@ -279,6 +352,24 @@ export const checkLeadByPhone = createAsyncThunk(
             }
         } catch (error) {
             return rejectWithValue(error.message || 'Failed to check lead');
+        }
+    }
+);
+
+// Thunk to validate call log ownership (check if numbers belong to others)
+export const validateLogOwnership = createAsyncThunk(
+    'leads/validateLogOwnership',
+    async (phoneNumbers, { rejectWithValue }) => {
+        try {
+            if (!phoneNumbers || phoneNumbers.length === 0) return {};
+            const response = await axiosClient.post('/leads/check-numbers', { phoneNumbers });
+            if (response.success) {
+                return response.data; // Returns map { phone: 'mine' | 'other' | 'free' }
+            } else {
+                return rejectWithValue(response.message);
+            }
+        } catch (error) {
+            return rejectWithValue(error.message || 'Failed to validate logs');
         }
     }
 );
@@ -406,7 +497,26 @@ const leadSlice = createSlice({
             })
             .addCase(fetchEnquiries.fulfilled, (state, action) => {
                  state.isLoading = false;
-                 state.leads = action.payload; 
+                 const response = action.payload;
+                 
+                 // Handle new paginated structure
+                 if (response.data && response.data.records) {
+                     const { records, page, total, limit } = response.data;
+                     const pages = Math.ceil(total / limit);
+                     
+                     if (page === 1) {
+                         state.leads = records;
+                     } else {
+                         // Check for duplicates
+                         const existingIds = new Set(state.leads.map(l => l._id));
+                         const newRecords = records.filter(l => !existingIds.has(l._id));
+                         state.leads = [...state.leads, ...newRecords];
+                     }
+                     state.pagination = { page, pages, total };
+                 } else {
+                     // Fallback for old structure or non-paginated response
+                     state.leads = response.data || response.result || [];
+                 }
             })
             .addCase(fetchEnquiries.rejected, (state, action) => {
                 state.isLoading = false;

@@ -10,6 +10,7 @@ import {
     Platform,
     StatusBar as NativeStatusBar,
     TouchableOpacity,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -177,12 +178,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     const handleCallAction = (contact) => {
         setShowQuickActions(false);
-        navigation.navigate('InAppCall', {
-            contact: { ...contact, source: contact.campaignName || 'Manual' },
-            leadSource: contact.campaignName || 'Manual',
-            campaignId: contact.campaignId,
-            campaignName: contact.campaignName
-        });
+        Linking.openURL(`tel:${contact.phone}`);
     };
 
     const handleAvatarPress = (contact) => {

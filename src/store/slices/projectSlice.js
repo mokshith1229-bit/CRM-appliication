@@ -8,7 +8,7 @@ export const fetchProjects = createAsyncThunk(
         try {
             const response = await axiosClient.get('/projects', { params: filters });
             if (response) {
-                const { projects, total, page, pages } = response;
+                const { projects, total, page, pages } = response.data;
                 return {
                     projects,
                     pagination: { page, pages, total }

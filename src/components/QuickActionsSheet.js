@@ -17,7 +17,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { openWhatsApp, sendSMS, sendEmail } from '../utils/intents';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateLead, removeLead, fetchLeadDetails, clearLeadDetails } from '../store/slices/leadSlice';
+import { updateLead, removeLead, fetchLeadDetails, clearLeadDetails, ensureLead } from '../store/slices/leadSlice';
 import { fetchTeamMembers } from '../store/slices/teamSlice';
 import axiosClient from '../api/axiosClient';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -139,22 +139,27 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
     const handleAddNote = async () => {
         if (newNote.trim() && contact) {
-            const newNoteObj = {
-                id: Date.now().toString(),
-                text: newNote.trim(),
-                timestamp: new Date().toISOString(),
-            };
-
-            const updatedNotes = [...(contact.notes || []), newNoteObj];
-
             try {
+               // Ensure lead exists first
+               const targetLead = await dispatch(ensureLead(contact)).unwrap();
+               
+               const newNoteObj = {
+                    id: Date.now().toString(),
+                    text: newNote.trim(),
+                    timestamp: new Date().toISOString(),
+               };
+               
+               // Use updated list from targetLead if it was just created/fetched
+               const currentNotes = targetLead.notes || [];
+               const updatedNotes = [...currentNotes, newNoteObj];
+
                await dispatch(updateLead({ 
-                   id: contact.id || contact._id, 
+                   id: targetLead.id || targetLead._id, 
                    data: { notes: updatedNotes } 
                })).unwrap();
                setNewNote('');
-               // Optimistic/Local state update is automatic if parent re-renders with new redux state
             } catch (error) {
+                console.error('Failed to add note:', error);
                 Alert.alert("Error", "Failed to add note");
             }
         }
@@ -162,8 +167,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleSaveLead = async () => {
         if (contact) {
             try {
+                const targetLead = await dispatch(ensureLead(contact)).unwrap();
                 await dispatch(updateLead({ 
-                    id: contact.id || contact._id, 
+                    id: targetLead.id || targetLead._id, 
                     data: { requirement: localLeadInfo.requirement } 
                 })).unwrap();
                 setIsEditingLead(false);
@@ -176,14 +182,16 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleTransfer = async (teamMember, reason) => {
         if (contact) {
             try {
+                const targetLead = await dispatch(ensureLead(contact)).unwrap();
+
                 // Use dedicated transfer endpoint
-                await axiosClient.post(`/leads/${contact.id || contact._id}/transfer`, {
+                await axiosClient.post(`/leads/${targetLead.id || targetLead._id}/transfer`, {
                     assigned_to: teamMember._id || teamMember.id,
                     reason: reason
                 });
                 
                 // Remove lead from local state since it's no longer accessible
-                dispatch(removeLead(contact.id || contact._id));
+                dispatch(removeLead(targetLead.id || targetLead._id));
                 
                 setIsTransferModalVisible(false);
                 onClose();
@@ -206,14 +214,16 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         if (!freshContact) return;
 
         try {
+            const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
+            
             // Schedule notification
             await schedulePushNotification(
-                `Reminder: ${freshContact.name || freshContact.phone}`,
-                reason || `Follow up with ${freshContact.name || 'Lead'}`,
+                `Reminder: ${targetLead.name || targetLead.phone}`,
+                reason || `Follow up with ${targetLead.name || 'Lead'}`,
                 date,
                 { 
                     type: 'reminder',
-                    leadId: freshContact.id || freshContact._id, 
+                    leadId: targetLead.id || targetLead._id, 
                     reason: reason,
                     createdBy: user ? {
                         id: user.id || user._id,
@@ -225,7 +235,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
             // Update lead with reminder timestamp and attributes
             await dispatch(updateLead({
-                id: freshContact.id || freshContact._id,
+                id: targetLead.id || targetLead._id,
                 data: { 
                     callbacks: { 
                         scheduled_at: date.toISOString(),
@@ -252,13 +262,15 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleUpdateSource = async (newSource) => {
         if (contact) {
             try {
+                const targetLead = await dispatch(ensureLead(contact)).unwrap();
+
                 // Strip source_ prefix if present
                 const cleanSource = newSource?.startsWith('source_') 
                     ? newSource.replace('source_', '') 
                     : newSource;
                     
                 await dispatch(updateLead({ 
-                    id: contact.id || contact._id, 
+                    id: targetLead.id || targetLead._id, 
                     data: { lead_source: cleanSource } 
                 })).unwrap();
             } catch (error) {
@@ -277,15 +289,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleConfirmStatus = async () => {
         if (contact && pendingStatus) {
             try {
-                // Strip status_ prefix if present
-                const cleanStatus = pendingStatus?.startsWith('status_')
-                    ? pendingStatus.replace('status_', '')
-                    : pendingStatus;
+                const targetLead = await dispatch(ensureLead(contact)).unwrap();
 
                 await dispatch(updateLead({
-                    id: contact.id || contact._id,
+                    id: targetLead.id || targetLead._id,
                     data: { 
-                        status: cleanStatus,
+                        status: pendingStatus,  // Already a label, no need to strip prefix
                         status_note: statusNote
                     }
                 })).unwrap();
@@ -966,7 +975,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 title="Update Lead Status"
                 options={statuses.map(s => ({ 
                     label: s.label, 
-                    value: s.key 
+                    value: s.label  // Use label as value, not key
                 }))}
                 selectedValue={(() => {
                     const statusValue = freshContact?.status;

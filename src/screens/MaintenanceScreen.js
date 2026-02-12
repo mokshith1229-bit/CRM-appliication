@@ -16,7 +16,7 @@ const MaintenanceScreen = ({ message }) => {
             <View style={styles.content}>
                 <View style={styles.iconContainer}>
                      <Image
-                        source={require('../../assets/icon.png')}
+                        source={require('../../assets/playstore.png')}
                         style={styles.logo}
                         resizeMode="contain"
                     />

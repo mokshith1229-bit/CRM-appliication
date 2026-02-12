@@ -16,6 +16,7 @@ import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen';
 import SubscriptionExpiredScreen from './src/screens/SubscriptionExpiredScreen';
 import { setupAxiosInterceptors } from './src/api/axiosClient';
 import CallLogService from './src/services/CallLogService';
+import { SocketProvider } from './src/context/SocketContext';
 
 // Setup Interceptors
 setupAxiosInterceptors(store);
@@ -114,8 +115,10 @@ const AppContent = () => {
     return (
         <SafeAreaProvider>
             <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-            <AppNavigator />
-            <GlobalReminderPopup />
+            <SocketProvider>
+                <AppNavigator />
+                <GlobalReminderPopup />
+            </SocketProvider>
         </SafeAreaProvider>
     );
 };

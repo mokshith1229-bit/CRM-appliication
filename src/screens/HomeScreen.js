@@ -13,6 +13,8 @@ import {
     TouchableOpacity, // Ensure TouchableOpacity is imported
     Alert, // Import Alert
     TextInput, // Added for search input
+    Linking,
+    AppState, // Import AppState
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -20,7 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 // import { useContactStore } from '../store/contactStore'; // Replaced by Redux
 // import { useCampaignStore } from '../store/campaignStore'; // Replaced by Redux
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchLeads, fetchEnquiries, setActiveFilter, updateLeadStatus } from '../store/slices/leadSlice';
+import { fetchLeads, fetchEnquiries, setActiveFilter, updateLeadStatus, ensureLead, validateLogOwnership } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
 import FilterBar from '../components/FilterBar';
@@ -61,20 +63,32 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     const dispatch = useDispatch();
     const { leads, isLoading, activeFilter, pagination } = useSelector((state) => state.leads);
     const { user } = useSelector((state) => state.auth);
-
-    // Fetch logs when filter is 'all'
-    useEffect(() => {
-        if (activeFilter === 'all') {
-            const loadLogs = async () => {
+  const loadLogs = async () => {
                 try {
                     setCallLogsPage(1);
                     const logsPerPage = 50;
                     const logs = await CallLogService.getAllRecentLogs(logsPerPage);
-                    console.log("logs fetched:", logs);
-                    setLocalCallLogs(logs);
+                    
+                    // VALIDATION: Filter out logs that belong to other agents
+                    let verifiedLogs = logs;
+                    if (logs.length > 0) {
+                        const phoneNumbers = logs.map(l => l.phoneNumber);
+                        // validateLogOwnership checks backend for ownership
+                        const ownershipMap = await dispatch(validateLogOwnership(phoneNumbers)).unwrap();
+                        
+                        // Filter out logs where status is 'other'
+                        verifiedLogs = logs.filter(log => {
+                            const status = ownershipMap[log.phoneNumber];
+                            return status !== 'other'; // Keep 'mine', 'free', or undefined
+                        });
+                        console.log(`Filtered ${logs.length - verifiedLogs.length} logs belonging to others`);
+                    }
+
+                    setLocalCallLogs(verifiedLogs);
                     setHasMoreLogs(logs.length === logsPerPage);
                     
-                    // Auto-sync call logs to server (only for numbers in leads collection)
+                    // Auto-sync call logs to server (only for verified logs? maybe all logs?)
+                    // Best to sync all so server has record, but we only show what's relevant to user
                     if (logs.length > 0) {
                         CallLogService.syncCallLogsToServer(logs).then(result => {
                             if (result.success) {
@@ -90,6 +104,10 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                     setHasMoreLogs(false);
                 }
             };
+    // Fetch logs when filter is 'all'
+    useEffect(() => {
+        if (activeFilter === 'all') {
+          
             loadLogs();
         } else {
             // Reset call logs when switching away from 'all' filter
@@ -266,6 +284,21 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         registerForPushNotificationsAsync();
     }, []);
 
+    // Refresh logs when app comes to foreground (e.g. after a call)
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (activeFilter === 'all' && nextAppState === 'active') {
+                console.log('App has come to the foreground - refreshing logs...');
+                fetchWithFilters(1);
+                loadLogs();
+            }
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, [activeFilter, fetchWithFilters]);
+
     // Check for due reminders every 10 seconds (Checking merged list would duplicate if we not careful, 
     // but effectively we should check all. For now checking `contacts` is existing behavior, 
     // let's expand to mergedContacts if we want global reminders.)
@@ -365,12 +398,24 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
 
     const handleStatusSelect = async (status) => {
         if (selectedContact) {
-            // Replaced legacy store logic with Redux
-            await dispatch(updateLeadStatus({ id: selectedContact.id, status }));
-            
-            // Auto-remove logic handled by backend or re-fetch if needed
-            // For immediate UI update, Redux slice handles the state update
-            await dispatch(fetchLeads());
+            try {
+                // Ensure lead exists (convert from log if needed) with the selected status
+                const targetLead = await dispatch(ensureLead({ 
+                    contact: selectedContact, 
+                    initialStatus: status 
+                })).unwrap();
+                
+                // Only update status if the lead already existed (wasn't just created)
+                if (selectedContact._source !== 'log' && !selectedContact.id?.startsWith('log-')) {
+                    await dispatch(updateLeadStatus({ id: targetLead.id || targetLead._id, status }));
+                }
+                
+                // Refresh leads list
+                await dispatch(fetchLeads());
+            } catch (error) {
+                console.error('Status update failed:', error);
+                Alert.alert('Error', 'Failed to update status');
+            }
         }
     };
 
@@ -384,7 +429,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         setShowQuickActions(false);
         // Don't auto-remove from New Enquiries on call
         // Contact will only be removed when user changes status from "New" to something else
-        navigation.navigate('InAppCall', { contact });
+        Linking.openURL(`tel:${contact.phone}`);
     };
 
     const loadMoreCallLogs = async () => {
@@ -465,7 +510,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                     <TouchableOpacity onPress={onOpenDrawer} style={{ padding: 4 }}>
                         <MaterialIcons name="menu" size={28} color={COLORS.text} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { marginLeft: 16 }]}>Contacts</Text>
+                    {/* <Text style={[styles.headerTitle, { marginLeft: 16 }]}>Contacts</Text> */}
                     <TouchableOpacity onPress={handleCalendarPress}>
                         <View>
                             <MaterialIcons name="date-range" size={24} color={COLORS.text} />
@@ -487,11 +532,24 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                 </View>
 
                 {/* Filter Bar */}
-                 <FilterBar
+                <FilterBar
                     activeFilter={activeFilter}
                     onFilterChange={(filter) => dispatch(setActiveFilter(filter))} // Corrected prop name
                 />
             </View>
+
+            {(dateFilter || dateRange) && (
+                <View style={styles.filterChipContainer}>
+                    <TouchableOpacity onPress={clearDateFilter} style={styles.filterChip}>
+                        <Text style={styles.filterChipText}>
+                            {dateFilter
+                                ? `📅 ${dateFilter.toLocaleDateString()} ✕`
+                                : `📅 ${dateRange.start.toLocaleDateString()} - ${dateRange.end.toLocaleDateString()} ✕`
+                            }
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {/* Content Area */}
             {isLoading && pagination.page === 1 ? (
@@ -535,6 +593,15 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                                  startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
                                  endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
                                  status: (activeFilter !== 'all' && activeFilter !== 'new_leads') ? (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold' ? activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1) : activeFilter) : undefined
+                             }));
+                         }
+                         // For New Leads (Enquiries)
+                         else if (activeFilter === 'new_leads' && !isLoading && pagination.page < pagination.pages) {
+                             dispatch(fetchEnquiries({
+                                 page: pagination.page + 1,
+                                 search: searchQuery,
+                                 startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
+                                 endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
                              }));
                          }
                     }}

@@ -8,6 +8,7 @@ import {
     ScrollView,
     Dimensions,
     Platform,
+    Linking,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -98,7 +99,7 @@ const KeypadScreen = ({ navigation }) => {
     const handleCall = (number, contact = null) => {
         if (number.length >= 3) {
             addRecentDial(number);
-            navigation.navigate('InAppCall', { number, contact });
+            Linking.openURL(`tel:${number}`);
         }
     };
 
