@@ -10,11 +10,12 @@ import {
     Platform,
     StatusBar as NativeStatusBar,
     TouchableOpacity,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateLeadStatus, updateLead, setActiveFilter, fetchLeads, fetchCampaignRecords, clearLeads, clearCampaignLeads } from '../store/slices/leadSlice';
+import { updateLeadStatus, updateLead, setActiveFilter, fetchLeads, fetchCampaignRecords, clearLeads, clearCampaignLeads, ensureLead } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
 import ContactCardSkeleton from '../components/ContactCardSkeleton'; // Import Skeleton
@@ -168,6 +169,62 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         setDateRange(null);
     };
 
+    const handleStatusChange = async (newStatus) => {
+        if (selectedContact) {
+            try {
+                // Ensure lead exists (convert from log/enquiry if needed) with the selected status
+                const targetLead = await dispatch(ensureLead({ 
+                    contact: selectedContact, 
+                    initialStatus: newStatus 
+                })).unwrap();
+                
+                // Only update status explicitly if the lead already existed
+                if (selectedContact._source !== 'log' && !selectedContact.id?.startsWith('log-')) {
+                     await dispatch(updateLeadStatus({ id: targetLead.id || targetLead._id, status: newStatus }));
+                }
+                
+                setShowStatusOverlay(false);
+                
+                // Refresh list
+                handleRefresh();
+
+            } catch (error) {
+                console.error('Status update failed:', error);
+                
+                // Check if it's a validation error (IVR/Service Number)
+                if (error === 'Cannot convert service numbers (IVR) to leads.' || 
+                    (typeof error === 'string' && error.includes('service numbers'))) {
+                    
+                    Alert.alert(
+                        'Validation Error',
+                        'This number appears to be a service number or IVR. Would you like to create a lead manually?',
+                        [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                                text: 'Create Manually', 
+                                onPress: () => {
+                                    setShowStatusOverlay(false); // Close overlay first
+                                    navigation.navigate('CreateLead', { 
+                                        initialLeadData: {
+                                            name: selectedContact.name,
+                                            phone: selectedContact.phone,
+                                            // Add other available fields
+                                            call_logs: selectedContact.call_logs || [],
+                                            _source: 'log_conversion',
+                                            lead_source: campaignName || selectedContact.leadSource || 'Campaign'
+                                        }
+                                    });
+                                }
+                            }
+                        ]
+                    );
+                } else {
+                    Alert.alert('Error', typeof error === 'string' ? error : 'Failed to update status');
+                }
+            }
+        }
+    };
+
     const handleCallAction = (contact) => {
         navigation.navigate('QuickContact', { 
             contact,
@@ -315,7 +372,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
             <StatusOverlay
                 contact={selectedContact}
                 visible={showStatusOverlay}
-                onSelect={(status) => selectedContact && dispatch(updateLeadStatus({ id: selectedContact.id, status }))}
+                onSelect={handleStatusChange}
                 onClose={() => setShowStatusOverlay(false)}
             />
 

@@ -2,14 +2,30 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, Dimensions, TouchableOpacity, Linking, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
+import { useDispatch } from 'react-redux';
+import { logout } from '../store/slices/authSlice';
 
 const { width, height } = Dimensions.get('window');
 
-const SubscriptionExpiredScreen = () => {
+const SubscriptionExpiredScreen = ({ navigation }) => {
+    const dispatch = useDispatch();
 
     const handleContactSupport = () => {
         // Replace with actual support email or link
         Linking.openURL('mailto:support@telecrm.com?subject=Subscription Expired Renewal');
+    };
+
+    const handleBackToLogin = async () => {
+        try {
+            // Dispatch logout to clear session
+            await dispatch(logout()).unwrap();
+            // Navigate to Login screen
+            navigation.replace('Login');
+        } catch (error) {
+            console.error('Logout failed:', error);
+            // Navigate to Login anyway
+            navigation.replace('Login');
+        }
     };
 
     return (
@@ -34,6 +50,10 @@ const SubscriptionExpiredScreen = () => {
 
                 <TouchableOpacity style={styles.button} onPress={handleContactSupport}>
                     <Text style={styles.buttonText}>Contact Support</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.secondaryButton} onPress={handleBackToLogin}>
+                    <Text style={styles.secondaryButtonText}>Back to Login</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -94,8 +114,24 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         width: '100%',
         alignItems: 'center',
+        marginBottom: 12,
     },
     buttonText: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    secondaryButton: {
+        backgroundColor: 'transparent',
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 12,
+        width: '100%',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
+    secondaryButtonText: {
         color: '#FFF',
         fontSize: 18,
         fontWeight: 'bold',

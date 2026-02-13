@@ -142,6 +142,35 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
         dispatch(clearSearchResults());
     };
 
+    // Initialize from navigation params (initialLeadData)
+    useEffect(() => {
+        if (route.params?.initialLeadData) {
+            const data = route.params.initialLeadData;
+            setName(data.name || '');
+            setPhone(data.phone || '');
+            setEmail(data.email || '');
+            setOccupation(data.occupation || '');
+            setCompanyName(data.company_name || '');
+            setLeadSource(data.lead_source || 'self');
+            setLeadStatus(data.status || 'New');
+            setRequirement(data.requirement || '');
+            
+            // Handle custom fields if any
+            if (data.custom_fields) {
+                const customFieldsArray = Object.entries(data.custom_fields).map(([key, value]) => ({
+                    id: Date.now() + Math.random(),
+                    name: key,
+                    value: String(value)
+                }));
+                setCustomFields(customFieldsArray);
+            }
+            // If it's a conversion, we might want to set a specific source if not provided
+            if (data._source === 'log_conversion' && !data.lead_source) {
+                setLeadSource('Device Log'); 
+            }
+        }
+    }, [route.params]);
+
     // Debounced search function
     const debouncedSearch = useCallback((query, field, timer) => {
         if (timer.current) {
