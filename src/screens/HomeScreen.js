@@ -71,6 +71,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                     
                     // VALIDATION: Filter out logs that belong to other agents
                     let verifiedLogs = logs;
+                    /*
                     if (logs.length > 0) {
                         const phoneNumbers = logs.map(l => l.phoneNumber);
                         // validateLogOwnership checks backend for ownership
@@ -83,21 +84,13 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                         });
                         console.log(`Filtered ${logs.length - verifiedLogs.length} logs belonging to others`);
                     }
+                    */
 
                     setLocalCallLogs(verifiedLogs);
                     setHasMoreLogs(logs.length === logsPerPage);
                     
-                    // Auto-sync call logs to server (only for verified logs? maybe all logs?)
-                    // Best to sync all so server has record, but we only show what's relevant to user
-                    if (logs.length > 0) {
-                        CallLogService.syncCallLogsToServer(logs).then(result => {
-                            if (result.success) {
-                                console.log(`Synced ${result.data?.updated || 0} call logs to server`);
-                            }
-                        }).catch(err => {
-                            console.warn('Failed to sync call logs:', err);
-                        });
-                    }
+                    setLocalCallLogs(verifiedLogs);
+                    setHasMoreLogs(logs.length === logsPerPage);
                 } catch (error) {
                     console.error("Error loading logs:", error);
                     setLocalCallLogs([]);
@@ -280,6 +273,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     }, [searchQuery, activeFilter, dateFilter, dateRange, fetchWithFilters]);
 
     // Register Notifications
+    // Register Notifications
     useEffect(() => {
         registerForPushNotificationsAsync();
     }, []);
@@ -288,7 +282,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     useEffect(() => {
         const subscription = AppState.addEventListener('change', nextAppState => {
             if (activeFilter === 'all' && nextAppState === 'active') {
-                console.log('App has come to the foreground - refreshing logs...');
+                console.log('App returned to active - refreshing UI logs...');
                 fetchWithFilters(1);
                 loadLogs();
             }
@@ -298,6 +292,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             subscription.remove();
         };
     }, [activeFilter, fetchWithFilters]);
+
 
     // Check for due reminders every 10 seconds (Checking merged list would duplicate if we not careful, 
     // but effectively we should check all. For now checking `contacts` is existing behavior, 
@@ -405,16 +400,26 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                     initialStatus: status 
                 })).unwrap();
                 
-                // Only update status if the lead already existed (wasn't just created)
-                if (selectedContact._source !== 'log' && !selectedContact.id?.startsWith('log-')) {
-                    await dispatch(updateLeadStatus({ id: targetLead.id || targetLead._id, status }));
-                }
+                // Always update status to record who did it and ensure it's in DB
+                // This covers both existing leads and newly converted logs
+                await dispatch(updateLeadStatus({ 
+                    id: targetLead._id || targetLead.id, 
+                    status
+                })).unwrap();
+                
+                // Close modals
+                setShowStatusOverlay(false);
+                setShowQuickActions(false);
                 
                 // Refresh leads list
                 await dispatch(fetchLeads());
             } catch (error) {
-                console.error('Status update failed:', error);
-                Alert.alert('Error', 'Failed to update status');
+                
+                const errorMessage = error.response?.data?.message  // The custom backend message
+                                     || error.response?.data           // Fallback to data object
+                                     || error.message                  // Fallback to "Request failed..."
+                                     || error||'An unknown error occurred';
+                               Alert.alert("Error", errorMessage);
             }
         }
     };
@@ -449,17 +454,6 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             setLocalCallLogs(allLogs);
             setCallLogsPage(nextPage);
             setHasMoreLogs(allLogs.length === totalToFetch);
-            
-            // Auto-sync call logs to server (only for numbers in leads collection)
-            if (allLogs.length > 0) {
-                CallLogService.syncCallLogsToServer(allLogs).then(result => {
-                    if (result.success && result.data?.updated > 0) {
-                        console.log(`Synced ${result.data?.updated || 0} call logs to server`);
-                    }
-                }).catch(err => {
-                    console.warn('Failed to sync call logs:', err);
-                });
-            }
         } catch (error) {
             console.error("Error loading more logs:", error);
             setHasMoreLogs(false);

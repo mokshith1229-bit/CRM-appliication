@@ -1,7 +1,7 @@
 import './shim'; // Polyfills for node-rsa
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { StyleSheet, StatusBar, Platform } from 'react-native';
+import { StyleSheet, StatusBar, Platform, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
@@ -61,6 +61,40 @@ const AppContent = () => {
         }
         dispatch(checkAppConfig());
     }, [dispatch, isAuthenticated]);
+
+    // Global AppState listener for Call Log Sync
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const handleAppStateChange = async (nextAppState) => {
+            if (nextAppState === 'active') {
+                console.log('[Global] App active - triggering call log sync...');
+                try {
+                    // Fetch recent logs (e.g. last 50)
+                    const logs = await CallLogService.getAllRecentLogs(50);
+                    if (logs && logs.length > 0) {
+                        const result = await CallLogService.syncCallLogsToServer(logs);
+                        if (result.success) {
+                            console.log(`[Global] Synced ${result.data?.updated || 0} call logs`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('[Global] Call log sync failed:', error);
+                }
+            }
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        
+        // Trigger sync immediately on mount if active
+        if (AppState.currentState === 'active') {
+            handleAppStateChange('active');
+        }
+
+        return () => {
+            subscription.remove();
+        };
+    }, [isAuthenticated]);
 
     // Check Maintenance Mode
     if (appConfig?.maintenanceMode) {

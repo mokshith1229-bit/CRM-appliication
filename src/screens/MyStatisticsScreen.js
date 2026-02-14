@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platform, StatusBar as NativeStatusBar, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platform, StatusBar as NativeStatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart } from 'react-native-chart-kit';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchMyStats } from '../store/slices/statsSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
@@ -17,11 +18,20 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
     const [dateFilter, setDateFilter] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
 
-    useEffect(() => {
-        // Fetch stats on mount and when date filter changes
+    const fetchStats = useCallback(() => {
         const dateParam = dateFilter ? dateFilter.toISOString().split('T')[0] : null;
         dispatch(fetchMyStats(dateParam));
     }, [dateFilter, dispatch]);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchStats();
+        }, [fetchStats])
+    );
+
+    const onRefresh = useCallback(() => {
+        fetchStats();
+    }, [fetchStats]);
 
     const handleDateChange = (event, selectedDate) => {
         if (Platform.OS === 'android') {
@@ -89,7 +99,13 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                contentContainerStyle={styles.scrollContent} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={isLoading} onRefresh={onRefresh} colors={[COLORS.primary]} />
+                }
+            >
 
                 {/* Date Filter Section */}
                 <View style={styles.filterSection}>

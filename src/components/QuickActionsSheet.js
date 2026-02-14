@@ -138,10 +138,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     }, [visible, freshContact]);
 
     const handleAddNote = async () => {
-        if (newNote.trim() && contact) {
+        if (newNote.trim() && freshContact) {
             try {
                // Ensure lead exists first
-               const targetLead = await dispatch(ensureLead(contact)).unwrap();
+               const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
                
                const newNoteObj = {
                     id: Date.now().toString(),
@@ -160,29 +160,39 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                setNewNote('');
             } catch (error) {
                 console.error('Failed to add note:', error);
-                Alert.alert("Error", "Failed to add note");
+                // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to add note");
+                const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || error || 'An unknown error occurred';
+                Alert.alert("Error", errorMessage);
             }
         }
     };
     const handleSaveLead = async () => {
-        if (contact) {
+        if (freshContact) {
             try {
-                const targetLead = await dispatch(ensureLead(contact)).unwrap();
+                const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
                 await dispatch(updateLead({ 
                     id: targetLead.id || targetLead._id, 
                     data: { requirement: localLeadInfo.requirement } 
                 })).unwrap();
                 setIsEditingLead(false);
             } catch (error) {
-                Alert.alert("Error", "Failed to update requirement");
+                // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to update requirement");
+                const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || error || 'An unknown error occurred';
+                Alert.alert("Error", errorMessage);
             }
         }
     };
 
     const handleTransfer = async (teamMember, reason) => {
-        if (contact) {
+        if (freshContact) {
             try {
-                const targetLead = await dispatch(ensureLead(contact)).unwrap();
+                const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
                 // Use dedicated transfer endpoint
                 await axiosClient.post(`/leads/${targetLead.id || targetLead._id}/transfer`, {
@@ -198,7 +208,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 Alert.alert('Success', `Lead transferred to ${teamMember.name}`);
             } catch (error) {
                 console.error('Failed to transfer lead:', error);
-                Alert.alert("Error", error.response?.data?.message || "Failed to transfer lead");
+                // const errorMessage = typeof error === 'string' ? error : (error.response?.data?.message || error.message || "Failed to transfer lead");
+                const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || error || 'An unknown error occurred';
+                Alert.alert("Error", errorMessage);
             }
         }
     };
@@ -255,14 +270,19 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
             Alert.alert('Success', `Reminder set for ${date.toLocaleString()}`);
         } catch (error) {
             console.error('Failed to schedule reminder:', error);
-            Alert.alert('Error', 'Failed to schedule reminder');
+            // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to schedule reminder");
+            const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || error || 'An unknown error occurred';
+            Alert.alert('Error', errorMessage);
         }
     };
 
     const handleUpdateSource = async (newSource) => {
-        if (contact) {
+        if (freshContact) {
             try {
-                const targetLead = await dispatch(ensureLead(contact)).unwrap();
+                const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
                 // Strip source_ prefix if present
                 const cleanSource = newSource?.startsWith('source_') 
@@ -275,7 +295,13 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 })).unwrap();
             } catch (error) {
                 console.error('QuickActionsSheet: Failed to update lead source', error);
-                Alert.alert("Error", "Failed to update lead source");
+                // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to update lead source");
+                 const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || error || 'An unknown error occurred';
+                
+                Alert.alert("Error", errorMessage);
             }
         }
     };
@@ -287,9 +313,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     };
 
     const handleConfirmStatus = async () => {
-        if (contact && pendingStatus) {
+        if (freshContact && pendingStatus) {
             try {
-                const targetLead = await dispatch(ensureLead(contact)).unwrap();
+                const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
                 await dispatch(updateLead({
                     id: targetLead.id || targetLead._id,
@@ -303,7 +329,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 setPendingStatus(null);
                 setStatusNote('');
             } catch (error) {
-                Alert.alert("Error", "Failed to update status");
+                // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to update status");
+                 const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || error || 'An unknown error occurred';
+                Alert.alert("Error", errorMessage);
             }
         }
     };
@@ -514,16 +545,16 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     };
 
     const handleSaveReminder = async (date) => {
-        if (contact) {
+        if (freshContact) {
             try {
                 await dispatch(updateLead({ 
-                    id: contact.id || contact._id, 
-                    data: { attributes: { ...contact.attributes, callSchedule: date.toISOString() } } 
+                    id: freshContact.id || freshContact._id, 
+                    data: { attributes: { ...freshContact.attributes, callSchedule: date.toISOString() } } 
                 })).unwrap();
                 
                 // Schedule push notification
                 await schedulePushNotification(
-                    `Call Reminder: ${contact.name || contact.phone}`,
+                    `Call Reminder: ${freshContact.name || freshContact.phone}`,
                     `It's time to follow up with this lead.`,
                     date
                 );
@@ -601,27 +632,25 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                             <View style={styles.actionsRow}>
                                 <TouchableOpacity
                                     style={styles.actionButton}
-                                    onPress={() => contact?.phone && openWhatsApp(contact.phone)}
+                                    onPress={() => freshContact?.phone && openWhatsApp(freshContact.phone)}
                                 >
                                     <View style={[styles.iconContainer, { backgroundColor: '#E8F5E9' }]}>
                                         <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
                                     </View>
                                     <Text style={styles.actionLabel}>WhatsApp</Text>
                                 </TouchableOpacity>
-
                                 <TouchableOpacity
                                     style={styles.actionButton}
-                                    onPress={() => contact?.phone && sendSMS(contact.phone)}
+                                    onPress={() => freshContact?.phone && sendSMS(freshContact.phone)}
                                 >
                                     <View style={[styles.iconContainer, { backgroundColor: '#E3F2FD' }]}>
                                         <MaterialCommunityIcons name="message-text" size={24} color="#007AFF" />
                                     </View>
                                     <Text style={styles.actionLabel}>Message</Text>
                                 </TouchableOpacity>
-
                                 <TouchableOpacity
                                     style={styles.actionButton}
-                                    onPress={() => sendEmail(contact?.email || '')}
+                                    onPress={() => sendEmail(freshContact?.email || '')}
                                 >
                                     <View style={[styles.iconContainer, { backgroundColor: '#FFEBEE' }]}>
                                         <MaterialCommunityIcons name="email" size={24} color="#F44336" />
@@ -784,11 +813,11 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                             {/* Notes Section */}
                             <View style={styles.notesSection}>
                                 <Text style={styles.sectionTitle}>Notes</Text>
-                                {(!contact?.notes || contact.notes.length === 0) ? (
+                                {(!freshContact?.notes || freshContact.notes.length === 0) ? (
                                     <Text style={styles.emptyNotes}>No notes yet.</Text>
                                 ) : (
                                     <View>
-                                        {contact.notes.slice(0, 3).map((note) => (
+                                        {freshContact.notes.slice(0, 3).map((note) => (
                                             <View key={note.id || Math.random()} style={styles.noteItem}>
                                                 <Text style={styles.noteText}>{note.text}</Text>
                                                 <Text style={styles.noteTime}>
@@ -796,7 +825,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                                 </Text>
                                             </View>
                                         ))}
-                                        {contact.notes.length > 3 && (
+                                        {freshContact.notes.length > 3 && (
                                             <TouchableOpacity onPress={() => setActiveTab('History')}>
                                                 <Text style={{color: COLORS.primary, textAlign: 'center', marginTop: 8}}>View All Notes in History</Text>
                                             </TouchableOpacity>

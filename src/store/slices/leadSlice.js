@@ -99,7 +99,15 @@ export const updateLeadStatus = createAsyncThunk(
                 return rejectWithValue(response.message);
             }
         } catch (error) {
-            return rejectWithValue(error.message || 'Failed to update status');
+            // 1. Extract the most specific message possible
+    const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || 'An unknown error occurred';
+
+    // 2. Log it for your own debugging
+    // 3. Return it to your Redux state / UI
+    return rejectWithValue(errorMessage);
         }
     }
 );
@@ -125,7 +133,15 @@ export const updateLead = createAsyncThunk(
                 return rejectWithValue(response.message || 'Failed to update lead');
             }
         } catch (error) {
-            return rejectWithValue(error.message || 'Failed to update lead');
+            // 1. Extract the most specific message possible
+    const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || 'An unknown error occurred';
+
+
+    // 3. Return it to your Redux state / UI
+    return rejectWithValue(errorMessage);
         }
     }
 );
@@ -322,19 +338,13 @@ export const ensureLead = createAsyncThunk(
             // Already a lead
             return contact;
         } catch (error) {
-            // If duplicate error, try to fetch the existing lead
-            if (error.message && error.message.includes('already exists')) {
-                const contact = payload?.contact || payload;
-                console.log('ensureLead: Lead already exists, fetching...', contact?.phone);
-                if (contact?.phone) {
-                    const existingResult = await dispatch(checkLeadByPhone(contact.phone)).unwrap();
-                    if (existingResult && existingResult.lead) {
-                        return existingResult.lead;
-                    }
-                }
-            }
-            console.error('ensureLead failed:', error);
-            return rejectWithValue(error.message || 'Failed to ensure lead existence');
+            // 1. Extract the most specific message possible
+    const errorMessage = error.response?.data?.message  // The custom backend message
+                      || error.response?.data           // Fallback to data object
+                      || error.message                  // Fallback to "Request failed..."
+                      || error || 'An unknown error occurred';
+                      
+            return rejectWithValue(errorMessage || 'Failed to ensure lead existence');
         }
     }
 );
@@ -488,6 +498,11 @@ const leadSlice = createSlice({
                     const index = state.leads.findIndex(l => l._id === newLead._id);
                     if (index !== -1) {
                         state.leads[index] = newLead;
+                    }
+
+                    // Also update currentLeadDetails if it matches
+                    if (state.currentLeadDetails && (state.currentLeadDetails._id === newLead._id || state.currentLeadDetails.id === newLead._id)) {
+                        state.currentLeadDetails = newLead;
                     }
                 }
             })
