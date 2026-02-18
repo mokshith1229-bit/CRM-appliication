@@ -24,9 +24,9 @@ export const fetchMetadata = createAsyncThunk(
             );
 
             return { 
+                ...data,
                 sources, 
                 statuses,
-                encryptedSubscription: data.encryptedSubscription 
             };
         } catch (error) {
              // Fallback
@@ -55,6 +55,7 @@ const decryptData = (encryptedData) => {
         if (!encryptedData) return null;
         const key = new NodeRSA(APP_CONFIG_PUBLIC_KEY); // Reusing public key from constants
         const decryptedString = key.decryptPublic(encryptedData, 'utf8');
+        console.log("decryptedString",decryptedString);
         return JSON.parse(decryptedString);
     } catch (e) {
         console.warn('Subscription decryption failed', e);
@@ -69,6 +70,8 @@ const initialState = {
     error: null,
     appConfig: null, // { maintenanceMode, minVersion, message }
     subscription: null, // { maxLicenses, expirationDate, planName }
+    whatsappSubscription: null,
+    isWhatsAppIntegrated: false,
 };
 
 const configSlice = createSlice({
@@ -85,27 +88,24 @@ const configSlice = createSlice({
                 state.sources = action.payload.sources;
                 state.statuses = action.payload.statuses;
 
-                // Process subscription if present
-                /*
-                   Note: fetchMetadata response structure in configController.js (getFullConfig) is:
-                   { lead_sources, lead_statuses, roles, fieldConfigs, customAttributes, encryptedSubscription }
-                   But the thunk above currently maps:
-                   sources = action.payload.sources
-                   statuses = action.payload.statuses
-
-                   Wait, the thunk parallel fetches /config/sources and /config/statuses separately in current implementation.
-                   The controller modification was in `getFullConfig`, but the thunk calls `getSources` and `getStatuses`.
-
-                   I need to update the thunk to call `getFullConfig` OR update `getSources/Status` OR fetch subscription separately.
-                   Given `getFullConfig` returns everything, switching to that is more efficient but requires deeper refactor.
-                   Alternatively, I can just add a separate fetch or update the thunk to use `getFullConfig` if that route is available.
-                   `router.get('/', configController.getFullConfig);` is available at `/api/config`.
-
-                   Let's Refactor the Thunk to use getFullConfig for efficiency and to get the subscription.
-                */
-
-                if (action.payload.encryptedSubscription) {
+                const subs = action.payload.subscriptions || {};
+                
+                // TeleCRM Subscription
+                if (subs.telecrm) {
+                    state.subscription = decryptData(subs.telecrm);
+                } else if (action.payload.encryptedSubscription) {
                     state.subscription = decryptData(action.payload.encryptedSubscription);
+                }
+
+                // WhatsApp Subscription
+                if (subs.whatsapp) {
+                    state.whatsappSubscription = decryptData(subs.whatsapp);
+                } else if (action.payload.encryptedWhatsAppSubscription) {
+                    state.whatsappSubscription = decryptData(action.payload.encryptedWhatsAppSubscription);
+                }
+
+                if (action.payload.isWhatsAppIntegrated !== undefined) {
+                    state.isWhatsAppIntegrated = action.payload.isWhatsAppIntegrated;
                 }
             })
             .addCase(fetchMetadata.rejected, (state, action) => {
