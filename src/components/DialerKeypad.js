@@ -7,6 +7,7 @@ import {
     Dimensions,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, SHADOWS } from '../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -85,7 +86,8 @@ const DialerKeypad = ({ onNumberPress, onBackspace, onClear, onLongZero, onCall,
             {/* Call Button Row */}
             <View style={styles.actionRow}>
                 <TouchableOpacity
-                    style={[styles.callButton, !canCall && styles.disabledCallButton]}
+                    style={[styles.callButtonContainer, !canCall && styles.disabledCallButton]}
+                    activeOpacity={0.8}
                     onPress={() => {
                         if (canCall) {
                             triggerHaptic('success');
@@ -94,8 +96,14 @@ const DialerKeypad = ({ onNumberPress, onBackspace, onClear, onLongZero, onCall,
                     }}
                     disabled={!canCall}
                 >
-                    <Ionicons name="call" size={24} color="#FFF" style={styles.callIcon} />
-                    <Text style={styles.callButtonText}>Call</Text>
+                    <LinearGradient
+                        colors={canCall ? ['#6C4DFF', '#4FC3F7'] : ['#E5E7EB', '#D1D5DB']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.callButtonGradient}
+                    >
+                        <Ionicons name="call" size={32} color="#FFF" />
+                    </LinearGradient>
                 </TouchableOpacity>
             </View>
         </View>
@@ -105,77 +113,86 @@ const DialerKeypad = ({ onNumberPress, onBackspace, onClear, onLongZero, onCall,
 const styles = StyleSheet.create({
     container: {
         width: '100%',
-        backgroundColor: '#EBEDF4',
+        backgroundColor: '#F5F3FF',
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
-        paddingHorizontal: 20,
-        paddingTop: 8,
-        paddingBottom: 20,
+        paddingHorizontal: 24,
+        paddingTop: 10,
+        paddingBottom: 90,
+        shadowColor: '#8A79D6',
+        shadowOffset: { width: 0, height: -8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 24,
+        elevation: 10,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
-        paddingVertical: 4,
-        paddingRight: 8,
+        paddingVertical: 8,
+        paddingRight: 12,
+        marginBottom: 8,
     },
     backspaceIconButton: {
-        padding: 8,
+        padding: 10,
+        backgroundColor: '#F3F4F6',
         borderRadius: 20,
     },
     grid: {
-        marginBottom: 10,
+        marginBottom: 16,
     },
     row: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 12,
+        marginBottom: 16,
     },
     key: {
-        width: (SCREEN_WIDTH - 64) / 3, // Slightly adjusted for better gutter control
-        height: 60,
-        borderRadius: 30,
+        width: (SCREEN_WIDTH - 72) / 3, /* Fill space with gaps */
+        height: 56,
+        borderRadius: 28,
         backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
-        ...SHADOWS.small,
+        shadowColor: '#8A79D6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
         elevation: 2,
+        borderWidth: 1,
+        borderColor: '#F9FAFB',
     },
     keyText: {
-        fontSize: SCREEN_WIDTH < 380 ? 24 : 28,
-        color: '#1C1C1E',
-        fontWeight: '400',
+        fontSize: 24,
+        color: '#111827',
+        fontWeight: '600',
     },
     subText: {
-        fontSize: 10,
-        color: '#8E8E93',
-        fontWeight: '500',
-        marginTop: -1,
+        fontSize: 11,
+        color: '#9CA3AF',
+        fontWeight: '400',
+        marginTop: 0,
     },
     actionRow: {
         alignItems: 'center',
-        paddingVertical: 10,
+        paddingVertical: 8,
     },
-    callButton: {
-        width: 140,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: '#008F39',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        ...SHADOWS.medium,
+    callButtonContainer: {
+        borderRadius: 36,
+        shadowColor: '#6C4DFF',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 8,
     },
     disabledCallButton: {
-        backgroundColor: '#A5D6A7',
-        opacity: 0.7,
+        shadowOpacity: 0,
+        elevation: 0,
     },
-    callIcon: {
-        marginRight: 12,
-    },
-    callButtonText: {
-        color: '#FFF',
-        fontSize: 18,
-        fontWeight: '600',
+    callButtonGradient: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });
 

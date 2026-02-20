@@ -1,24 +1,33 @@
 export const COLORS = {
+    // Brand Colors
+    primaryPurple: '#6C4DFF',
+    primaryBlue: '#3B82F6',
+    darkPurple: '#4C35CC',
+    lightPurpleTint: '#F3F0FF',
+    softBackgroundTint: '#F7F5FF',
+    gradientStart: '#6C4DFF',
+    gradientEnd: '#3B82F6',
+
     // Status colors
     none: '#9CA3AF',
     hot: '#EF4444',
     warm: '#F97316',
-    cold: '#3B82F6',
+    cold: '#3B82F6', // Changed to brand blue
     interested: '#10B981',
     not_interested: '#6B7280',
     personal: '#8B5CF6',
 
     // UI colors
-    primary: '#007AFF',
-    background: '#FFFFFF',
+    primary: '#6C4DFF', // Changed to brand purple
+    background: '#F7F5FF', // Changed to soft purple tint
     cardBackground: '#FFFFFF',
-    text: '#000000',
-    textSecondary: '#8E8E93',
+    text: '#111827', // Dark neutral
+    textSecondary: '#6B7280', // Secondary grey
     border: '#E0E0E0',
     overlay: 'rgba(0, 0, 0, 0.5)',
 
     // Filter bar
-    filterActive: '#007AFF',
+    filterActive: '#6C4DFF', // Changed to brand purple
     filterInactive: '#8E8E93',
 
     // New Palette - Royal Blue & Purple Theme
@@ -115,9 +124,9 @@ export const CALL_OUTCOMES = [
     { id: 'busy', label: 'Busy', icon: 'phone-locked', color: '#FF9500' },
     { id: 'switched_off', label: 'Switched Off', icon: 'power-off', color: '#8E8E93' },
     { id: 'not_interested', label: 'Not Interested', icon: 'thumb-down', color: '#5856D6' },
-    { id: 'callback', label: 'Callback', icon: 'history', color: '#007AFF' },
+    { id: 'callback', label: 'Callback', icon: 'history', color: COLORS.primaryPurple },
     { id: 'hot', label: 'Hot Call', icon: 'whatshot', color: '#FF3B30' },
     { id: 'warm', label: 'Warm Call', icon: 'wb-sunny', color: '#FF9500' },
-    { id: 'cold', label: 'Cold Call', icon: 'ac-unit', color: '#007AFF' },
+    { id: 'cold', label: 'Cold Call', icon: 'ac-unit', color: COLORS.primaryBlue },
     { id: 'converted', label: 'Converted', icon: 'check-circle', color: '#4CAF50' },
 ];

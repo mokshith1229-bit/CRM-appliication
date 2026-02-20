@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { makeCall } from '../utils/intents';
 import defaultAvatar from '../assets/default_avatar.jpg';
@@ -82,12 +83,12 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
     const getStatusBadge = () => {
         // For New Enquiries, always show "New" status
         if (contact.isNewLead) {
-            return { label: 'New', color: '#34C759', bg: '#E8F5E9' };
+            return { label: 'NEW', color: COLORS.primaryPurple, bg: COLORS.lightPurpleTint };
         }
 
         // Handle "Unsaved" status for device logs
         if (contact?.status === 'Unsaved' || contact._source === 'log') {
-            return { label: 'Unsaved', color: '#FF9500', bg: '#FFF3E0' };
+            return { label: 'UNSAVED', color: COLORS.primaryPurple, bg: COLORS.lightPurpleTint };
         }
 
         // Safety check for statuses array
@@ -99,7 +100,7 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
         // Find matching status in dynamic config
         // Keys in config have format: "status_Cold", but contact.status is just "Cold"
         const statusValue = contact?.status;
-        
+
         if (!statusValue) {
             return { label: 'None', color: '#9CA3AF', bg: '#F3F4F6' };
         }
@@ -109,15 +110,15 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
         });
         if (matchingStatus) {
             return {
-                label: matchingStatus.label,
-                color: matchingStatus.color || '#9CA3AF',
-                bg: matchingStatus.color ? `${matchingStatus.color}20` : '#F3F4F6' // 20% opacity
+                label: matchingStatus.label.toUpperCase(),
+                color: COLORS.primaryPurple, // Explicitly standardizing to soft purple background
+                bg: COLORS.lightPurpleTint
             };
         }
 
         // Default fallback - show the status value even if not in config
         console.warn(`ContactCard: No matching status found for "${statusValue}"`);
-        return { label: statusValue, color: '#9CA3AF', bg: '#F3F4F6' };
+        return { label: statusValue?.toUpperCase(), color: COLORS.primaryPurple, bg: COLORS.lightPurpleTint };
     };
 
     const statusBadge = getStatusBadge();
@@ -200,15 +201,15 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                                 {contact.leadSource}
                             </Text>
                         )}
-                        
+
                         {/* Only show assignment info for CRM leads, not device logs */}
                         {contact._source !== 'log' && (
                             <>
                                 {contact.transferredBy ? (
                                     <Text style={styles.transferredByText}>
                                         Transferred by: {
-                                            typeof contact.transferredBy === 'object' 
-                                                ? contact.transferredBy.name  || contact.transferredBy.role
+                                            typeof contact.transferredBy === 'object'
+                                                ? contact.transferredBy.name || contact.transferredBy.role
                                                 : contact.transferredBy
                                         }
                                     </Text>
@@ -269,16 +270,20 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                 </View>
             </View>
 
-            {/* Call Button - Custom Image */}
+            {/* Primary Action Button - 48px size, 24px radius, gradient */}
             <TouchableOpacity
-                style={styles.callButton}
+                style={styles.callButtonContainer}
                 onPress={handleCallPress}
+                activeOpacity={0.8}
             >
-                <Image
-                    source={customCallIcon}
-                    style={styles.callIconCustom}
-                    resizeMode="contain"
-                />
+                <LinearGradient
+                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.callButtonGradient}
+                >
+                    <MaterialIcons name="phone" size={20} color="#FFFFFF" />
+                </LinearGradient>
             </TouchableOpacity>
         </TouchableOpacity>
     );
@@ -289,20 +294,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: COLORS.background,
-        paddingVertical: 12, // Slightly reduced vertical padding
-        paddingHorizontal: 12, // Reduced horizontal padding
-        marginBottom: 8, // Reduced margin bottom
-        // marginHorizontal removed
-        borderRadius: 12, // Slightly less rounded
-        // More subtle shadow
-        shadowColor: COLORS.shadowBlue,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-        borderWidth: 1,
-        borderColor: '#F0F0F5', 
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+        marginHorizontal: 6, // Reduced from 16 to make cards broader
+        marginBottom: 10,
+        borderRadius: 20, // Modern floating card radius
+        shadowColor: '#8a79d6', // Soft purple shadow
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 4,
     },
     leftSection: {
         flexDirection: 'row',
@@ -334,11 +336,11 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
     },
     name: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: COLORS.royalBlue, // Royal Blue
+        fontFamily: 'SF Pro Display',
+        fontSize: 16,
+        fontWeight: '600', // Semibold
+        color: '#1F2937',
         marginRight: 8,
-        letterSpacing: 0.3,
     },
     statusBadge: {
         paddingHorizontal: 10,
@@ -347,16 +349,17 @@ const styles = StyleSheet.create({
         backgroundColor: '#F3E5F5',
     },
     statusBadgeText: {
+        fontFamily: 'SF Pro Display',
         fontSize: 10,
-        fontWeight: '700',
-        textTransform: 'uppercase',
+        fontWeight: '700', // Bold
         letterSpacing: 0.5,
     },
     phoneText: {
+        fontFamily: 'SF Pro Display',
         fontSize: 14,
-        fontWeight: '500',
-        color: COLORS.deepPurple, // Deep Purple
-        marginBottom: 4,
+        color: '#4B5563',
+        fontWeight: '500', // Medium
+        marginBottom: 6,
     },
     statusRow: {
         flexDirection: 'row',
@@ -374,53 +377,57 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     statusText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: '#666',
+        fontFamily: 'SF Pro Display',
+        fontSize: 13,
+        fontWeight: '400',
+        color: '#6B7280',
     },
     bullet: {
+        fontFamily: 'SF Pro Display',
         fontSize: 12,
         color: COLORS.lightViolet, // Light Violet bullet
         marginHorizontal: 8,
     },
     timeText: {
-        fontSize: 12,
-        color: '#888',
+        fontFamily: 'SF Pro Display',
+        fontSize: 13,
         fontWeight: '400',
+        color: '#666',
     },
     assignedText: {
-        fontSize: 12,
-        color: COLORS.purple, // Purple
-        fontWeight: '500',
+        fontFamily: 'SF Pro Display',
+        fontSize: 13,
+        fontWeight: '400',
+        color: '#666',
     },
-    callButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: COLORS.lightVioletBg, // Very light violet bg
+    callButtonContainer: {
+        borderRadius: 24, // Exact radius
+        shadowColor: COLORS.gradientStart,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 4,
+    },
+    callButtonGradient: {
+        width: 48, // Exact size annotated
+        height: 48,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.lightPurpleBorder, // Light purple border
-        marginLeft: 8,
-    },
-    callIconCustom: {
-        width: 22,
-        height: 22,
-    },
-    callButtonIcon: {
-        fontSize: 18,
     },
     assignedByText: {
-        fontSize: 11,
-        color: COLORS.violet, // Violet
+        fontFamily: 'SF Pro Display',
+        fontSize: 12,
+        fontWeight: '400',
+        color: '#8E8E93',
         marginTop: 2,
         fontStyle: 'italic',
     },
     leadSourceText: {
-        fontSize: 11,
-        color: COLORS.purple, // Purple
-        fontWeight: '700',
+        fontFamily: 'SF Pro Display',
+        fontSize: 12,
+        color: COLORS.primaryPurple,
+        fontWeight: '400',
         marginTop: 2,
         backgroundColor: COLORS.violetAccent,
         alignSelf: 'flex-start',
@@ -430,10 +437,24 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     transferredByText: {
-        fontSize: 11,
-        color: COLORS.violet, // Violet
+        fontFamily: 'SF Pro Display',
+        fontSize: 12,
+        color: '#8E8E93',
         marginTop: 1,
+        fontWeight: '400', // Regular
         fontStyle: 'italic',
+    },
+    sourceText: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 13,
+        color: COLORS.primaryPurple,
+        fontWeight: '400', // Regular
+    },
+    campaignText: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 13,
+        color: COLORS.primaryPurple,
+        fontWeight: '400', // Regular
     },
     attributesContainer: {
         flexDirection: 'row',

@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS } from '../constants/theme';
 
 const BottomTabs = ({ activeTab, onTabPress }) => {
     const insets = useSafeAreaInsets();
@@ -22,16 +24,28 @@ const BottomTabs = ({ activeTab, onTabPress }) => {
                         onPress={() => onTabPress(tab.id)}
                         activeOpacity={0.7}
                     >
-                        <View style={[
-                            styles.iconContainer,
-                            isActive && styles.activeIconContainer
-                        ]}>
-                            <MaterialIcons
-                                name={tab.icon}
-                                size={24}
-                                color={isActive ? '#1C1C1E' : '#8E8E93'}
-                            />
-                        </View>
+                        {isActive ? (
+                            <LinearGradient
+                                colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.iconContainer}
+                            >
+                                <MaterialIcons
+                                    name={tab.icon}
+                                    size={24}
+                                    color="#FFFFFF"
+                                />
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.iconContainer}>
+                                <MaterialIcons
+                                    name={tab.icon}
+                                    size={24}
+                                    color="#8E8E93"
+                                />
+                            </View>
+                        )}
                         <Text style={[
                             styles.tabLabel,
                             isActive && styles.activeTabLabel
@@ -70,16 +84,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 4,
     },
-    activeIconContainer: {
-        backgroundColor: '#DCE4F9',
-    },
     tabLabel: {
         fontSize: 12,
         color: '#8E8E93',
         fontWeight: '500',
     },
     activeTabLabel: {
-        color: '#007AFF',
+        color: COLORS.primaryPurple,
         fontWeight: 'bold',
     },
 });

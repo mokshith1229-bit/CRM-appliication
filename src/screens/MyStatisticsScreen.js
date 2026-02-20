@@ -61,15 +61,16 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
         setDateFilter(null);
     };
 
-    // Prepare chart data from API response
+    // Prepare chart data from API response safely
+    const dailyCalls = stats?.dailyCalls || [];
     const chartData = {
-        labels: stats.dailyCalls.map(day => {
-            const d = new Date(day.date);
+        labels: dailyCalls.length > 0 ? dailyCalls.map(day => {
+            const d = new Date(day.date || new Date());
             return `${d.getDate()}/${d.getMonth() + 1}`;
-        }),
-        datasets: [{ 
-            data: stats.dailyCalls.length > 0 
-                ? stats.dailyCalls.map(day => day.count)
+        }) : ['No Data'],
+        datasets: [{
+            data: dailyCalls.length > 0
+                ? dailyCalls.map(day => day.count)
                 : [0] // Prevent chart error with empty data
         }]
     };
@@ -99,8 +100,8 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView 
-                contentContainerStyle={styles.scrollContent} 
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl refreshing={isLoading} onRefresh={onRefresh} colors={[COLORS.primary]} />
@@ -165,13 +166,13 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
                         {/* Stats Grid */}
                         <Text style={styles.sectionTitle}>Performance Overview</Text>
                         <View style={styles.grid}>
-                            <StatCard title="Calls Attempted" value={stats.calls.attempted} icon="phone-outgoing" color="#007AFF" />
-                            <StatCard title="Calls Connected" value={stats.calls.connected} icon="phone-check" color="#34C759" />
-                            <StatCard title="Not Connected" value={stats.calls.notConnected} icon="phone-missed" color="#FF3B30" />
-                            <StatCard title="In-Progress" value={stats.leads.inProgress} icon="progress-clock" color="#FF9500" />
-                            <StatCard title="Converted" value={stats.leads.converted} icon="check-decagram" color="#10B981" />
-                            <StatCard title="Lost Leads" value={stats.leads.lost} icon="close-circle" color="#8E8E93" />
-                            <StatCard title="WhatsApp Sent" value={stats.whatsapp} icon="whatsapp" color="#25D366" />
+                            <StatCard title="Calls Attempted" value={stats?.calls?.attempted || 0} icon="phone-outgoing" color={COLORS.primaryPurple} />
+                            <StatCard title="Calls Connected" value={stats?.calls?.connected || 0} icon="phone-check" color="#34C759" />
+                            <StatCard title="Not Connected" value={stats?.calls?.notConnected || 0} icon="phone-missed" color="#FF3B30" />
+                            <StatCard title="In-Progress" value={stats?.leads?.inProgress || 0} icon="progress-clock" color="#FF9500" />
+                            <StatCard title="Converted" value={stats?.leads?.converted || 0} icon="check-decagram" color="#10B981" />
+                            <StatCard title="Lost Leads" value={stats?.leads?.lost || 0} icon="close-circle" color="#8E8E93" />
+                            <StatCard title="WhatsApp Sent" value={stats?.whatsapp || 0} icon="whatsapp" color="#25D366" />
                         </View>
 
                         {/* Chart Section */}

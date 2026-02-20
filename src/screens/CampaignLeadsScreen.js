@@ -6,7 +6,7 @@ import {
     StyleSheet,
     RefreshControl,
     ActivityIndicator,
-    
+    TextInput,
     Platform,
     StatusBar as NativeStatusBar,
     TouchableOpacity,
@@ -50,11 +50,11 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     // Filter leads by campaignId
     // Data is now isolated in campaignLeads state
     // We use 'leads' variable directly as selected above
-    
+
     // Active filter state
     const activeFilter = useSelector(state => state.leads.activeFilter);
     const setActiveFilterAction = (filter) => dispatch(setActiveFilter(filter));
-    
+
     // We import { setActiveFilter } from leadSlice actions, so:
     // const setActiveFilterAction = (filter) => dispatch(setActiveFilter(filter));
     // Implementation below.
@@ -107,16 +107,16 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     // Use mapped version if specific fields needed, but 'allLeads' usually has what we need
     // We map to ensure consistent structure if backend response varies
     const displayedLeads = leads; // Assuming leads are already in correct format from fetchLeads
-    
+
     // Unified Fetch Logic
     const fetchWithFilters = (pageOrReset = 1) => {
-        const filters = { 
+        const filters = {
             campaignId,
             page: pageOrReset,
         };
 
         if (searchQuery) filters.search = searchQuery;
-        
+
         // Date filters might not be supported on CampaignRecord yet in controller but passing anyway
         if (dateFilter) {
             filters.startDate = dateFilter.toISOString();
@@ -132,11 +132,11 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     // Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => {
-             fetchWithFilters(1);
+            fetchWithFilters(1);
         }, 500);
         return () => clearTimeout(timer);
     }, [searchQuery, dateFilter, dateRange]);
-    
+
     // Initial Fetch
     useEffect(() => {
         dispatch(clearCampaignLeads());
@@ -173,38 +173,38 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         if (selectedContact) {
             try {
                 // Ensure lead exists (convert from log/enquiry if needed) with the selected status
-                const targetLead = await dispatch(ensureLead({ 
-                    contact: selectedContact, 
-                    initialStatus: newStatus 
+                const targetLead = await dispatch(ensureLead({
+                    contact: selectedContact,
+                    initialStatus: newStatus
                 })).unwrap();
-                
+
                 // Only update status explicitly if the lead already existed
                 if (selectedContact._source !== 'log' && !selectedContact.id?.startsWith('log-')) {
-                     await dispatch(updateLeadStatus({ id: targetLead.id || targetLead._id, status: newStatus }));
+                    await dispatch(updateLeadStatus({ id: targetLead.id || targetLead._id, status: newStatus }));
                 }
-                
+
                 setShowStatusOverlay(false);
-                
+
                 // Refresh list
                 handleRefresh();
 
             } catch (error) {
                 console.error('Status update failed:', error);
-                
+
                 // Check if it's a validation error (IVR/Service Number)
-                if (error === 'Cannot convert service numbers (IVR) to leads.' || 
+                if (error === 'Cannot convert service numbers (IVR) to leads.' ||
                     (typeof error === 'string' && error.includes('service numbers'))) {
-                    
+
                     Alert.alert(
                         'Validation Error',
                         'This number appears to be a service number or IVR. Would you like to create a lead manually?',
                         [
                             { text: 'Cancel', style: 'cancel' },
-                            { 
-                                text: 'Create Manually', 
+                            {
+                                text: 'Create Manually',
                                 onPress: () => {
                                     setShowStatusOverlay(false); // Close overlay first
-                                    navigation.navigate('CreateLead', { 
+                                    navigation.navigate('CreateLead', {
                                         initialLeadData: {
                                             name: selectedContact.name,
                                             phone: selectedContact.phone,
@@ -226,7 +226,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     };
 
     const handleCallAction = (contact) => {
-        navigation.navigate('QuickContact', { 
+        navigation.navigate('QuickContact', {
             contact,
             campaignId,
             campaignName
@@ -259,20 +259,25 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
             <SafeAreaView style={styles.container}>
                 <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
                 <View style={styles.header}>
-                     <View style={styles.headerTop}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                            <MaterialIcons name="arrow-back" size={28} color={COLORS.text} />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle} numberOfLines={1}>{campaignName}</Text>
-                        <View style={{ width: 40 }} />
-                    </View>
-                    <SearchBar
-                         searchQuery={searchQuery}
-                         onSearchChange={setSearchQuery}
-                         hideMenuIcon={true}
-                    />
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <MaterialIcons name="arrow-back" size={28} color="#111827" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{campaignName}</Text>
                 </View>
-                <View style={styles.listContent}>
+
+                {/* Floating Search Pill */}
+                <View style={styles.searchPillContainer}>
+                    <View style={styles.searchPill}>
+                        <TextInput
+                            style={styles.searchInputPill}
+                            placeholder="Search contacts"
+                            editable={false}
+                            placeholderTextColor="#9CA3AF"
+                        />
+                    </View>
+                </View>
+
+                <View style={[styles.listContent, { paddingTop: 10 }]}>
                     {[1, 2, 3, 4, 5, 6].map((key) => (
                         <ContactCardSkeleton key={key} />
                     ))}
@@ -285,22 +290,32 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         <SafeAreaView style={styles.container}>
             <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
 
-            {/* Custom Header with Calendar Support */}
+            {/* Clean Native Header */}
             <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={28} color={COLORS.text} />
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <MaterialIcons name="arrow-back" size={28} color="#111827" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle} numberOfLines={1}>{campaignName}</Text>
+            </View>
+
+            {/* Floating Search Pill wrapping the Search input and Calendar */}
+            <View style={styles.searchPillContainer}>
+                <View style={styles.searchPill}>
+                    <TextInput
+                        style={styles.searchInputPill}
+                        placeholder="Search contacts"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholderTextColor="#9CA3AF"
+                    />
+
+                    <TouchableOpacity onPress={() => setShowDateRangeModal(true)} style={styles.iconButton}>
+                        <View>
+                            <MaterialIcons name={'calendar-today'} size={24} color="#4B5563" />
+                            {(dateFilter || dateRange) && <View style={styles.activeDot} />}
+                        </View>
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{campaignName}</Text>
-                    <View style={{ width: 40 }} />
                 </View>
-                <SearchBar
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    onCalendarPress={() => setShowDateRangeModal(true)}
-                    isDateFiltered={!!dateFilter || !!dateRange}
-                    hideMenuIcon={true}
-                />
             </View>
 
             {(dateFilter || dateRange) && (
@@ -336,15 +351,15 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                     />
                 }
                 onEndReached={() => {
-                     if (!isLoading && pagination && pagination.page < pagination.pages) {
-                         // Load next page
-                         const filters = { 
+                    if (!isLoading && pagination && pagination.page < pagination.pages) {
+                        // Load next page
+                        const filters = {
                             page: pagination.page + 1,
-                            campaignId: campaignId 
+                            campaignId: campaignId
                         };
 
                         if (searchQuery) filters.search = searchQuery;
-                        
+
                         if (dateFilter) {
                             filters.startDate = dateFilter.toISOString();
                             filters.endDate = dateFilter.toISOString();
@@ -354,7 +369,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                         }
 
                         dispatch(fetchCampaignRecords(filters));
-                     }
+                    }
                 }}
                 onEndReachedThreshold={0.5}
             />
@@ -434,60 +449,90 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: COLORS.background,
     },
-    loadingText: {
-        ...TYPOGRAPHY.body,
-        marginTop: SPACING.md,
-        color: COLORS.textSecondary,
-    },
     header: {
-        backgroundColor: COLORS.cardBackground,
-        paddingBottom: 4,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
-    },
-    headerTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    headerTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: COLORS.text,
-        flex: 1,
-        marginHorizontal: 12,
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'android' ? 12 : 0,
+        paddingBottom: 16,
+        backgroundColor: 'transparent',
     },
     backButton: {
-        padding: 4,
+        marginRight: 16,
     },
-    menuButton: {
-        padding: 4,
+    headerTitle: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#111827',
+        flex: 1,
+    },
+    searchPillContainer: {
+        paddingHorizontal: 16,
+        marginBottom: 8,
+    },
+    searchPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        height: 56,
+        borderRadius: 28,
+        paddingLeft: 24,
+        paddingRight: 8,
+        shadowColor: '#8a79d6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 8,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+    },
+    iconButton: {
+        padding: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    searchInputPill: {
+        flex: 1,
+        fontFamily: 'SF Pro Display',
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#111827',
+    },
+    activeDot: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.primaryPurple,
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF',
     },
     filterChipContainer: {
         paddingHorizontal: 16,
         paddingTop: 12,
         paddingBottom: 4,
-        backgroundColor: COLORS.background,
     },
     filterChip: {
         alignSelf: 'flex-start',
-        backgroundColor: COLORS.primary + '20',
+        backgroundColor: '#F3F0FF',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: COLORS.primary,
+        borderColor: COLORS.primaryPurple,
     },
     filterChipText: {
-        color: COLORS.primary,
+        color: COLORS.primaryPurple,
         fontWeight: '600',
         fontSize: 14,
     },
     listContent: {
         paddingHorizontal: 16,
         paddingBottom: 100,
+        paddingTop: 16,
     },
     emptyState: {
         alignItems: 'center',

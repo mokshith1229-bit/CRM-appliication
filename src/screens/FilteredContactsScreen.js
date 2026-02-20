@@ -6,7 +6,7 @@ import {
     StyleSheet,
     RefreshControl,
     ActivityIndicator,
-    
+    TextInput,
     Platform,
     StatusBar as NativeStatusBar,
     TouchableOpacity,
@@ -16,14 +16,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    fetchLeads, 
-    fetchEnquiries, 
+import {
+    fetchLeads,
+    fetchEnquiries,
     fetchCombinedEnquiries,
-    clearLeads, 
-    ensureLead, 
+    clearLeads,
+    ensureLead,
     updateLeadStatus,
-    updateLead 
+    updateLead
 } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
@@ -59,7 +59,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     // Identify if the current filter is a grouped source type
     const sourceGroupType = filterId?.startsWith('source_type:') ? filterId.replace('source_type:', '') : null;
-    
+
     // Get all instances for this type
     const availableInstances = React.useMemo(() => {
         if (!sourceGroupType) return [];
@@ -67,12 +67,12 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
             const lowKey = s.key?.toLowerCase() || '';
             const lowLabel = s.label?.toLowerCase() || '';
             const type = sourceGroupType.toLowerCase();
-            
-            return lowKey === type || 
-                   lowKey.startsWith(`${type}_`) || 
-                   lowKey.startsWith(`${type} `) ||
-                   lowKey.startsWith(`${type}(`) ||
-                   lowLabel.includes(type);
+
+            return lowKey === type ||
+                lowKey.startsWith(`${type}_`) ||
+                lowKey.startsWith(`${type} `) ||
+                lowKey.startsWith(`${type}(`) ||
+                lowLabel.includes(type);
         });
     }, [sources, sourceGroupType]);
 
@@ -99,63 +99,63 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
             attributes: lead.attributes || {},
             campaignId: lead.campaign_id,
             campaignName: lead.attributes?.campaignName,
-            lastCallRecord: lead.call_logs && lead.call_logs.length > 0 
-                ? lead.call_logs[lead.call_logs.length - 1] 
+            lastCallRecord: lead.call_logs && lead.call_logs.length > 0
+                ? lead.call_logs[lead.call_logs.length - 1]
                 : null
         })).sort((a, b) => new Date(b.lastCallTime || 0) - new Date(a.lastCallTime || 0)); // Note: Backend sort preferred, but keeping client sort for now as secondary
     }, [allLeads]);
 
     // Unified Fetch Logic for this Screen
     const fetchWithFilters = React.useCallback(() => {
-         const filters = {};
-         
-         // 1. Apply Base Filter from Drawer (filterId)
-         if (filterId) {
-             // Dynamic filter parsing
-             if (filterId.startsWith('source_')) {
-                 const sourceKey = filterId.replace('source_', '');
-                 if (sourceKey.startsWith('type:')) {
-                     // Check if a specific instance is selected
-                     if (selectedInstance) {
-                         filters.lead_source = selectedInstance.key;
-                     } else {
-                         filters.lead_source = sourceKey; // Will be e.g. "type:facebook"
-                     }
-                 } else {
-                     filters.lead_source = sourceKey;
-                 }
-             } else if (filterId.startsWith('status_')) {
-                 filters.status = filterId.replace('status_', '');
-             } else if (filterId.startsWith('transferred_')) {
-                 filters.transferred_by = filterId.replace('transferred_', '');
-             }
-             // No hardcoded status cases needed - all handled dynamically
-         }
+        const filters = {};
 
-         // 2. Apply Search
-         if (searchQuery) {
-             filters.search = searchQuery;
-         }
+        // 1. Apply Base Filter from Drawer (filterId)
+        if (filterId) {
+            // Dynamic filter parsing
+            if (filterId.startsWith('source_')) {
+                const sourceKey = filterId.replace('source_', '');
+                if (sourceKey.startsWith('type:')) {
+                    // Check if a specific instance is selected
+                    if (selectedInstance) {
+                        filters.lead_source = selectedInstance.key;
+                    } else {
+                        filters.lead_source = sourceKey; // Will be e.g. "type:facebook"
+                    }
+                } else {
+                    filters.lead_source = sourceKey;
+                }
+            } else if (filterId.startsWith('status_')) {
+                filters.status = filterId.replace('status_', '');
+            } else if (filterId.startsWith('transferred_')) {
+                filters.transferred_by = filterId.replace('transferred_', '');
+            }
+            // No hardcoded status cases needed - all handled dynamically
+        }
 
-         // 3. Apply Date Filters
-         if (dateFilter) {
-             filters.startDate = dateFilter.toISOString();
-             filters.endDate = dateFilter.toISOString();
-         } else if (dateRange) {
-             filters.startDate = dateRange.start.toISOString();
-             filters.endDate = dateRange.end.toISOString();
-         }
+        // 2. Apply Search
+        if (searchQuery) {
+            filters.search = searchQuery;
+        }
 
-         // Dispatch
-         if (route.params?.isEnquiryMode) {
-             dispatch(fetchCombinedEnquiries(filters));
-         } else {
-             // Include enquiries only when filtering by lead source from CustomDrawer
-             if (filterId && filterId.startsWith('source_')) {
-                 filters.includeEnquiries = 'true';
-             }
-             dispatch(fetchLeads(filters));
-         }
+        // 3. Apply Date Filters
+        if (dateFilter) {
+            filters.startDate = dateFilter.toISOString();
+            filters.endDate = dateFilter.toISOString();
+        } else if (dateRange) {
+            filters.startDate = dateRange.start.toISOString();
+            filters.endDate = dateRange.end.toISOString();
+        }
+
+        // Dispatch
+        if (route.params?.isEnquiryMode) {
+            dispatch(fetchCombinedEnquiries(filters));
+        } else {
+            // Include enquiries only when filtering by lead source from CustomDrawer
+            if (filterId && filterId.startsWith('source_')) {
+                filters.includeEnquiries = 'true';
+            }
+            dispatch(fetchLeads(filters));
+        }
     }, [filterId, searchQuery, dateFilter, dateRange, route.params?.isEnquiryMode, dispatch]);
 
     // Initial Fetch & Filter Changes
@@ -163,26 +163,26 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
         // Clear stale data
         dispatch(clearLeads());
         fetchWithFilters();
-        
+
         return () => {
-             dispatch(clearLeads());
+            dispatch(clearLeads());
         };
     }, [fetchWithFilters, route.params?.timestamp]); // Re-fetch when filters change
 
-     // Debounce Search - Wait for user to stop typing
+    // Debounce Search - Wait for user to stop typing
     useEffect(() => {
         const timer = setTimeout(() => {
-             // Only fetch if search query changed (handled by dependency)
-             // But valid fetchWithFilters includes it.
-             // We need to avoid double fetch on mount.
-             // Mount calls useEffect above. Search change calls this.
-             // We can rely on fetchWithFilters dependency changes, but we want debounce.
-             // Actually, the above effect [fetchWithFilters] will run on every render if fetchWithFilters changes.
-             // We should wrap fetchWithFilters in useCallback, which depends on [searchQuery].
-             // So typing updates searchQuery -> updates fetchWithFilters -> triggers above effect.
-             // To IMPLEMENT DEBOUNCE: We should NOT put fetchWithFilters in the main dependency array of the immediate fetch,
-             // OR we debounce the setSearchQuery itself, which is harder with controlled input.
-             // ALTERNATIVE: Use a separate useEffect for search specifically.
+            // Only fetch if search query changed (handled by dependency)
+            // But valid fetchWithFilters includes it.
+            // We need to avoid double fetch on mount.
+            // Mount calls useEffect above. Search change calls this.
+            // We can rely on fetchWithFilters dependency changes, but we want debounce.
+            // Actually, the above effect [fetchWithFilters] will run on every render if fetchWithFilters changes.
+            // We should wrap fetchWithFilters in useCallback, which depends on [searchQuery].
+            // So typing updates searchQuery -> updates fetchWithFilters -> triggers above effect.
+            // To IMPLEMENT DEBOUNCE: We should NOT put fetchWithFilters in the main dependency array of the immediate fetch,
+            // OR we debounce the setSearchQuery itself, which is harder with controlled input.
+            // ALTERNATIVE: Use a separate useEffect for search specifically.
         }, 500);
         // Current implementation above triggers on dependency change immediately.
         // Let's optimize: Remove `fetchWithFilters` from the main effect and call it explicitly.
@@ -195,7 +195,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     // This causes request on every keystroke.
     // FIX: Remove `fetchWithFilters` from dependencies of main effect? No, we want it to run.
     // FIX: Debounce logic needs to be cleaner.
-    
+
     // For now, implementing the removal of client-side logic as priority.
     // I will replace the previous `useEffect` block completely.
 
@@ -237,10 +237,10 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     const handleRefresh = async () => {
         setRefreshing(true);
         if (route.params?.isEnquiryMode) {
-             // Keep logic consistent
-             fetchWithFilters();
+            // Keep logic consistent
+            fetchWithFilters();
         } else {
-             fetchWithFilters();
+            fetchWithFilters();
         }
         setRefreshing(false);
     };
@@ -248,7 +248,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     // Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => {
-             fetchWithFilters();
+            fetchWithFilters();
         }, 500);
         return () => clearTimeout(timer);
     }, [searchQuery, filterId, dateFilter, dateRange, selectedInstance]); // Added selectedInstance
@@ -275,41 +275,41 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
             try {
                 // Ensure lead exists (convert from log/enquiry if needed) with the selected status
                 // This handles both logs AND enquiries being promoted
-                const targetLead = await dispatch(ensureLead({ 
-                    contact: selectedContact, 
-                    initialStatus: newStatus 
+                const targetLead = await dispatch(ensureLead({
+                    contact: selectedContact,
+                    initialStatus: newStatus
                 })).unwrap();
-                
+
                 // Only update status explicitly if the lead already existed (wasn't just created/converted by ensureLead)
                 // If ensureLead created it, it already set the status
                 // However, ensureLead returns the lead object. If it was an existing lead, ensureLead returns it.
                 // If we want to force status update on existing leads too:
                 if (selectedContact._source !== 'log' && !selectedContact.id?.startsWith('log-')) {
-                     await dispatch(updateLeadStatus({ id: targetLead.id || targetLead._id, status: newStatus }));
+                    await dispatch(updateLeadStatus({ id: targetLead.id || targetLead._id, status: newStatus }));
                 }
-                
+
                 setShowStatusOverlay(false);
-                
+
                 // Refresh list to show updated status
                 handleRefresh();
 
             } catch (error) {
                 console.error('Status update failed:', error);
-                
+
                 // Check if it's a validation error (IVR/Service Number)
-                if (error === 'Cannot convert service numbers (IVR) to leads.' || 
+                if (error === 'Cannot convert service numbers (IVR) to leads.' ||
                     (typeof error === 'string' && error.includes('service numbers'))) {
-                    
+
                     Alert.alert(
                         'Validation Error',
                         'This number appears to be a service number or IVR. Would you like to create a lead manually?',
                         [
                             { text: 'Cancel', style: 'cancel' },
-                            { 
-                                text: 'Create Manually', 
+                            {
+                                text: 'Create Manually',
                                 onPress: () => {
                                     setShowStatusOverlay(false); // Close overlay first
-                                    navigation.navigate('CreateLead', { 
+                                    navigation.navigate('CreateLead', {
                                         initialLeadData: {
                                             name: selectedContact.name,
                                             phone: selectedContact.phone,
@@ -351,20 +351,25 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
             <SafeAreaView style={styles.container}>
                 <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
                 <View style={styles.header}>
-                    <View style={styles.headerTop}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                            <MaterialIcons name="arrow-back" size={28} color={COLORS.text} />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle} numberOfLines={1}>{filterLabel}</Text>
-                        <View style={{ width: 40 }} />
-                    </View>
-                    <SearchBar
-                        searchQuery={searchQuery}
-                        onSearchChange={setSearchQuery}
-                         hideMenuIcon={true}
-                    />
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <MaterialIcons name="arrow-back" size={28} color="#111827" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{filterLabel}</Text>
                 </View>
-                <View style={styles.listContent}>
+
+                {/* Floating Search Pill */}
+                <View style={styles.searchPillContainer}>
+                    <View style={styles.searchPill}>
+                        <TextInput
+                            style={styles.searchInputPill}
+                            placeholder="Search contacts"
+                            editable={false}
+                            placeholderTextColor="#9CA3AF"
+                        />
+                    </View>
+                </View>
+
+                <View style={[styles.listContent, { paddingTop: 10 }]}>
                     {[1, 2, 3, 4, 5, 6].map((key) => (
                         <ContactCardSkeleton key={key} />
                     ))}
@@ -377,33 +382,43 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
         <SafeAreaView style={styles.container}>
             <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
 
-            {/* Custom Header */}
+            {/* Clean Native Header */}
             <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={28} color={COLORS.text} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{filterLabel}</Text>
-                    <View style={{ width: 40 }} />
-                </View>
-                <SearchBar
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    onCalendarPress={() => setShowDateRangeModal(true)}
-                    isDateFiltered={!!dateFilter || !!dateRange}
-                    hideMenuIcon={true}
-                />
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <MaterialIcons name="arrow-back" size={28} color="#111827" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle} numberOfLines={1}>{filterLabel}</Text>
             </View>
-            
+
+            {/* Floating Search Pill wrapping the Search input and Calendar */}
+            <View style={styles.searchPillContainer}>
+                <View style={styles.searchPill}>
+                    <TextInput
+                        style={styles.searchInputPill}
+                        placeholder="Search contacts"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholderTextColor="#9CA3AF"
+                    />
+
+                    <TouchableOpacity onPress={() => setShowDateRangeModal(true)} style={styles.iconButton}>
+                        <View>
+                            <MaterialIcons name={'calendar-today'} size={24} color="#4B5563" />
+                            {(dateFilter || dateRange) && <View style={styles.activeDot} />}
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             {/* Instance Selector for Grouped Sources */}
             {sourceGroupType && availableInstances.length > 1 && (
                 <View style={styles.instanceSelector}>
-                    <ScrollView 
-                        horizontal 
+                    <ScrollView
+                        horizontal
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.instanceScrollContent}
                     >
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={[styles.instanceChip, !selectedInstance && styles.instanceChipActive]}
                             onPress={() => setSelectedInstance(null)}
                         >
@@ -413,7 +428,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
                         </TouchableOpacity>
 
                         {availableInstances.map((instance) => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 key={instance.key}
                                 style={[styles.instanceChip, selectedInstance?.key === instance.key && styles.instanceChipActive]}
                                 onPress={() => setSelectedInstance(instance)}
@@ -540,51 +555,89 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
     },
     header: {
-        backgroundColor: COLORS.cardBackground,
-        paddingBottom: 4,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
-    },
-    headerTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    headerTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: COLORS.text,
-        flex: 1,
-        marginHorizontal: 12,
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'android' ? 12 : 0,
+        paddingBottom: 16,
+        backgroundColor: 'transparent',
     },
     backButton: {
-        padding: 4,
+        marginRight: 16,
+    },
+    headerTitle: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#111827',
+        flex: 1,
+    },
+    searchPillContainer: {
+        paddingHorizontal: 16,
+        marginBottom: 8,
+    },
+    searchPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        height: 56,
+        borderRadius: 28,
+        paddingLeft: 24,
+        paddingRight: 8,
+        shadowColor: '#8a79d6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 8,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+    },
+    iconButton: {
+        padding: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    searchInputPill: {
+        flex: 1,
+        fontFamily: 'SF Pro Display',
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#111827',
+    },
+    activeDot: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.primaryPurple,
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF',
     },
     filterChipContainer: {
         paddingHorizontal: 16,
         paddingTop: 12,
         paddingBottom: 4,
-        backgroundColor: COLORS.background,
     },
     filterChip: {
         alignSelf: 'flex-start',
-        backgroundColor: COLORS.primary + '20',
+        backgroundColor: '#F3F0FF',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: COLORS.primary,
+        borderColor: COLORS.primaryPurple,
     },
     filterChipText: {
-        color: COLORS.primary,
+        color: COLORS.primaryPurple,
         fontWeight: '600',
         fontSize: 14,
     },
     listContent: {
         paddingHorizontal: 0, // Removed padding
         paddingBottom: 100,
+        paddingTop: 16,
     },
     emptyState: {
         alignItems: 'center',

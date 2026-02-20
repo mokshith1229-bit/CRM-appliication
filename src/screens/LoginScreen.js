@@ -27,7 +27,7 @@ const { width, height } = Dimensions.get('window');
 const LoginScreen = ({ navigation }) => {
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
-    
+
     const dispatch = useDispatch();
     const { isLoading, error, isAuthenticated } = useSelector((state) => state.auth);
 
@@ -63,7 +63,9 @@ const LoginScreen = ({ navigation }) => {
         >
             <StatusBar style="light" />
             <LinearGradient
-                colors={['#2E0B56', '#12123E']} // Deep Purple to Dark Blue
+                colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.background}
             />
 
@@ -111,15 +113,23 @@ const LoginScreen = ({ navigation }) => {
                     </View>
 
                     <TouchableOpacity
-                        style={styles.loginButton}
+                        style={styles.loginButtonContainer}
                         onPress={handleLogin}
                         disabled={isLoading}
+                        activeOpacity={0.8}
                     >
-                        {isLoading ? (
-                            <ActivityIndicator color="#FFF" />
-                        ) : (
-                            <Text style={styles.loginButtonText}>Login</Text>
-                        )}
+                        <LinearGradient
+                            colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.loginButtonGradient}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.loginButtonText}>Login</Text>
+                            )}
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
 
@@ -215,22 +225,24 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.1)',
         marginBottom: 5,
     },
-    loginButton: {
-        backgroundColor: '#00E0FF', // Bright Cyan
-        borderRadius: 12,
-        paddingVertical: 16,
-        alignItems: 'center',
+    loginButtonContainer: {
         marginTop: 20,
-        shadowColor: "#00E0FF",
+        borderRadius: 12,
+        overflow: 'hidden',
+        shadowColor: COLORS.primaryPurple,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 5,
     },
+    loginButtonGradient: {
+        paddingVertical: 16,
+        alignItems: 'center',
+    },
     loginButtonText: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#000', // Black text on bright button
+        color: '#FFF',
     },
     footer: {
         flexDirection: 'row',

@@ -6,7 +6,7 @@ import {
     StyleSheet,
     RefreshControl,
     ActivityIndicator,
-    
+
     Modal,
     Platform,
     StatusBar as NativeStatusBar,
@@ -63,44 +63,44 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     const dispatch = useDispatch();
     const { leads, isLoading, activeFilter, pagination } = useSelector((state) => state.leads);
     const { user } = useSelector((state) => state.auth);
-  const loadLogs = async () => {
-                try {
-                    setCallLogsPage(1);
-                    const logsPerPage = 50;
-                    const logs = await CallLogService.getAllRecentLogs(logsPerPage);
-                    
-                    // VALIDATION: Filter out logs that belong to other agents
-                    let verifiedLogs = logs;
-                    /*
-                    if (logs.length > 0) {
-                        const phoneNumbers = logs.map(l => l.phoneNumber);
-                        // validateLogOwnership checks backend for ownership
-                        const ownershipMap = await dispatch(validateLogOwnership(phoneNumbers)).unwrap();
-                        
-                        // Filter out logs where status is 'other'
-                        verifiedLogs = logs.filter(log => {
-                            const status = ownershipMap[log.phoneNumber];
-                            return status !== 'other'; // Keep 'mine', 'free', or undefined
-                        });
-                        console.log(`Filtered ${logs.length - verifiedLogs.length} logs belonging to others`);
-                    }
-                    */
+    const loadLogs = async () => {
+        try {
+            setCallLogsPage(1);
+            const logsPerPage = 50;
+            const logs = await CallLogService.getAllRecentLogs(logsPerPage);
 
-                    setLocalCallLogs(verifiedLogs);
-                    setHasMoreLogs(logs.length === logsPerPage);
-                    
-                    setLocalCallLogs(verifiedLogs);
-                    setHasMoreLogs(logs.length === logsPerPage);
-                } catch (error) {
-                    console.error("Error loading logs:", error);
-                    setLocalCallLogs([]);
-                    setHasMoreLogs(false);
-                }
-            };
+            // VALIDATION: Filter out logs that belong to other agents
+            let verifiedLogs = logs;
+            /*
+            if (logs.length > 0) {
+                const phoneNumbers = logs.map(l => l.phoneNumber);
+                // validateLogOwnership checks backend for ownership
+                const ownershipMap = await dispatch(validateLogOwnership(phoneNumbers)).unwrap();
+                
+                // Filter out logs where status is 'other'
+                verifiedLogs = logs.filter(log => {
+                    const status = ownershipMap[log.phoneNumber];
+                    return status !== 'other'; // Keep 'mine', 'free', or undefined
+                });
+                console.log(`Filtered ${logs.length - verifiedLogs.length} logs belonging to others`);
+            }
+            */
+
+            setLocalCallLogs(verifiedLogs);
+            setHasMoreLogs(logs.length === logsPerPage);
+
+            setLocalCallLogs(verifiedLogs);
+            setHasMoreLogs(logs.length === logsPerPage);
+        } catch (error) {
+            console.error("Error loading logs:", error);
+            setLocalCallLogs([]);
+            setHasMoreLogs(false);
+        }
+    };
     // Fetch logs when filter is 'all'
     useEffect(() => {
         if (activeFilter === 'all') {
-          
+
             loadLogs();
         } else {
             // Reset call logs when switching away from 'all' filter
@@ -113,7 +113,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     // Filter leads on frontend for display logic if needed or rely on backend.
     // Backend `fetchLeads` returns generic list.
     // We map them to match expected 'contact' shape for UI.
-    
+
     // Map leads from store directly for display
     // We rely on backend filtering now.
     const displayedContacts = React.useMemo(() => {
@@ -122,26 +122,26 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             name: lead.name,
             phone: lead.phone,
             email: lead.email,
-            status: lead.status, 
+            status: lead.status,
             leadSource: lead.lead_source || lead.source,
             assignedTo: lead.assigned_to?.name || 'Unknown',
             assigned_by: lead.assigned_by, // Pass full user object (or string for legacy)
-            transferredBy: lead.transfer_history && lead.transfer_history.length > 0 
-                ? lead.transfer_history[lead.transfer_history.length - 1].transferred_by 
+            transferredBy: lead.transfer_history && lead.transfer_history.length > 0
+                ? lead.transfer_history[lead.transfer_history.length - 1].transferred_by
                 : null, // Extract most recent transfer
             photo: lead.photo, // Map photo
             callLogs: lead.call_logs || [], // Map call_logs
             notes: lead.notes || [], // Map notes
-            lastCallTime: lead.last_call_at || lead.updatedAt || lead.received_at, 
-            callStatus: lead.attributes?.callStatus || 'none', 
+            lastCallTime: lead.last_call_at || lead.updatedAt || lead.received_at,
+            callStatus: lead.attributes?.callStatus || 'none',
             callSchedule: lead.attributes?.callSchedule,
             isNewLead: lead.status === 'New' || lead.status === 'Unprocessed',
             attributes: lead.attributes || {},
             campaignId: lead.campaign_id, // Ensure campaignId is mapped
             campaignName: lead.attributes?.campaignName, // Ensure campaignName is mapped
-            site_visit_done: lead.site_visit_done, 
-            lastCallRecord: lead.call_logs && lead.call_logs.length > 0 
-                ? lead.call_logs[lead.call_logs.length - 1] 
+            site_visit_done: lead.site_visit_done,
+            lastCallRecord: lead.call_logs && lead.call_logs.length > 0
+                ? lead.call_logs[lead.call_logs.length - 1]
                 : null
         });
 
@@ -150,64 +150,64 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
 
             // 1. Add all Leads first
             leads.forEach(lead => {
-                 const mapped = mapLead(lead);
-                 const normalizedPhone = mapped.phone?.replace(/[^0-9]/g, '');
-                 if(normalizedPhone) {
-                     uniqueContacts.set(normalizedPhone, { ...mapped, _source: 'lead' });
-                 }
+                const mapped = mapLead(lead);
+                const normalizedPhone = mapped.phone?.replace(/[^0-9]/g, '');
+                if (normalizedPhone) {
+                    uniqueContacts.set(normalizedPhone, { ...mapped, _source: 'lead' });
+                }
             });
 
             // 2. Merge Logs
             localCallLogs.forEach(log => {
-                 const normalizedPhone = log.phoneNumber?.replace(/[^0-9]/g, '');
-                 if (!normalizedPhone) return;
+                const normalizedPhone = log.phoneNumber?.replace(/[^0-9]/g, '');
+                if (!normalizedPhone) return;
 
-                 const existing = uniqueContacts.get(normalizedPhone);
-                 // Using timestamp from call log lib (usually ms or string)
-                 const logTimeStr = log.timestamp; 
-                 // Ensure logTime is valid date object
-                 const logDate = new Date(parseInt(logTimeStr));
-                 const logIso = logDate.toISOString();
+                const existing = uniqueContacts.get(normalizedPhone);
+                // Using timestamp from call log lib (usually ms or string)
+                const logTimeStr = log.timestamp;
+                // Ensure logTime is valid date object
+                const logDate = new Date(parseInt(logTimeStr));
+                const logIso = logDate.toISOString();
 
-                 if (existing) {
-                     // Update existing if log is newer
-                     const existingTime = new Date(existing.lastCallTime || 0).getTime();
-                     if (logDate.getTime() > existingTime) {
-                         existing.lastCallTime = logIso;
-                         existing.callStatus = log.type === 'MISSED' ? 'missed' : 'connected';
-                         existing.lastCallRecord = {
+                if (existing) {
+                    // Update existing if log is newer
+                    const existingTime = new Date(existing.lastCallTime || 0).getTime();
+                    if (logDate.getTime() > existingTime) {
+                        existing.lastCallTime = logIso;
+                        existing.callStatus = log.type === 'MISSED' ? 'missed' : 'connected';
+                        existing.lastCallRecord = {
                             duration: log.duration + 's',
                             date: logIso
-                         };
-                     }
-                     uniqueContacts.set(normalizedPhone, existing);
-                 } else {
-                     // Create transient contact from log
-                     // Check specific types from react-native-call-log: 1=INCOMING, 2=OUTGOING, 3=MISSED
-                     let callStatus = 'none';
-                     if (log.type === 'MISSED' || log.type === '3') callStatus = 'missed';
-                     else callStatus = 'connected'; // Assume connected for others roughly
+                        };
+                    }
+                    uniqueContacts.set(normalizedPhone, existing);
+                } else {
+                    // Create transient contact from log
+                    // Check specific types from react-native-call-log: 1=INCOMING, 2=OUTGOING, 3=MISSED
+                    let callStatus = 'none';
+                    if (log.type === 'MISSED' || log.type === '3') callStatus = 'missed';
+                    else callStatus = 'connected'; // Assume connected for others roughly
 
-                     uniqueContacts.set(normalizedPhone, {
-                         id: `log-${log.timestamp}-${normalizedPhone}`,
-                         name: log.name || log.phoneNumber,
-                         phone: log.phoneNumber,
-                         status: 'Unsaved',
-                         leadSource: 'Device Log',
-                         callStatus: callStatus,
-                         lastCallTime: logIso,
-                         lastCallRecord: {
-                             duration: log.duration + 's',
-                             date: logIso
-                         },
-                         isNewLead: false,
-                         _source: 'log',
-                         photo: null
-                     });
-                 }
+                    uniqueContacts.set(normalizedPhone, {
+                        id: `log-${log.timestamp}-${normalizedPhone}`,
+                        name: log.name || log.phoneNumber,
+                        phone: log.phoneNumber,
+                        status: 'Unsaved',
+                        leadSource: 'Device Log',
+                        callStatus: callStatus,
+                        lastCallTime: logIso,
+                        lastCallRecord: {
+                            duration: log.duration + 's',
+                            date: logIso
+                        },
+                        isNewLead: false,
+                        _source: 'log',
+                        photo: null
+                    });
+                }
             });
 
-            return Array.from(uniqueContacts.values()).sort((a, b) => 
+            return Array.from(uniqueContacts.values()).sort((a, b) =>
                 new Date(b.lastCallTime || 0) - new Date(a.lastCallTime || 0)
             );
 
@@ -221,18 +221,18 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     // Unified Fetch Logic
     const fetchWithFilters = React.useCallback((pageOrReset = 1) => {
         const filters = { page: pageOrReset };
-        
+
         // Add Active Filter (Status/Source)
         if (activeFilter !== 'all' && activeFilter !== 'new_leads' && activeFilter !== 'contacts') {
-             // Map activeFilter to backend keys if needed
-             if (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold') {
-                 filters.status = activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1);
-             } else {
-                 // Fallback or specific mapping
-                 filters.status = activeFilter;
-             }
+            // Map activeFilter to backend keys if needed
+            if (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold') {
+                filters.status = activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1);
+            } else {
+                // Fallback or specific mapping
+                filters.status = activeFilter;
+            }
         }
-        
+
         // For 'contacts' filter, we just fetch all leads standardly
         // For 'all' filter, we ALSO fetch leads to merge them
         // So no special exclusion needed for 'all' or 'contacts' regarding status
@@ -252,22 +252,22 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         }
 
         if (activeFilter === 'new_leads') {
-           dispatch(fetchCombinedEnquiries(filters)); 
+            dispatch(fetchCombinedEnquiries(filters));
         } else {
-           // Fetch leads for 'all', 'contacts', and status filters
-           dispatch(fetchLeads(filters));
-           
-           if (activeFilter === 'all') {
-               // Trigger log refresh explicitly if needed, though useEffect handles it on filter change
-               // Here purely for pagination if we wanted to fetch more logs? (Logs usually fixed size for now)
-           }
+            // Fetch leads for 'all', 'contacts', and status filters
+            dispatch(fetchLeads(filters));
+
+            if (activeFilter === 'all') {
+                // Trigger log refresh explicitly if needed, though useEffect handles it on filter change
+                // Here purely for pagination if we wanted to fetch more logs? (Logs usually fixed size for now)
+            }
         }
     }, [activeFilter, searchQuery, dateFilter, dateRange, dispatch]);
 
     // Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => {
-             fetchWithFilters(1);
+            fetchWithFilters(1);
         }, 500);
         return () => clearTimeout(timer);
     }, [searchQuery, activeFilter, dateFilter, dateRange, fetchWithFilters]);
@@ -395,31 +395,31 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         if (selectedContact) {
             try {
                 // Ensure lead exists (convert from log if needed) with the selected status
-                const targetLead = await dispatch(ensureLead({ 
-                    contact: selectedContact, 
-                    initialStatus: status 
+                const targetLead = await dispatch(ensureLead({
+                    contact: selectedContact,
+                    initialStatus: status
                 })).unwrap();
-                
+
                 // Always update status to record who did it and ensure it's in DB
                 // This covers both existing leads and newly converted logs
-                await dispatch(updateLeadStatus({ 
-                    id: targetLead._id || targetLead.id, 
+                await dispatch(updateLeadStatus({
+                    id: targetLead._id || targetLead.id,
                     status
                 })).unwrap();
-                
+
                 // Close modals
                 setShowStatusOverlay(false);
                 setShowQuickActions(false);
-                
+
                 // Refresh leads list
                 await dispatch(fetchLeads());
             } catch (error) {
-                
+
                 const errorMessage = error.response?.data?.message  // The custom backend message
-                                     || error.response?.data           // Fallback to data object
-                                     || error.message                  // Fallback to "Request failed..."
-                                     || error||'An unknown error occurred';
-                               Alert.alert("Error", errorMessage);
+                    || error.response?.data           // Fallback to data object
+                    || error.message                  // Fallback to "Request failed..."
+                    || error || 'An unknown error occurred';
+                Alert.alert("Error", errorMessage);
             }
         }
     };
@@ -439,17 +439,17 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
 
     const loadMoreCallLogs = async () => {
         if (!hasMoreLogs || loadingMoreLogs || activeFilter !== 'all') return;
-        
+
         setLoadingMoreLogs(true);
         try {
             const logsPerPage = 50;
             const nextPage = callLogsPage + 1;
             const previousCount = localCallLogs.length;
-            
+
             // react-native-call-log doesn't support offset, so we fetch more total logs
             const totalToFetch = nextPage * logsPerPage;
             const allLogs = await CallLogService.getAllRecentLogs(totalToFetch);
-            
+
             console.log(`Loaded ${allLogs.length} total call logs (page ${nextPage})`);
             setLocalCallLogs(allLogs);
             setCallLogsPage(nextPage);
@@ -463,7 +463,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     };
 
     const renderContactCard = ({ item }) => {
-        
+
         return <ContactCard
             contact={item}
             onPress={handleContactPress}
@@ -498,37 +498,34 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-            
-            <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={onOpenDrawer} style={{ padding: 4 }}>
-                        <MaterialIcons name="menu" size={28} color={COLORS.text} />
-                    </TouchableOpacity>
-                    {/* <Text style={[styles.headerTitle, { marginLeft: 16 }]}>Contacts</Text> */}
-                    <TouchableOpacity onPress={handleCalendarPress}>
-                        <View>
-                            <MaterialIcons name="date-range" size={24} color={COLORS.text} />
-                            {(dateFilter || dateRange) && <View style={{ position: 'absolute', right: -2, top: -2, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary }} />}
-                        </View>
-                    </TouchableOpacity>
-                </View>
 
-                {/* Search Bar */}
-                <View style={styles.searchContainer}>
-                    <MaterialIcons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+            <View style={[styles.header, { backgroundColor: 'transparent', borderBottomWidth: 0, paddingTop: 10 }]}>
+                {/* Floating Search Pill */}
+                <View style={styles.searchPill}>
+                    <TouchableOpacity onPress={onOpenDrawer} style={styles.iconButton}>
+                        <MaterialIcons name="menu" size={26} color="#4B5563" />
+                    </TouchableOpacity>
+
                     <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search leads..."
+                        style={styles.searchInputPill}
+                        placeholder="Search contacts"
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         placeholderTextColor="#9CA3AF"
                     />
+
+                    <TouchableOpacity onPress={handleCalendarPress} style={styles.iconButton}>
+                        <View>
+                            <MaterialIcons name={'calendar-today'} size={22} color="#4B5563" />
+                            {(dateFilter || dateRange) && <View style={styles.activeDot} />}
+                        </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Filter Bar */}
                 <FilterBar
                     activeFilter={activeFilter}
-                    onFilterChange={(filter) => dispatch(setActiveFilter(filter))} // Corrected prop name
+                    onFilterChange={(filter) => dispatch(setActiveFilter(filter))}
                 />
             </View>
 
@@ -547,7 +544,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
 
             {/* Content Area */}
             {isLoading && pagination.page === 1 ? (
-                 renderSkeletons()
+                renderSkeletons()
             ) : (
                 <FlatList
                     data={displayedContacts}
@@ -563,41 +560,41 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                         />
                     }
                     onEndReached={() => {
-                         // For 'all' filter, fetch both leads and call logs
-                         if (activeFilter === 'all') {
-                             // Fetch more leads from API
-                             if (!isLoading && pagination.page < pagination.pages) {
-                                 dispatch(fetchLeads({ 
-                                     page: pagination.page + 1,
-                                     search: searchQuery,
-                                     startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
-                                     endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
-                                 }));
-                             }
-                             // Fetch more call logs from device
-                             if (hasMoreLogs && !loadingMoreLogs) {
-                                 loadMoreCallLogs();
-                             }
-                         }
-                         // For other filters, just fetch leads
-                         else if (activeFilter !== 'new_leads' && !isLoading && pagination.page < pagination.pages) {
-                             dispatch(fetchLeads({ 
-                                 page: pagination.page + 1,
-                                 search: searchQuery,
-                                 startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
-                                 endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
-                                 status: (activeFilter !== 'all' && activeFilter !== 'new_leads') ? (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold' ? activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1) : activeFilter) : undefined
-                             }));
-                         }
-                         // For New Leads (Enquiries)
-                         else if (activeFilter === 'new_leads' && !isLoading && pagination.page < pagination.pages) {
-                             dispatch(fetchCombinedEnquiries({
-                                 page: pagination.page + 1,
-                                 search: searchQuery,
-                                 startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
-                                 endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
-                             }));
-                         }
+                        // For 'all' filter, fetch both leads and call logs
+                        if (activeFilter === 'all') {
+                            // Fetch more leads from API
+                            if (!isLoading && pagination.page < pagination.pages) {
+                                dispatch(fetchLeads({
+                                    page: pagination.page + 1,
+                                    search: searchQuery,
+                                    startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
+                                    endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
+                                }));
+                            }
+                            // Fetch more call logs from device
+                            if (hasMoreLogs && !loadingMoreLogs) {
+                                loadMoreCallLogs();
+                            }
+                        }
+                        // For other filters, just fetch leads
+                        else if (activeFilter !== 'new_leads' && !isLoading && pagination.page < pagination.pages) {
+                            dispatch(fetchLeads({
+                                page: pagination.page + 1,
+                                search: searchQuery,
+                                startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
+                                endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
+                                status: (activeFilter !== 'all' && activeFilter !== 'new_leads') ? (activeFilter === 'hot' || activeFilter === 'warm' || activeFilter === 'cold' ? activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1) : activeFilter) : undefined
+                            }));
+                        }
+                        // For New Leads (Enquiries)
+                        else if (activeFilter === 'new_leads' && !isLoading && pagination.page < pagination.pages) {
+                            dispatch(fetchCombinedEnquiries({
+                                page: pagination.page + 1,
+                                search: searchQuery,
+                                startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
+                                endDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.end.toISOString() : undefined),
+                            }));
+                        }
                     }}
                     onEndReachedThreshold={0.5}
                     ListFooterComponent={
@@ -621,7 +618,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                                     </View>
                                 )}
                                 {!loadingMoreLogs && hasMoreLogs && (
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         style={{ paddingHorizontal: 16, paddingVertical: 15, alignItems: 'center' }}
                                         onPress={loadMoreCallLogs}
                                     >
@@ -770,26 +767,51 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
     },
     header: {
-        backgroundColor: COLORS.cardBackground,
-        paddingHorizontal: 16, // Standardized 16px
-        paddingTop: 16,
-        paddingBottom: 8, // Reduced to allow 12px spacing below
+        paddingHorizontal: 0,
+        paddingTop: 8,
+        paddingBottom: 0,
     },
-    headerTitle: {
-        fontSize: 32,
-        fontWeight: '700',
-        color: COLORS.text,
+    searchPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        borderRadius: 30, // Pill shape
+        height: 52,
+        paddingHorizontal: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        elevation: 3,
+        justifyContent: 'space-between',
     },
-    headerSubtitle: {
-        ...TYPOGRAPHY.body,
-        color: COLORS.textSecondary,
-        marginTop: SPACING.xs,
+    iconButton: {
+        padding: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    searchInputPill: {
+        flex: 1,
+        fontSize: 16,
+        color: '#111827',
+        paddingHorizontal: 8,
+        textAlign: 'center', // Center aligned like reference image
+    },
+    activeDot: {
+        position: 'absolute',
+        right: -2,
+        top: -2,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.primaryPurple,
     },
     filterChipContainer: {
         paddingHorizontal: 16,
-        paddingTop: 12, // 12px top padding below header
-        paddingBottom: 12, // 12px bottom padding before list
-        backgroundColor: COLORS.background,
+        paddingTop: 8,
+        paddingBottom: 8,
+        backgroundColor: 'transparent',
     },
     filterChip: {
         alignSelf: 'flex-start',

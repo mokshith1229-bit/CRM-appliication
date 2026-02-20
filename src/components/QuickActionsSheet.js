@@ -14,6 +14,7 @@ import {
     ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { openWhatsApp, sendSMS, sendEmail } from '../utils/intents';
 import { useDispatch, useSelector } from 'react-redux';
@@ -34,7 +35,7 @@ const formatDate = (dateString) => {
     const now = new Date();
     const diff = now - date;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (days < 7) {
@@ -46,44 +47,44 @@ const formatDate = (dateString) => {
 
 const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, campaignName }) => {
     // console.log('🟢 QuickActionsSheet render - visible:', visible, 'contact:', contact?.name || contact?.phone);
-    
+
     const dispatch = useDispatch();
-    
+
     // Get fresh contact data from Redux list
     const leads = useSelector(state => state.leads.leads);
     // Also get detailed info (history)
     const detailedContact = useSelector(state => state.leads.currentLeadDetails);
-    
+
     // Merge contact info: detailed takes precedence, then list item, then prop
     const listContact = contact ? leads.find(l => (l._id || l.id) === (contact._id || contact.id)) : null;
     const freshContact = detailedContact || listContact || contact;
 
     const { sources, statuses } = useSelector(state => state.config);
     const allTeamMembers = useSelector(state => state.team.members);
-    
+
     const { user } = useSelector(state => state.auth);
-    
+
     const teamMembers = allTeamMembers.filter(member => {
         const isNotAdmin = member.role !== 'admin';
-        
+
         // Resolve IDs to ensure we compare correctly even if one has _id and other has id
         const memberId = member._id || member.id;
         const userId = user ? (user._id || user.id) : null;
-        
+
         const isNotSelf = userId ? (memberId !== userId) : true;
-        
+
         return isNotAdmin && isNotSelf;
     });
 
     const [activeTab, setActiveTab] = useState('Details'); // 'Details' | 'History'
-    
+
     const [callOutcome, setCallOutcome] = useState('');
     const [remark, setRemark] = useState('');
     const [newNote, setNewNote] = useState('');
     const [selectedTeamMember, setSelectedTeamMember] = useState(null);
     const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
     const [isEditingLead, setIsEditingLead] = useState(false);
-    
+
     const [showSourcePicker, setShowSourcePicker] = useState(false);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
 
@@ -96,7 +97,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const [callScheduleDate, setCallScheduleDate] = useState(new Date());
     const [reminderReason, setReminderReason] = useState('');
     const [showReminderSetupModal, setShowReminderSetupModal] = useState(false);
-    
+
     // Legacy states kept if needed, but we essentially replace usage
     const [showCallDatePicker, setShowCallDatePicker] = useState(false);
     const [showCallTimePicker, setShowCallTimePicker] = useState(false);
@@ -112,7 +113,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     useEffect(() => {
         if (visible) {
             dispatch(fetchTeamMembers());
-            
+
             if (freshContact?._source === 'log' && freshContact?.phone) {
                 // Fetch local logs for device log contact
                 CallLogService.getLogsForNumber(freshContact.phone, 500)
@@ -122,9 +123,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 dispatch(fetchLeadDetails(freshContact._id || freshContact.id));
             }
         } else {
-             dispatch(clearLeadDetails());
-             setLocalDeviceLogs([]);
-             setActiveTab('Details');
+            dispatch(clearLeadDetails());
+            setLocalDeviceLogs([]);
+            setActiveTab('Details');
         }
     }, [visible, dispatch, freshContact?._id, freshContact?.id, freshContact?._source, freshContact?.phone]);
 
@@ -140,31 +141,31 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleAddNote = async () => {
         if (newNote.trim() && freshContact) {
             try {
-               // Ensure lead exists first
-               const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
-               
-               const newNoteObj = {
+                // Ensure lead exists first
+                const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
+
+                const newNoteObj = {
                     id: Date.now().toString(),
                     text: newNote.trim(),
                     timestamp: new Date().toISOString(),
-               };
-               
-               // Use updated list from targetLead if it was just created/fetched
-               const currentNotes = targetLead.notes || [];
-               const updatedNotes = [...currentNotes, newNoteObj];
+                };
 
-               await dispatch(updateLead({ 
-                   id: targetLead.id || targetLead._id, 
-                   data: { notes: updatedNotes } 
-               })).unwrap();
-               setNewNote('');
+                // Use updated list from targetLead if it was just created/fetched
+                const currentNotes = targetLead.notes || [];
+                const updatedNotes = [...currentNotes, newNoteObj];
+
+                await dispatch(updateLead({
+                    id: targetLead.id || targetLead._id,
+                    data: { notes: updatedNotes }
+                })).unwrap();
+                setNewNote('');
             } catch (error) {
                 console.error('Failed to add note:', error);
                 // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to add note");
                 const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || error || 'An unknown error occurred';
+                    || error.response?.data           // Fallback to data object
+                    || error.message                  // Fallback to "Request failed..."
+                    || error || 'An unknown error occurred';
                 Alert.alert("Error", errorMessage);
             }
         }
@@ -173,17 +174,17 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         if (freshContact) {
             try {
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
-                await dispatch(updateLead({ 
-                    id: targetLead.id || targetLead._id, 
-                    data: { requirement: localLeadInfo.requirement } 
+                await dispatch(updateLead({
+                    id: targetLead.id || targetLead._id,
+                    data: { requirement: localLeadInfo.requirement }
                 })).unwrap();
                 setIsEditingLead(false);
             } catch (error) {
                 // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to update requirement");
                 const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || error || 'An unknown error occurred';
+                    || error.response?.data           // Fallback to data object
+                    || error.message                  // Fallback to "Request failed..."
+                    || error || 'An unknown error occurred';
                 Alert.alert("Error", errorMessage);
             }
         }
@@ -199,10 +200,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                     assigned_to: teamMember._id || teamMember.id,
                     reason: reason
                 });
-                
+
                 // Remove lead from local state since it's no longer accessible
                 dispatch(removeLead(targetLead.id || targetLead._id));
-                
+
                 setIsTransferModalVisible(false);
                 onClose();
                 Alert.alert('Success', `Lead transferred to ${teamMember.name}`);
@@ -210,9 +211,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 console.error('Failed to transfer lead:', error);
                 // const errorMessage = typeof error === 'string' ? error : (error.response?.data?.message || error.message || "Failed to transfer lead");
                 const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || error || 'An unknown error occurred';
+                    || error.response?.data           // Fallback to data object
+                    || error.message                  // Fallback to "Request failed..."
+                    || error || 'An unknown error occurred';
                 Alert.alert("Error", errorMessage);
             }
         }
@@ -230,15 +231,15 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
         try {
             const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
-            
+
             // Schedule notification
             await schedulePushNotification(
                 `Reminder: ${targetLead.name || targetLead.phone}`,
                 reason || `Follow up with ${targetLead.name || 'Lead'}`,
                 date,
-                { 
+                {
                     type: 'reminder',
-                    leadId: targetLead.id || targetLead._id, 
+                    leadId: targetLead.id || targetLead._id,
                     reason: reason,
                     createdBy: user ? {
                         id: user.id || user._id,
@@ -251,18 +252,18 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
             // Update lead with reminder timestamp and attributes
             await dispatch(updateLead({
                 id: targetLead.id || targetLead._id,
-                data: { 
-                    callbacks: { 
+                data: {
+                    callbacks: {
                         scheduled_at: date.toISOString(),
                         reason: reason,
                         status: 'Pending',
                         created_by: user ? {
                             id: user.id || user._id,
-                            name: user.name, 
+                            name: user.name,
                             email: user.email,
                             role: user.role
                         } : null
-                    } 
+                    }
                 }
             })).unwrap();
 
@@ -272,9 +273,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
             console.error('Failed to schedule reminder:', error);
             // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to schedule reminder");
             const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || error || 'An unknown error occurred';
+                || error.response?.data           // Fallback to data object
+                || error.message                  // Fallback to "Request failed..."
+                || error || 'An unknown error occurred';
             Alert.alert('Error', errorMessage);
         }
     };
@@ -285,22 +286,22 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
                 // Strip source_ prefix if present
-                const cleanSource = newSource?.startsWith('source_') 
-                    ? newSource.replace('source_', '') 
+                const cleanSource = newSource?.startsWith('source_')
+                    ? newSource.replace('source_', '')
                     : newSource;
-                    
-                await dispatch(updateLead({ 
-                    id: targetLead.id || targetLead._id, 
-                    data: { lead_source: cleanSource } 
+
+                await dispatch(updateLead({
+                    id: targetLead.id || targetLead._id,
+                    data: { lead_source: cleanSource }
                 })).unwrap();
             } catch (error) {
                 console.error('QuickActionsSheet: Failed to update lead source', error);
                 // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to update lead source");
-                 const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || error || 'An unknown error occurred';
-                
+                const errorMessage = error.response?.data?.message  // The custom backend message
+                    || error.response?.data           // Fallback to data object
+                    || error.message                  // Fallback to "Request failed..."
+                    || error || 'An unknown error occurred';
+
                 Alert.alert("Error", errorMessage);
             }
         }
@@ -319,21 +320,21 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
                 await dispatch(updateLead({
                     id: targetLead.id || targetLead._id,
-                    data: { 
+                    data: {
                         status: pendingStatus,  // Already a label, no need to strip prefix
                         status_note: statusNote
                     }
                 })).unwrap();
-                
+
                 setShowStatusNoteModal(false);
                 setPendingStatus(null);
                 setStatusNote('');
             } catch (error) {
                 // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to update status");
-                 const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || error || 'An unknown error occurred';
+                const errorMessage = error.response?.data?.message  // The custom backend message
+                    || error.response?.data           // Fallback to data object
+                    || error.message                  // Fallback to "Request failed..."
+                    || error || 'An unknown error occurred';
                 Alert.alert("Error", errorMessage);
             }
         }
@@ -350,7 +351,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 // Format: Previous -> Current
                 const prev = item.previous_status || 'New';
                 const current = item.status;
-                
+
                 // Match status color
                 const statusKey = current?.toLowerCase();
                 const matchingStatus = statuses.find(s => {
@@ -382,13 +383,13 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 const toName = toUser ? (toUser.name || toUser.email || toUser.role || 'Unknown') : 'Unknown';
                 // const fromName = fromUser ? (fromUser.name || fromUser.email || fromUser.role || 'Unknown') : 'Unknown'; 
                 // We mainly care about who transferred it and to whom
-                
+
                 items.push({
                     type: 'transfer',
                     date: new Date(item.transferred_at),
                     title: `Transferred to ${toName}`,
                     // Detailed attribution in subtitle logic later
-                    user: byUser, 
+                    user: byUser,
                     toUser: toUser, // explicit ref
                     note: item.reason,
                     icon: 'account-arrow-right',
@@ -411,18 +412,18 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 });
             });
         }
-        
+
         // Notes (if treated as history items)
         if (freshContact.notes) {
             freshContact.notes.forEach(item => {
-                 items.push({
+                items.push({
                     type: 'note',
                     date: new Date(item.timestamp),
                     title: 'Note Added',
                     note: item.text,
                     icon: 'note-text',
                     color: '#607D8B'
-                 });
+                });
             });
         }
 
@@ -431,7 +432,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
             localDeviceLogs.forEach(item => {
                 // Check if this log is already accounted for (unlikely for unsaved, but good practice)
                 const logTime = parseInt(item.timestamp);
-                
+
                 // Map device log types to readable status
                 let callStatus = 'Connected';
                 if (item.type === 'MISSED' || item.type === '3') callStatus = 'Missed';
@@ -458,7 +459,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const renderHistoryItem = ({ item }) => {
         // Robust user name resolution
         const getUserName = (u) => u ? (u.name || u.email || u.role || 'Unknown') : 'Unknown';
-        
+
         const isTransfer = item.type === 'transfer';
         const isStatus = item.type === 'status';
 
@@ -467,9 +468,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         if (isStatus) {
             subText = `By ${getUserName(item.user)}`;
         } else if (isTransfer) {
-             subText = `By ${getUserName(item.user)}`;
+            subText = `By ${getUserName(item.user)}`;
         } else if (item.user) {
-             subText = `By ${getUserName(item.user)}`;
+            subText = `By ${getUserName(item.user)}`;
         }
 
         return (
@@ -479,21 +480,21 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 </View>
                 <View style={styles.historyContent}>
                     <View style={styles.historyHeader}>
-                         <Text style={styles.historyTitle}>{item.title}</Text>
-                         <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
+                        <Text style={styles.historyTitle}>{item.title}</Text>
+                        <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
                     </View>
-                    
+
                     {/* Subtitle / User Info */}
                     {(item.subtitle || subText) && (
-                         <Text style={styles.historySubtitle}>
+                        <Text style={styles.historySubtitle}>
                             {item.subtitle ? item.subtitle + ' • ' : ''}{subText}
-                         </Text>
+                        </Text>
                     )}
 
                     {/* Transfer Reason or Call Note */}
                     {item.note && (
                         <View style={styles.historyNoteContainer}>
-                            {isTransfer && <Text style={{fontSize:12, fontWeight:'600', color: '#555'}}>Reason:</Text>}
+                            {isTransfer && <Text style={{ fontSize: 12, fontWeight: '600', color: '#555' }}>Reason:</Text>}
                             <Text style={styles.historyNoteText}>{item.note}</Text>
                         </View>
                     )}
@@ -547,11 +548,11 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleSaveReminder = async (date) => {
         if (freshContact) {
             try {
-                await dispatch(updateLead({ 
-                    id: freshContact.id || freshContact._id, 
-                    data: { attributes: { ...freshContact.attributes, callSchedule: date.toISOString() } } 
+                await dispatch(updateLead({
+                    id: freshContact.id || freshContact._id,
+                    data: { attributes: { ...freshContact.attributes, callSchedule: date.toISOString() } }
                 })).unwrap();
-                
+
                 // Schedule push notification
                 await schedulePushNotification(
                     `Call Reminder: ${freshContact.name || freshContact.phone}`,
@@ -596,7 +597,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
                     {/* Contact Header (Always Visible) */}
                     <View style={styles.headerContainer}>
-                         <View style={styles.contactInfo}>
+                        <View style={styles.contactInfo}>
                             <View style={styles.contactNameRow}>
                                 <Text style={styles.contactName}>{freshContact?.name || freshContact?.phone || 'Unknown'}</Text>
                                 {freshContact?.site_visit_done && (
@@ -611,13 +612,13 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
                         {/* Tabs */}
                         <View style={styles.tabContainer}>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[styles.tab, activeTab === 'Details' && styles.activeTab]}
                                 onPress={() => setActiveTab('Details')}
                             >
                                 <Text style={[styles.tabText, activeTab === 'Details' && styles.activeTabText]}>Details</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[styles.tab, activeTab === 'History' && styles.activeTab]}
                                 onPress={() => setActiveTab('History')}
                             >
@@ -630,62 +631,49 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                         <ScrollView style={styles.content}>
                             {/* Action Buttons */}
                             <View style={styles.actionsRow}>
-                                <TouchableOpacity
-                                    style={styles.actionButton}
-                                    onPress={() => freshContact?.phone && openWhatsApp(freshContact.phone)}
-                                >
-                                    <View style={[styles.iconContainer, { backgroundColor: '#E8F5E9' }]}>
-                                        <MaterialCommunityIcons name="whatsapp" size={24} color="#25D366" />
+                                <TouchableOpacity style={styles.actionButton} onPress={() => freshContact?.phone && openWhatsApp(freshContact.phone)}>
+                                    <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
+                                        <MaterialCommunityIcons name="whatsapp" size={24} color={COLORS.primaryPurple} />
                                     </View>
                                     <Text style={styles.actionLabel}>WhatsApp</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.actionButton}
-                                    onPress={() => freshContact?.phone && sendSMS(freshContact.phone)}
-                                >
-                                    <View style={[styles.iconContainer, { backgroundColor: '#E3F2FD' }]}>
-                                        <MaterialCommunityIcons name="message-text" size={24} color="#007AFF" />
+
+                                <TouchableOpacity style={styles.actionButton} onPress={() => freshContact?.phone && sendSMS(freshContact.phone)}>
+                                    <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
+                                        <MaterialCommunityIcons name="message-text" size={24} color={COLORS.primaryPurple} />
                                     </View>
                                     <Text style={styles.actionLabel}>Message</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.actionButton}
-                                    onPress={() => sendEmail(freshContact?.email || '')}
-                                >
-                                    <View style={[styles.iconContainer, { backgroundColor: '#FFEBEE' }]}>
-                                        <MaterialCommunityIcons name="email" size={24} color="#F44336" />
+
+                                <TouchableOpacity style={styles.actionButton} onPress={() => sendEmail(freshContact?.email || '')}>
+                                    <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
+                                        <MaterialCommunityIcons name="email" size={24} color={COLORS.primaryPurple} />
                                     </View>
                                     <Text style={styles.actionLabel}>Mail</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={styles.actionButton}
-                                    onPress={() => setIsTransferModalVisible(true)}
-                                >
-                                    <View style={[styles.iconContainer, { backgroundColor: '#FFF3E0' }]}>
-                                        <MaterialCommunityIcons name="account-arrow-right" size={24} color="#FF9800" />
+                                <TouchableOpacity style={styles.actionButton} onPress={() => setIsTransferModalVisible(true)}>
+                                    <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
+                                        <MaterialCommunityIcons name="account-multiple" size={24} color={COLORS.primaryPurple} />
                                     </View>
                                     <Text style={styles.actionLabel}>Transfer</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={styles.actionButton}
-                                    onPress={handleRemindPress}
-                                >
-                                    <View style={[styles.iconContainer, { backgroundColor: '#F3E5F5' }]}>
-                                        <MaterialCommunityIcons name="bell-outline" size={24} color="#9C27B0" />
+                                <TouchableOpacity style={styles.actionButton} onPress={handleRemindPress}>
+                                    <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
+                                        <MaterialCommunityIcons name="bell-outline" size={24} color={COLORS.primaryPurple} />
                                     </View>
                                     <Text style={styles.actionLabel}>Remind</Text>
                                 </TouchableOpacity>
                             </View>
 
-                             {/* Lead Status Selector */}
-                             <TouchableOpacity 
-                                style={styles.leadSection} 
+                            {/* Lead Status Selector */}
+                            <TouchableOpacity
+                                style={styles.leadSection}
                                 onPress={() => setShowStatusPicker(true)}
                             >
                                 <View style={styles.leadHeader}>
-                                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <MaterialCommunityIcons name="list-status" size={20} color={COLORS.primary} />
                                         <Text style={styles.sectionTitle}>Lead Status</Text>
                                     </View>
@@ -694,10 +682,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                             {(() => {
                                                 const statusValue = freshContact?.status;
                                                 if (!statusValue) return 'Select';
-                                                
+
                                                 const matchingStatus = statuses.find(s => {
-                                                    const keyWithoutPrefix = s.key?.startsWith('status_') 
-                                                        ? s.key.replace('status_', '') 
+                                                    const keyWithoutPrefix = s.key?.startsWith('status_')
+                                                        ? s.key.replace('status_', '')
                                                         : s.key;
                                                     return keyWithoutPrefix === statusValue;
                                                 });
@@ -711,12 +699,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
 
                             {/* Lead Source Selector */}
-                            <TouchableOpacity 
-                                style={styles.leadSection} 
+                            <TouchableOpacity
+                                style={styles.leadSection}
                                 onPress={() => setShowSourcePicker(true)}
                             >
                                 <View style={styles.leadHeader}>
-                                     <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <MaterialCommunityIcons name="source-branch" size={20} color={COLORS.primary} />
                                         <Text style={styles.sectionTitle}>Lead Source</Text>
                                     </View>
@@ -727,8 +715,8 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                                 if (!sourceValue) return 'Select';
                                                 // Find matching source to display its label
                                                 const matchingSource = sources.find(s => {
-                                                    const keyWithoutPrefix = s.key?.startsWith('source_') 
-                                                        ? s.key.replace('source_', '') 
+                                                    const keyWithoutPrefix = s.key?.startsWith('source_')
+                                                        ? s.key.replace('source_', '')
                                                         : s.key;
                                                     return keyWithoutPrefix === sourceValue;
                                                 });
@@ -773,7 +761,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                             {/* Site Visit Information */}
                             {freshContact?.site_visit_done_by && (
                                 <View style={styles.siteVisitInfoSection}>
-                                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12}}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                                         <MaterialCommunityIcons name="home-city" size={20} color={COLORS.primary} />
                                         <Text style={styles.sectionTitle}>Site Visit Information</Text>
                                     </View>
@@ -827,7 +815,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                         ))}
                                         {freshContact.notes.length > 3 && (
                                             <TouchableOpacity onPress={() => setActiveTab('History')}>
-                                                <Text style={{color: COLORS.primary, textAlign: 'center', marginTop: 8}}>View All Notes in History</Text>
+                                                <Text style={{ color: COLORS.primary, textAlign: 'center', marginTop: 8 }}>View All Notes in History</Text>
                                             </TouchableOpacity>
                                         )}
                                     </View>
@@ -845,29 +833,39 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                     numberOfLines={2}
                                 />
                                 <TouchableOpacity
-                                    style={[styles.addNoteButton, !newNote.trim() && styles.addNoteButtonDisabled]}
+                                    style={styles.addNoteButtonContainer}
                                     onPress={handleAddNote}
                                     disabled={!newNote.trim()}
+                                    activeOpacity={0.8}
                                 >
-                                    <Text style={styles.addNoteButtonText}>Add Note</Text>
+                                    <LinearGradient
+                                        colors={!newNote.trim() ? ['#E5E7EB', '#D1D5DB'] : [COLORS.gradientStart, COLORS.gradientEnd]}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.addNoteGradient}
+                                    >
+                                        <Text style={[styles.addNoteButtonText, !newNote.trim() && { color: '#9CA3AF' }]}>
+                                            Add Note
+                                        </Text>
+                                    </LinearGradient>
                                 </TouchableOpacity>
                             </View>
                         </ScrollView>
                     ) : (
                         <View style={styles.content}>
-                             {historyItems.length === 0 ? (
-                                 <View style={styles.emptyHistory}>
-                                     <MaterialCommunityIcons name="history" size={48} color="#CCC" />
-                                     <Text style={styles.emptyHistoryText}>No history available</Text>
-                                 </View>
-                             ) : (
-                                 <FlatList 
+                            {historyItems.length === 0 ? (
+                                <View style={styles.emptyHistory}>
+                                    <MaterialCommunityIcons name="history" size={48} color="#CCC" />
+                                    <Text style={styles.emptyHistoryText}>No history available</Text>
+                                </View>
+                            ) : (
+                                <FlatList
                                     data={historyItems}
                                     renderItem={renderHistoryItem}
                                     keyExtractor={(item, index) => index.toString()}
                                     contentContainerStyle={{ paddingVertical: 16 }}
-                                 />
-                             )}
+                                />
+                            )}
                         </View>
                     )}
                 </View>
@@ -883,12 +881,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 <View style={styles.modalOverlay}>
                     <View style={styles.dialog}>
                         <Text style={styles.dialogTitle}>Set Reminder</Text>
-                        
+
                         <View style={{ width: '100%', marginBottom: 16 }}>
                             <Text style={styles.inputLabel}>Date & Time</Text>
                             {Platform.OS === 'android' ? (
                                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         style={styles.dateButton}
                                         onPress={() => {
                                             DateTimePickerAndroid.open({
@@ -908,7 +906,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                         <Text style={styles.dateButtonText}>{callScheduleDate.toLocaleDateString()}</Text>
                                         <MaterialCommunityIcons name="calendar-today" size={20} color={COLORS.primary} />
                                     </TouchableOpacity>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         style={styles.dateButton}
                                         onPress={() => {
                                             DateTimePickerAndroid.open({
@@ -925,7 +923,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                             });
                                         }}
                                     >
-                                        <Text style={styles.dateButtonText}>{callScheduleDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                                        <Text style={styles.dateButtonText}>{callScheduleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                                         <MaterialCommunityIcons name="clock-outline" size={20} color={COLORS.primary} />
                                     </TouchableOpacity>
                                 </View>
@@ -953,14 +951,14 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                         </View>
 
                         <View style={styles.dialogActions}>
-                            <TouchableOpacity 
-                                style={[styles.actionButtonOutline, {flex:1}]} 
+                            <TouchableOpacity
+                                style={[styles.actionButtonOutline, { flex: 1 }]}
                                 onPress={() => setShowReminderSetupModal(false)}
                             >
                                 <Text style={styles.actionButtonOutlineText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.actionButtonPrimary, {flex:1}]} 
+                            <TouchableOpacity
+                                style={[styles.actionButtonPrimary, { flex: 1 }]}
                                 onPress={() => scheduleReminder(callScheduleDate, reminderReason)}
                             >
                                 <Text style={styles.actionButtonPrimaryText}>Set Reminder</Text>
@@ -976,15 +974,15 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 onTransfer={handleTransfer}
                 teamMembers={teamMembers}
             />
-            
+
             {/* Source Picker */}
             <StatusPicker
                 visible={showSourcePicker}
                 onClose={() => setShowSourcePicker(false)}
                 title="Select Lead Source"
-                options={sources.map(s => ({ 
-                    label: s.label, 
-                    value: s.key 
+                options={sources.map(s => ({
+                    label: s.label,
+                    value: s.key
                 }))}
                 selectedValue={(() => {
                     const sourceValue = freshContact?.leadSource || freshContact?.lead_source;
@@ -992,18 +990,18 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                         const keyWithoutPrefix = s.key?.startsWith('source_') ? s.key.replace('source_', '') : s.key;
                         return keyWithoutPrefix === sourceValue;
                     });
-                    return matchingSource?.key; 
+                    return matchingSource?.key;
                 })()}
                 onSelect={handleUpdateSource}
             />
 
             {/* Status Picker */}
-             <StatusPicker
+            <StatusPicker
                 visible={showStatusPicker}
                 onClose={() => setShowStatusPicker(false)}
                 title="Update Lead Status"
-                options={statuses.map(s => ({ 
-                    label: s.label, 
+                options={statuses.map(s => ({
+                    label: s.label,
                     value: s.label  // Use label as value, not key
                 }))}
                 selectedValue={(() => {
@@ -1012,7 +1010,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                         const keyWithoutPrefix = s.key?.startsWith('status_') ? s.key.replace('status_', '') : s.key;
                         return keyWithoutPrefix === statusValue;
                     });
-                    return matchingStatus?.key; 
+                    return matchingStatus?.key;
                 })()}
                 onSelect={handleStatusSelect}
             />
@@ -1027,7 +1025,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 <View style={styles.statusModalOverlay}>
                     <View style={styles.statusModalContent}>
                         <Text style={styles.statusModalTitle}>Add Note (Optional)</Text>
-                         <Text style={styles.statusModalSubtitle}>
+                        <Text style={styles.statusModalSubtitle}>
                             Adding a note to this status change helps track the lead journey.
                         </Text>
                         <TextInput
@@ -1039,18 +1037,18 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                             onChangeText={setStatusNote}
                         />
                         <View style={styles.statusModalButtons}>
-                             <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.statusModalCancel}
                                 onPress={() => setShowStatusNoteModal(false)}
-                             >
+                            >
                                 <Text style={styles.statusModalCancelText}>Cancel</Text>
-                             </TouchableOpacity>
-                             <TouchableOpacity 
+                            </TouchableOpacity>
+                            <TouchableOpacity
                                 style={styles.statusModalConfirm}
                                 onPress={handleConfirmStatus}
-                             >
+                            >
                                 <Text style={styles.statusModalConfirmText}>Update Status</Text>
-                             </TouchableOpacity>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -1078,15 +1076,16 @@ const styles = StyleSheet.create({
         borderBottomColor: 'transparent',
     },
     activeTab: {
-        borderBottomColor: COLORS.primary,
+        borderBottomColor: COLORS.primaryPurple,
     },
     tabText: {
+        fontFamily: 'SF Pro Display',
         fontSize: 14,
         fontWeight: '600',
-        color: '#999',
+        color: '#9CA3AF',
     },
     activeTabText: {
-        color: COLORS.primary,
+        color: COLORS.primaryPurple,
     },
     // History Styles
     historyItem: {
@@ -1224,27 +1223,33 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#FFF',
     },
-    
+
+    // Existing styles below (overlay, backdrop, etc already exist but we need to keep them or merge)
     // Existing styles below (overlay, backdrop, etc already exist but we need to keep them or merge)
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(247, 245, 255, 0.90)', // Soft purple tint #F7F5FF backdrop
         justifyContent: 'flex-end',
     },
     backdrop: {
         flex: 1,
     },
     sheet: {
-        backgroundColor: '#FFF',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         height: '80%', // Fixed height to prevent jumping
         paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+        shadowColor: '#8a79d6',
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 10,
     },
     dragHandle: {
         width: 40,
         height: 4,
-        backgroundColor: '#DDD',
+        backgroundColor: '#E5E7EB',
         borderRadius: 2,
         alignSelf: 'center',
         marginTop: 12,
@@ -1256,17 +1261,18 @@ const styles = StyleSheet.create({
     },
     contactInfo: {
         paddingVertical: 10, // Reduced top padding
-        // borderBottomWidth: 1, // Moved to header
-        // borderBottomColor: '#EEE',
     },
     contactName: {
-        fontSize: 22, // Slightly smaller to fit header
-        fontWeight: 'bold',
-        color: '#000',
+        fontFamily: 'SF Pro Display',
+        fontSize: 22,
+        fontWeight: '600',
+        color: '#111827',
     },
     contactPhone: {
-        fontSize: 16,
-        color: '#666',
+        fontFamily: 'SF Pro Display',
+        fontSize: 15,
+        fontWeight: '500',
+        color: '#6B7280',
         marginTop: 4,
     },
     contactNameRow: {
@@ -1285,17 +1291,19 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     siteVisitBadgeText: {
+        fontFamily: 'SF Pro Display',
         fontSize: 12,
         color: '#0288D1',
         fontWeight: '600',
     },
     actionsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
+        justifyContent: 'space-between',
         paddingVertical: 20,
     },
     actionButton: {
         alignItems: 'center',
+        flex: 1,
     },
     iconContainer: {
         width: 56,
@@ -1306,109 +1314,142 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     actionLabel: {
+        fontFamily: 'SF Pro Display',
         fontSize: 12,
-        color: '#666',
+        fontWeight: '500',
+        color: '#4B5563',
     },
     notesSection: {
-        marginTop: 20,
+        marginTop: 4,
     },
     sectionTitle: {
-        fontSize: 18,
+        fontFamily: 'SF Pro Display',
+        fontSize: 16,
         fontWeight: '600',
-        color: '#000',
-        // marginBottom: 12, // Handled in header rows
+        color: '#111827',
     },
     emptyNotes: {
+        fontFamily: 'SF Pro Display',
         fontSize: 14,
-        color: '#999',
+        color: '#9CA3AF',
         fontStyle: 'italic',
         textAlign: 'center',
         paddingVertical: 20,
     },
     noteItem: {
-        backgroundColor: '#F5F5F5',
-        padding: 12,
-        borderRadius: 8,
+        backgroundColor: '#FFFFFF',
+        padding: 14,
+        borderRadius: 14,
         marginBottom: 8,
+        borderLeftWidth: 4,
+        borderLeftColor: COLORS.primaryPurple,
+        shadowColor: '#8a79d6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
     },
     noteText: {
+        fontFamily: 'SF Pro Display',
         fontSize: 14,
-        color: '#000',
+        fontWeight: '400',
+        color: '#111827',
         marginBottom: 4,
     },
     noteTime: {
+        fontFamily: 'SF Pro Display',
         fontSize: 12,
-        color: '#666',
+        color: '#9CA3AF',
     },
     addNoteSection: {
-        marginTop: 20,
+        marginTop: 12,
         marginBottom: 20,
     },
     noteInput: {
+        fontFamily: 'SF Pro Display',
         borderWidth: 1,
-        borderColor: '#DDD',
-        borderRadius: 8,
-        padding: 12,
+        borderColor: '#E5E7EB',
+        borderRadius: 16,
+        padding: 16,
         fontSize: 14,
         minHeight: 60,
         textAlignVertical: 'top',
+        marginBottom: 12,
     },
-    addNoteButton: {
-        backgroundColor: COLORS.primary,
-        padding: 14,
-        borderRadius: 8,
+    addNoteButtonContainer: {
+        borderRadius: 14,
+        overflow: 'hidden',
+    },
+    addNoteGradient: {
+        height: 48,
+        justifyContent: 'center',
         alignItems: 'center',
-        marginTop: 12,
+        borderRadius: 14,
     },
     addNoteButtonDisabled: {
-        backgroundColor: '#CCC',
+        backgroundColor: '#CCC', // Overridden by gradient colors prop
     },
     addNoteButtonText: {
-        color: '#FFF',
+        fontFamily: 'SF Pro Display',
+        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
     },
     // iosPickerContainer styles removed as they referenced React Native Picker which is not used
     // StatusPicker uses its own modal
-    
+
     leadSection: {
-        marginTop: 20,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEE',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        shadowColor: '#8a79d6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
     },
     leadHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 8,
     },
     editButton: {
-        color: COLORS.primary,
-        fontSize: 16,
+        fontFamily: 'SF Pro Display',
+        color: COLORS.primaryPurple,
+        fontSize: 14,
         fontWeight: '600',
     },
-    leadInput: { // Removed separate input style, reusing textInput
+    leadInput: {
+        fontFamily: 'SF Pro Display',
         borderWidth: 1,
-        borderColor: '#DDD',
-        borderRadius: 8,
-        padding: 12,
+        borderColor: '#E5E7EB',
+        borderRadius: 16,
+        padding: 16,
         fontSize: 14,
         minHeight: 80,
         textAlignVertical: 'top',
         marginBottom: 12,
     },
     textInput: {
-         borderWidth: 1,
-        borderColor: '#DDD',
-        borderRadius: 8,
-        padding: 12,
+        fontFamily: 'SF Pro Display',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 16,
+        padding: 16,
         fontSize: 14,
         minHeight: 80,
         textAlignVertical: 'top',
         marginBottom: 12,
     },
-    
+    leadDescText: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 14,
+        fontWeight: '400',
+        color: '#6B7280',
+    },
+
     // Dialog / Modal Styles
     modalOverlay: {
         flex: 1,

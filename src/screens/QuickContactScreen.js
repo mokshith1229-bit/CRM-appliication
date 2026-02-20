@@ -5,7 +5,7 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-    
+
     Platform,
     Linking,
     Alert,
@@ -46,17 +46,17 @@ const QuickContactScreen = ({ route, navigation }) => {
     const listContact = campaignId
         ? leads.find(l => l.id === initialContact?.id && l.campaign_id === campaignId) || initialContact
         : leads.find(l => l.id === initialContact?.id) || initialContact;
-    
+
     // Use detailed contact if available and matching ID, otherwise fallback to list contact
-    const contact = (currentLeadDetails && (currentLeadDetails._id === listContact?.id || currentLeadDetails._id === listContact?._id)) 
-        ? currentLeadDetails 
+    const contact = (currentLeadDetails && (currentLeadDetails._id === listContact?.id || currentLeadDetails._id === listContact?._id))
+        ? currentLeadDetails
         : listContact;
 
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [editingNoteId, setEditingNoteId] = useState(null);
     const [editingNoteValue, setEditingNoteValue] = useState('');
     const [showHint, setShowHint] = useState(true);
-    
+
     // Collapsible states
     const [expandStatus, setExpandStatus] = useState(false);
     const [expandTransfers, setExpandTransfers] = useState(false);
@@ -65,7 +65,7 @@ const QuickContactScreen = ({ route, navigation }) => {
 
     useEffect(() => {
         dispatch(fetchTeamMembers());
-        
+
         if (initialContact?._source === 'log' && initialContact?.phone) {
             // Fetch local logs for device log contact
             CallLogService.getLogsForNumber(initialContact.phone, 500)
@@ -87,8 +87,8 @@ const QuickContactScreen = ({ route, navigation }) => {
         }
 
         return () => {
-             dispatch(clearLeadDetails());
-             setLocalDeviceLogs([]);
+            dispatch(clearLeadDetails());
+            setLocalDeviceLogs([]);
         }
     }, [dispatch, initialContact]);
     const handleWhatsApp = () => {
@@ -124,12 +124,12 @@ const QuickContactScreen = ({ route, navigation }) => {
         try {
             // Check if member has ID
             if (member._id) {
-                 await dispatch(updateLead({ 
-                    id: contact.id || contact._id, 
-                    data: { 
+                await dispatch(updateLead({
+                    id: contact.id || contact._id,
+                    data: {
                         assigned_to: member.id,
                         reason: reason // Pass reason to backend
-                    } 
+                    }
                 })).unwrap();
                 setShowTransferModal(false);
                 Alert.alert("Success", `Lead transferred to ${member.name}`);
@@ -150,14 +150,14 @@ const QuickContactScreen = ({ route, navigation }) => {
     const handleSaveNote = async () => {
         if (editingNoteId && contact) {
             const existingLogs = contact.callLogs || contact.call_logs || [];
-            const updatedLogs = existingLogs.map(log => 
+            const updatedLogs = existingLogs.map(log =>
                 log.id === editingNoteId ? { ...log, notes: editingNoteValue } : log
             );
 
             try {
-                await dispatch(updateLead({ 
-                    id: contact.id || contact._id, 
-                    data: { call_logs: updatedLogs } 
+                await dispatch(updateLead({
+                    id: contact.id || contact._id,
+                    data: { call_logs: updatedLogs }
                 })).unwrap();
                 setEditingNoteId(null);
                 setEditingNoteValue('');
@@ -185,22 +185,22 @@ const QuickContactScreen = ({ route, navigation }) => {
 
     const handleAddLead = async () => {
         if (!contact) return;
-        
+
         try {
             // 1. Check if lead exists by phone for this tenant
             const checkResult = await dispatch(checkLeadByPhone(contact.phone)).unwrap();
-            
+
             if (checkResult.exists) {
                 // If lead exists, navigate to the correct list and open it
                 if (campaignId) {
-                    navigation.navigate('CampaignLeads', { 
-                        campaignId, 
-                        campaignName, 
-                        openContactDetail: checkResult.lead.id 
+                    navigation.navigate('CampaignLeads', {
+                        campaignId,
+                        campaignName,
+                        openContactDetail: checkResult.lead.id
                     });
                 } else {
-                    navigation.navigate('Home', { 
-                        openContactDetail: checkResult.lead.id 
+                    navigation.navigate('Home', {
+                        openContactDetail: checkResult.lead.id
                     });
                 }
             } else {
@@ -211,19 +211,19 @@ const QuickContactScreen = ({ route, navigation }) => {
                     lead_source: campaignName || 'Quick Add',
                     status: 'New'
                 })).unwrap();
-                
+
                 Alert.alert("Success", "Lead created successfully");
-                
+
                 // 3. Navigate after creation
                 if (campaignId) {
-                    navigation.navigate('CampaignLeads', { 
-                        campaignId, 
-                        campaignName, 
-                        openContactDetail: newLead.id 
+                    navigation.navigate('CampaignLeads', {
+                        campaignId,
+                        campaignName,
+                        openContactDetail: newLead.id
                     });
                 } else {
-                    navigation.navigate('Home', { 
-                        openContactDetail: newLead.id 
+                    navigation.navigate('Home', {
+                        openContactDetail: newLead.id
                     });
                 }
             }
@@ -236,12 +236,12 @@ const QuickContactScreen = ({ route, navigation }) => {
     const formatLogDate = (dateString) => {
         if (!dateString) return '';
         const d = new Date(dateString);
-        return d.toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            hour: 'numeric', 
-            minute: '2-digit', 
-            hour12: true 
+        return d.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
         });
     };
 
@@ -331,23 +331,23 @@ const QuickContactScreen = ({ route, navigation }) => {
 
                 {/* Status History Collapsible */}
                 <View style={styles.card}>
-                    <TouchableOpacity 
-                        style={styles.collapsibleHeader} 
+                    <TouchableOpacity
+                        style={styles.collapsibleHeader}
                         onPress={() => setExpandStatus(!expandStatus)}
                     >
-                         <View style={{flexDirection:'row', alignItems:'center'}}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <MaterialCommunityIcons name="progress-clock" size={22} color="#444" />
-                            <Text style={[styles.cardText, {marginLeft: 10, fontWeight: '500'}]}>Status History</Text>
-                         </View>
-                         <MaterialIcons name={expandStatus ? "expand-less" : "expand-more"} size={24} color="#666" />
+                            <Text style={[styles.cardText, { marginLeft: 10, fontWeight: '500' }]}>Status History</Text>
+                        </View>
+                        <MaterialIcons name={expandStatus ? "expand-less" : "expand-more"} size={24} color="#666" />
                     </TouchableOpacity>
-                    
+
                     {expandStatus && (
                         <View style={styles.historyList}>
                             {contact.status_history && contact.status_history.length > 0 ? (
                                 contact.status_history.slice().reverse().map((item, index) => {
                                     // Robust matching against config statuses
-                                    const statusKey = item.status?.toString(); 
+                                    const statusKey = item.status?.toString();
                                     const matchingStatus = statuses.find(s => {
                                         // Handle potential 'status_' prefix in config keys or direct match
                                         const cleanKey = s?.label;
@@ -365,7 +365,7 @@ const QuickContactScreen = ({ route, navigation }) => {
                                             </View>
                                             <View style={styles.historyContent}>
                                                 <Text style={styles.historyTitle}>
-                                                    Changed to <Text style={{fontWeight:'700', color: displayColor}}>{displayStatus}</Text>
+                                                    Changed to <Text style={{ fontWeight: '700', color: displayColor }}>{displayStatus}</Text>
                                                 </Text>
                                                 <Text style={styles.historySub}>
                                                     {(() => {
@@ -387,36 +387,36 @@ const QuickContactScreen = ({ route, navigation }) => {
 
                 {/* Transfer History Collapsible */}
                 <View style={styles.card}>
-                    <TouchableOpacity 
-                        style={styles.collapsibleHeader} 
+                    <TouchableOpacity
+                        style={styles.collapsibleHeader}
                         onPress={() => setExpandTransfers(!expandTransfers)}
                     >
-                         <View style={{flexDirection:'row', alignItems:'center'}}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <MaterialCommunityIcons name="account-switch-outline" size={22} color="#444" />
-                            <Text style={[styles.cardText, {marginLeft: 10, fontWeight: '500'}]}>Transfer History</Text>
-                         </View>
-                         <MaterialIcons name={expandTransfers ? "expand-less" : "expand-more"} size={24} color="#666" />
+                            <Text style={[styles.cardText, { marginLeft: 10, fontWeight: '500' }]}>Transfer History</Text>
+                        </View>
+                        <MaterialIcons name={expandTransfers ? "expand-less" : "expand-more"} size={24} color="#666" />
                     </TouchableOpacity>
-                    
+
                     {expandTransfers && (
                         <View style={styles.historyList}>
                             {contact.transfer_history && contact.transfer_history.length > 0 ? (
                                 contact.transfer_history.slice().reverse().map((item, index) => (
                                     <View key={index} style={styles.historyItem}>
                                         <View style={styles.historyTimeline}>
-                                            <View style={[styles.timelineDot, {backgroundColor: '#FF9500'}]} />
+                                            <View style={[styles.timelineDot, { backgroundColor: '#FF9500' }]} />
                                             {index < contact.transfer_history.length - 1 && <View style={styles.timelineLine} />}
                                         </View>
                                         <View style={styles.historyContent}>
-                                             <Text style={styles.historyTitle}>
-                                                Transferred to <Text style={{fontWeight:'700'}}>
+                                            <Text style={styles.historyTitle}>
+                                                Transferred to <Text style={{ fontWeight: '700' }}>
                                                     {(() => {
                                                         const user = item.transferred_to;
                                                         return user ? (user.name || user.email || user.role || 'Unknown') : 'Unknown';
                                                     })()}
                                                 </Text>
                                             </Text>
-                                             <Text style={styles.historySub}>
+                                            <Text style={styles.historySub}>
                                                 by {(() => {
                                                     const user = item.transferred_by;
                                                     return user ? (user.name || user.email || user.role || 'Unknown') : 'Unknown';
@@ -437,11 +437,11 @@ const QuickContactScreen = ({ route, navigation }) => {
 
                 {/* Call Logs */}
                 <View style={styles.card}>
-                     <View style={styles.collapsibleHeader}>
-                         <View style={{flexDirection:'row', alignItems:'center'}}>
+                    <View style={styles.collapsibleHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <MaterialCommunityIcons name="phone-log-outline" size={22} color="#444" />
-                            <Text style={[styles.cardText, {marginLeft: 10, fontWeight: '500'}]}>Call Logs</Text>
-                         </View>
+                            <Text style={[styles.cardText, { marginLeft: 10, fontWeight: '500' }]}>Call Logs</Text>
+                        </View>
                     </View>
                     <View style={styles.historyList}>
                         {((contact?._source === 'log' ? localDeviceLogs : (contact.call_logs || contact.callLogs)) || []).length > 0 ? (
@@ -459,7 +459,7 @@ const QuickContactScreen = ({ route, navigation }) => {
                                         </View>
                                         <Text style={styles.logDate}>{formatLogDate(log.date || log.timestamp)}</Text>
                                     </View>
-                                    
+
                                     {contact?._source !== 'log' && (
                                         <TouchableOpacity
                                             style={styles.notesSection}
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
         lineHeight: 18,
     },
     linkText: {
-        color: '#007AFF',
+        color: COLORS.primaryPurple,
     },
     hintClose: {
         padding: 4,

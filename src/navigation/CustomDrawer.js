@@ -7,7 +7,7 @@ import {
     ScrollView,
     Modal,
     Animated,
-    
+    Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useProfileStore } from '../store/profileStore';
@@ -48,19 +48,19 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
             { id: 'referral', label: 'Referral', icon: 'people' },
             { id: 'website', label: 'Website', icon: 'web' }
         ];
-        
+
         sources.forEach(source => {
             const lowKey = source.key?.toLowerCase() || '';
             const lowLabel = source.label?.toLowerCase() || '';
             let matchedBase = null;
-            
-            // Check if it matches a base type (prefix or contains in label, but NOT exact match)
+
+            // Check if it matches a base type (prefix or contains in label)
             for (const base of baseTypes) {
-                // Only match instances, not the base source itself
-                if (lowKey.startsWith(`${base.id}_`) || 
+                if (lowKey.startsWith(`${base.id}_`) ||
                     lowKey.startsWith(`${base.id} `) ||
                     lowKey.startsWith(`${base.id}(`) ||
-                    (lowLabel.includes(base.id) && lowKey !== base.id)) {
+                    lowKey === base.id ||
+                    lowLabel.includes(base.id)) {
                     matchedBase = base;
                     break;
                 }
@@ -112,7 +112,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
         try {
             await clearProfile();
             await clearSubscription();
-            
+
             // Dispatch Logout Action (Handlers Server Logout + Storage Clear + Redux State Update)
             await dispatch(logout()).unwrap();
 
@@ -133,6 +133,15 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
             onPress: () => {
                 onClose();
                 navigation.navigate('CreateLead');
+            },
+        },
+        {
+            id: 'create-enquiry',
+            title: 'Create New Enquiry',
+            icon: 'post-add',
+            onPress: () => {
+                onClose();
+                navigation.navigate('CreateNewEnquiry');
             },
         },
         {
@@ -209,9 +218,23 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                     >
                         <SafeAreaView style={styles.drawerContent}>
                             <View style={styles.header}>
-                                <Text style={styles.headerTitle}>Main Menu</Text>
-                                <TouchableOpacity onPress={onClose}>
-                                    <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+                                <TouchableOpacity onPress={() => navigation.navigate('MyProfile')}>
+                                    <View style={styles.profileAvatarContainer}>
+                                        <Text style={styles.profileAvatarText}>
+                                            {useProfileStore.getState().profile?.name?.charAt(0) || 'U'}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                                <View style={styles.headerTextContainer}>
+                                    <Text style={styles.headerTitle}>
+                                        {useProfileStore.getState().profile?.name || 'User Name'}
+                                    </Text>
+                                    <Text style={styles.headerSubtitle}>
+                                        {useProfileStore.getState().profile?.role === 'admin' ? 'Omni Admin' : 'Sales Manager'}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                                    <MaterialIcons name="close" size={24} color="#8E8E93" />
                                 </TouchableOpacity>
                             </View>
 
@@ -228,12 +251,12 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                 ))}
 
                                 <View style={styles.sectionDivider} />
-                                <Text style={styles.sectionHeader}>Campaigns</Text>
+                                <Text style={styles.sectionHeader}>CAMPAIGNS</Text>
 
                                 {campaigns.map((campaign) => (
                                     <TouchableOpacity
                                         key={campaign._id}
-                                        style={styles.menuItem}
+                                        style={styles.campaignItem}
                                         onPress={() => {
                                             onClose();
                                             navigation.navigate('CampaignLeads', {
@@ -242,19 +265,20 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                             });
                                         }}
                                     >
-                                        <MaterialIcons name="campaign" size={24} color={COLORS.text} style={styles.menuIcon} />
-                                        <Text style={styles.menuText}>{campaign.name}</Text>
+                                        <MaterialIcons name="campaign" size={20} color={COLORS.primaryPurple} style={styles.menuIcon} />
+                                        <Text style={styles.campaignText}>{campaign.name}</Text>
+                                        <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.chevronIcon} />
                                     </TouchableOpacity>
                                 ))}
 
                                 <View style={styles.sectionDivider} />
-                                <Text style={styles.sectionHeader}>Filters</Text>
+                                <Text style={styles.sectionHeader}>FILTERS</Text>
 
                                 {statuses.length > 0 ? (
                                     statuses.map((status) => (
                                         <TouchableOpacity
                                             key={status.key}
-                                            style={styles.menuItem}
+                                            style={styles.campaignItem}
                                             onPress={() => {
                                                 onClose();
                                                 navigation.navigate('FilteredContacts', {
@@ -264,20 +288,21 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                                 });
                                             }}
                                         >
-                                            <MaterialIcons 
+                                            <MaterialIcons
                                                 name={
                                                     status.label.includes('Hot') ? 'local-fire-department' :
-                                                    status.label.includes('Warm') ? 'wb-sunny' :
-                                                    status.label.includes('Cold') ? 'ac-unit' :
-                                                    status.label.includes('Interested') ? 'star' :
-                                                    status.label.includes('Not Interested') ? 'block' :
-                                                    'label'
-                                                } 
-                                                size={24} 
-                                                color={status.color || COLORS.text} 
-                                                style={styles.menuIcon} 
+                                                        status.label.includes('Warm') ? 'wb-sunny' :
+                                                            status.label.includes('Cold') ? 'ac-unit' :
+                                                                status.label.includes('Interested') ? 'star' :
+                                                                    status.label.includes('Not Interested') ? 'block' :
+                                                                        'label'
+                                                }
+                                                size={20}
+                                                color={status.color || COLORS.text}
+                                                style={styles.menuIcon}
                                             />
-                                            <Text style={styles.menuText}>{status.label}</Text>
+                                            <Text style={styles.campaignText}>{status.label}</Text>
+                                            <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.chevronIcon} />
                                         </TouchableOpacity>
                                     ))
                                 ) : (
@@ -285,7 +310,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                 )}
 
                                 <View style={styles.sectionDivider} />
-                                <Text style={styles.sectionHeader}>Lead Source</Text>
+                                <Text style={styles.sectionHeader}>LEAD SOURCE</Text>
                                 {groupedSources.length > 0 ? (
                                     groupedSources.map((source) => (
                                         <TouchableOpacity
@@ -300,14 +325,15 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                                 });
                                             }}
                                         >
-                                            <MaterialIcons 
+                                            <MaterialIcons
                                                 name={source.icon || 'link'
-                                                } 
-                                                size={24} 
-                                                color={COLORS.text} 
-                                                style={styles.menuIcon} 
+                                                }
+                                                size={20}
+                                                color={COLORS.text}
+                                                style={styles.menuIcon}
                                             />
-                                            <Text style={styles.menuText}>{source.label}{source.isGroup && source.count > 1 && <Text style={{ fontSize: 12, color: COLORS.textSecondary }}> ({source.count} accounts)</Text>}</Text>
+                                            <Text style={styles.campaignText}>{source.label}{source.isGroup && source.count > 1 && <Text style={{ fontSize: 12, color: COLORS.textSecondary }}> ({source.count} accounts)</Text>}</Text>
+                                            <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.chevronIcon} />
                                         </TouchableOpacity>
                                     ))
                                 ) : (
@@ -317,13 +343,12 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                             </ScrollView>
 
                             <View style={styles.footer}>
-                                <View style={styles.sectionDivider} />
                                 <TouchableOpacity
-                                    style={styles.menuItem}
+                                    style={styles.logoutButton}
                                     onPress={() => setShowLogoutModal(true)}
                                 >
-                                    <MaterialIcons name="logout" size={20} color={COLORS.hot} style={styles.menuIcon} />
-                                    <Text style={[styles.menuText, { color: COLORS.hot }]}>Logout</Text>
+                                    <MaterialIcons name="logout" size={20} color="#EF4444" style={{ marginRight: 12 }} />
+                                    <Text style={styles.logoutText}>Logout</Text>
                                 </TouchableOpacity>
                             </View>
                         </SafeAreaView>
@@ -381,11 +406,6 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -438,77 +458,154 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: COLORS.textSecondary,
     },
+    overlay: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
     backdrop: {
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(247, 245, 255, 0.90)', // Soft purple tint #F7F5FF backdrop overlaying the main app
     },
     drawer: {
-        width: 280,
-        height: '100%',
-        backgroundColor: COLORS.cardBackground,
-        shadowColor: '#000',
-        shadowOffset: { width: 2, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-        elevation: 8,
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: '85%',
+        maxWidth: 320,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)', // Glass white
+        borderTopRightRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: '#8a79d6',
+        shadowOffset: { width: 4, height: 0 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 10,
     },
     drawerContent: {
         flex: 1,
+        paddingTop: Platform.OS === 'android' ? 20 : 0,
     },
     header: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        padding: SPACING.md,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        marginBottom: 8,
+    },
+    profileAvatarContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#EBE6FF', // Soft purple background for avatar
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    profileAvatarText: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 20,
+        fontWeight: '700',
+        color: COLORS.primaryPurple,
+    },
+    headerTextContainer: {
+        flex: 1,
     },
     headerTitle: {
-        ...TYPOGRAPHY.title,
-        fontSize: 24,
-        fontWeight: '700',
+        fontFamily: 'SF Pro Display',
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#111827',
+    },
+    headerSubtitle: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 14,
+        fontWeight: '400',
+        color: '#6B7280',
+        marginTop: 2,
+    },
+    closeButton: {
+        padding: 4,
     },
     menuList: {
         flex: 1,
-        paddingTop: SPACING.md,
+        paddingTop: 4,
     },
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: SPACING.md,
-        marginHorizontal: SPACING.sm,
-        marginBottom: SPACING.xs,
-        borderRadius: 8,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        marginHorizontal: 16,
+        marginBottom: 4,
+        borderRadius: 16,
+    },
+    campaignItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        marginHorizontal: 16,
+        marginBottom: 4,
+        borderRadius: 16,
+        backgroundColor: COLORS.lightPurpleTint, // Highlighted background
     },
     sectionDivider: {
         height: 1,
-        backgroundColor: COLORS.border,
-        marginVertical: SPACING.md,
-        marginHorizontal: SPACING.md,
+        backgroundColor: '#F3F4F6',
+        marginVertical: 12,
+        marginHorizontal: 20,
     },
     sectionHeader: {
-        ...TYPOGRAPHY.subtitle,
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        paddingHorizontal: SPACING.lg,
-        marginBottom: SPACING.sm,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
+        fontFamily: 'SF Pro Display',
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#9CA3AF',
+        paddingHorizontal: 24,
+        marginBottom: 8,
+        marginTop: 4,
+        letterSpacing: 1.2,
     },
     menuIcon: {
-        marginRight: SPACING.md,
+        marginRight: 16,
+        color: '#111827', // Darker generic icon color
+    },
+    chevronIcon: {
+        marginLeft: 'auto',
     },
     menuText: {
-        ...TYPOGRAPHY.subtitle,
+        fontFamily: 'SF Pro Display',
         fontSize: 16,
-        fontWeight: '500',
+        fontWeight: '600', // Medium
+        color: '#111827',
+    },
+    campaignText: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 15,
+        fontWeight: '500', // Medium
+        color: COLORS.primaryPurple,
     },
     footer: {
-        paddingBottom: SPACING.md,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        paddingTop: 12,
+    },
+    logoutButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FEF2F2', // Soft red tint
+        paddingVertical: 16,
+        marginHorizontal: 20,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#FEE2E2',
+    },
+    logoutText: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#EF4444',
     },
 });
 

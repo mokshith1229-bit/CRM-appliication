@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 
 const FilterBar = ({ activeFilter, onFilterChange, newLeadsCount = 0 }) => {
@@ -24,6 +25,14 @@ const FilterBar = ({ activeFilter, onFilterChange, newLeadsCount = 0 }) => {
                             onPress={() => onFilterChange(filter.id)}
                             activeOpacity={0.7}
                         >
+                            {isActive && (
+                                <LinearGradient
+                                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={[StyleSheet.absoluteFillObject, { borderRadius: 20 }]}
+                                />
+                            )}
                             {/* Render badge if needed */}
                             {showBadge && (
                                 <View style={styles.badge}>
@@ -41,7 +50,6 @@ const FilterBar = ({ activeFilter, onFilterChange, newLeadsCount = 0 }) => {
                             >
                                 {filter.label}
                             </Text>
-                            {isActive && <View style={styles.activeIndicator} />}
                         </TouchableOpacity>
                     );
                 })}
@@ -52,53 +60,58 @@ const FilterBar = ({ activeFilter, onFilterChange, newLeadsCount = 0 }) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: COLORS.cardBackground,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24, // Exact annotated radius
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 8,
+        padding: 4, // Inner padding
+        height: 48, // 44px active area + 4px padding
+        shadowColor: '#8a79d6', // Soft purple shadow
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 2,
     },
     rowContainer: {
         flexDirection: 'row',
         width: '100%',
+        height: '100%',
     },
     filterButton: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 16,
+        borderRadius: 20,
         position: 'relative',
+        height: '100%',
     },
     filterButtonActive: {
-        // Active state styling handled by text and indicator
+        // Handled by absolute linear gradient
     },
     filterText: {
         ...TYPOGRAPHY.body,
-        color: COLORS.filterInactive,
+        color: COLORS.textSecondary,
         fontWeight: '500',
+        zIndex: 1,
     },
     filterTextActive: {
-        color: COLORS.filterActive,
-        fontWeight: '700',
-    },
-    activeIndicator: {
-        position: 'absolute',
-        bottom: 0,
-        height: 3,
-        width: '60%', // Use a percentage width for the indicator
-        backgroundColor: COLORS.filterActive,
-        borderRadius: 2,
+        color: '#FFFFFF',
+        fontWeight: '600',
+        zIndex: 1,
     },
     badge: {
         position: 'absolute',
         top: 8,
         right: 10,
-        backgroundColor: '#FF3B30',
+        backgroundColor: COLORS.lightPurpleTint,
         borderRadius: 10,
         paddingHorizontal: 6,
         paddingVertical: 2,
         zIndex: 1,
     },
     badgeText: {
-        color: '#FFFFFF',
+        color: COLORS.primaryPurple,
         fontSize: 10,
         fontWeight: '700',
     },

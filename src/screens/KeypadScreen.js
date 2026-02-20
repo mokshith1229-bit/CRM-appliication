@@ -108,7 +108,7 @@ const KeypadScreen = ({ navigation }) => {
     };
 
     return (
-        <View style={[styles.container, { paddingTop: insets.top, paddingBottom: 60 + insets.bottom }]}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.topFlexArea}>
                 {/* Suggested Section - Moved to top */}
                 <View style={styles.suggestedContainer}>
@@ -126,36 +126,48 @@ const KeypadScreen = ({ navigation }) => {
                                 key={contact.id}
                                 style={styles.suggestedItem}
                                 onPress={() => handleSuggestionPress(contact)}
+                                activeOpacity={0.7}
                             >
                                 <View style={styles.avatarContainer}>
                                     <View style={[
                                         styles.avatar,
-                                        { backgroundColor: contact.isRecent ? '#E0E0E0' : (contact.id.toString().charCodeAt(0) % 2 === 0 ? '#4DB6AC' : '#4FC3F7') }
+                                        { backgroundColor: '#B39DFF' }
                                     ]}>
-                                        <Text style={[styles.avatarText, contact.isRecent && { color: '#666' }]}>
-                                            {contact.name.charAt(0)}
+                                        <Text style={styles.avatarText}>
+                                            {contact.name.charAt(0).toUpperCase()}
                                         </Text>
                                     </View>
                                 </View>
                                 <View style={styles.suggestedInfo}>
                                     <Text style={styles.contactName}>{contact.name}</Text>
                                     <Text style={styles.contactPhone}>
-                                        {contact.isRecent ? 'Recently dialed ' : 'Phone '}
-                                        {contact.phone}
+                                        Phone {contact.phone}
                                     </Text>
                                 </View>
                                 <TouchableOpacity
                                     onPress={() => handleCall(contact.phone, contact)}
                                     style={styles.callIconButton}
                                 >
-                                    <MaterialIcons name="phone-in-talk" size={24} color="#007AFF" />
+                                    <MaterialIcons name="phone" size={20} color="#FFFFFF" />
                                 </TouchableOpacity>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
                 </View>
 
-                {/* Number Input Selection Area - Only show when there's input */}
+                {/* Info Bar: Actions when no exact match found but phone has input */}
+                {phoneNumber.length > 0 && (
+                    <View style={styles.infoBar}>
+                        <View style={styles.actionsRow}>
+                            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('CreateLead', { phone: phoneNumber })}>
+                                <MaterialIcons name="person-add" size={20} color={'#6C4DFF'} />
+                                <Text style={styles.actionLabel}>Create contact</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {/* Number Input Selection Area - Shows directly above keypad */}
                 {phoneNumber.length > 0 && (
                     <View style={styles.inputArea}>
                         <TextInput
@@ -168,23 +180,6 @@ const KeypadScreen = ({ navigation }) => {
                             autoFocus={false}
                             caretHidden={phoneNumber.length === 0}
                         />
-                    </View>
-                )}
-
-                {/* Info Bar: Actions when no exact match found but phone has input */}
-                {phoneNumber.length > 0 && (
-                    <View style={styles.infoBar}>
-                        <View style={styles.actionsRow}>
-                            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('CreateLead', { phone: phoneNumber })}>
-                                <MaterialIcons name="person-add" size={20} color={COLORS.primary} />
-                                <Text style={styles.actionLabel}>Create contact</Text>
-                            </TouchableOpacity>
-                            <View style={styles.actionDivider} />
-                            <TouchableOpacity style={styles.actionBtn}>
-                                <MaterialIcons name="add" size={20} color={COLORS.primary} />
-                                <Text style={styles.actionLabel}>Add to contact</Text>
-                            </TouchableOpacity>
-                        </View>
                     </View>
                 )}
             </View>
@@ -205,104 +200,123 @@ const KeypadScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#F7F5FF',
     },
     topFlexArea: {
         flex: 1,
-    },
-    inputArea: {
-        height: 80,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    phoneNumberInput: {
-        fontSize: SCREEN_WIDTH < 380 ? 32 : 44,
-        color: '#1C1C1E',
-        textAlign: 'center',
-        width: '100%',
-        fontWeight: '300',
-    },
-    infoBar: {
-        height: 50,
-        justifyContent: 'center',
-        paddingHorizontal: 20,
-    },
-    actionsRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    actionBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 8,
-    },
-    actionLabel: {
-        fontSize: 14,
-        color: COLORS.primary,
-        fontWeight: '500',
-        marginLeft: 6,
-    },
-    actionDivider: {
-        width: 1,
-        height: 20,
-        backgroundColor: '#DDD',
-        marginHorizontal: 15,
+        justifyContent: 'flex-start',
     },
     suggestedContainer: {
         flex: 1,
-        paddingHorizontal: 20,
-        paddingTop: 10,
     },
     suggestedTitle: {
-        fontSize: 16,
-        color: '#8E8E93',
-        fontWeight: '500',
-        marginBottom: 15,
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#111827',
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: 16,
     },
     suggestedList: {
         flex: 1,
     },
     suggestedListContent: {
-        paddingBottom: 20,
+        paddingHorizontal: 20,
+        paddingBottom: 32,
     },
     suggestedItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        marginBottom: 12,
+        shadowColor: '#8A79D6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#F3F0FF',
     },
     avatarContainer: {
-        marginRight: 15,
+        marginRight: 16,
     },
     avatar: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarText: {
-        color: '#FFF',
-        fontSize: 22,
+        fontSize: 16,
         fontWeight: '600',
+        color: '#FFFFFF',
     },
     suggestedInfo: {
         flex: 1,
+        justifyContent: 'center',
     },
     contactName: {
-        fontSize: 17,
-        color: '#1C1C1E',
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#111827',
         marginBottom: 2,
     },
     contactPhone: {
-        fontSize: 14,
-        color: '#8E8E93',
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '400',
     },
     callIconButton: {
-        padding: 10,
-    }
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#6C4DFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#6C4DFF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    inputArea: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingBottom: 24,
+    },
+    phoneNumberInput: {
+        fontSize: 36,
+        fontWeight: '500',
+        color: '#111827',
+        textAlign: 'center',
+        letterSpacing: 2,
+    },
+    infoBar: {
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    actionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    actionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EBE8FF',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    actionLabel: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#6C4DFF',
+        marginLeft: 6,
+    },
 });
 
 export default KeypadScreen;

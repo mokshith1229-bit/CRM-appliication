@@ -6,7 +6,7 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
-    
+
     StatusBar,
     Platform,
     Linking,
@@ -15,6 +15,7 @@ import {
     ActivityIndicator,
     RefreshControl,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -46,8 +47,8 @@ const HighDemandProjectsScreen = ({ navigation }) => {
         projectName: project.name,
         certification: project.data.rera ? 'RERA' : null,
         location: project.data.location || 'Location not specified',
-        images: project.data.photos?.length > 0 
-            ? project.data.photos 
+        images: project.data.photos?.length > 0
+            ? project.data.photos
             : ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400'],
         imageCount: project.data.photos?.length || 1,
         status: project.data.status || 'N/A',
@@ -102,8 +103,8 @@ const HighDemandProjectsScreen = ({ navigation }) => {
                     <Text style={styles.loadingText}>Loading projects...</Text>
                 </View>
             ) : (
-                <ScrollView 
-                    style={styles.scrollView} 
+                <ScrollView
+                    style={styles.scrollView}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
@@ -195,10 +196,18 @@ const HighDemandProjectsScreen = ({ navigation }) => {
                                     {/* Action Buttons */}
                                     <View style={styles.actionButtons}>
                                         <TouchableOpacity
-                                            style={styles.viewNumberButton}
+                                            style={styles.viewNumberButtonContainer}
                                             onPress={() => handleForward(project)}
+                                            activeOpacity={0.8}
                                         >
-                                            <Text style={styles.viewNumberText}>Forward</Text>
+                                            <LinearGradient
+                                                colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 0 }}
+                                                style={styles.viewNumberButtonGradient}
+                                            >
+                                                <Text style={styles.viewNumberText}>Forward</Text>
+                                            </LinearGradient>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={styles.callButton}
@@ -414,19 +423,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
     },
-    viewNumberButton: {
+    viewNumberButtonContainer: {
         flex: 1,
-        borderWidth: 1,
-        borderColor: COLORS.primary,
         borderRadius: 10,
+        overflow: 'hidden',
+        shadowColor: COLORS.primaryPurple,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 4,
+    },
+    viewNumberButtonGradient: {
         paddingVertical: 12,
         alignItems: 'center',
-        backgroundColor: '#FAFAFA',
     },
     viewNumberText: {
         fontSize: 15,
         fontWeight: '600',
-        color: COLORS.primary,
+        color: '#FFFFFF',
         letterSpacing: 0.3,
     },
     callButton: {

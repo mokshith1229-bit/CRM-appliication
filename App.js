@@ -51,11 +51,11 @@ const AppContent = () => {
             dispatch(fetchMetadata());
             // Request permissions on startup
             const requestPermissions = async () => {
-                 try {
+                try {
                     await CallLogService.requestPermission();
-                 } catch (err) {
+                } catch (err) {
                     console.log("Permission request failed", err);
-                 }
+                }
             };
             requestPermissions();
         }
@@ -85,7 +85,7 @@ const AppContent = () => {
         };
 
         const subscription = AppState.addEventListener('change', handleAppStateChange);
-        
+
         // Trigger sync immediately on mount if active
         if (AppState.currentState === 'active') {
             handleAppStateChange('active');
@@ -110,10 +110,10 @@ const AppContent = () => {
     // If minVersion > currentVersion
     const isUpdateRequired = () => {
         if (!appConfig?.minVersion) return false;
-        
+
         const v1 = appConfig.minVersion.split('.').map(Number);
         const v2 = currentVersion.split('.').map(Number);
-        
+
         for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
             const num1 = v1[i] || 0;
             const num2 = v2[i] || 0;
@@ -129,8 +129,9 @@ const AppContent = () => {
         return <UpdateRequiredScreen storeUrl={url} />;
     }
 
-    // Check Subscription Expiration (Fail Closed)
+    // Check Subscription Expiration (Fail Closed) - DISABLED PER USER REQUEST
     // Only check if NOT loading AND Authenticated to avoid flash of expired screen or blocking login
+    /*
     if (!isLoading && isAuthenticated) {
         if (!subscription) {
            // If loaded but no subscription found
@@ -145,6 +146,7 @@ const AppContent = () => {
             }
         }
     }
+    */
 
     return (
         <SafeAreaProvider>
