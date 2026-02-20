@@ -14,7 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { useDispatch, useSelector } from 'react-redux';
-import { setActiveFilter, createLead } from '../store/slices/leadSlice';
+import { setActiveFilter, createEnquiry, fetchTenantConfig } from '../store/slices/leadSlice';
+import StatusPicker from '../components/StatusPicker';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const generateId = () => '_' + Math.random().toString(36).substr(2, 9);
 
@@ -35,6 +37,11 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
     const [location, setLocation] = useState('');
     const [timeline, setTimeline] = useState('');
 
+    // Section 4: Source & Status
+    const [leadSource, setLeadSource] = useState('');
+    const [leadStatus, setLeadStatus] = useState('');
+    const { tenantConfig } = useSelector(state => state.leads);
+
     // Section 5: Custom Fields
     const [customFields, setCustomFields] = useState([]);
 
@@ -54,9 +61,33 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
         const newErrors = {};
         if (!name.trim()) newErrors.name = 'Full Name is required';
         if (!phone.trim()) newErrors.phone = 'Mobile Number is required';
+        if (!leadStatus) newErrors.status = 'Status is required';
+        if (!leadSource) newErrors.source = 'Source is required';
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
+
+    // Picker Visibility States
+    const [showSourcePicker, setShowSourcePicker] = useState(false);
+    const [showStatusPicker, setShowStatusPicker] = useState(false);
+
+    // Fetch tenant config on mount
+    React.useEffect(() => {
+        if (!tenantConfig) {
+            dispatch(fetchTenantConfig());
+        }
+    }, []);
+
+    // Derived options from tenantConfig
+    const sourceOptions = tenantConfig?.lead_sources?.map(s => ({
+        label: s.label,
+        value: s.key
+    })) || [];
+
+    const statusOptions = tenantConfig?.lead_statuses?.map(s => ({
+        label: s.label,
+        value: s.label // Use label to avoid 'status_' prefix
+    })) || [];
 
     const handleSave = async () => {
         if (!validate()) {
@@ -75,14 +106,14 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
             timeline: timeline.trim(),
             assignedTo: currentUser?.name || 'Self',
             assignedBy: currentUser?.name || 'System',
-            leadSource: 'Manual Enquiry',
-            status: 'New',
+            leadSource: leadSource,
+            status: leadStatus,
             customFields,
         };
 
         try {
             // Save to backend via Redux Thunk
-            await dispatch(createLead(newEnquiry)).unwrap();
+            await dispatch(createEnquiry(newEnquiry)).unwrap();
 
             // Show success and navigate
             Alert.alert('Success', 'Enquiry created successfully!', [
@@ -239,14 +270,36 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
                         </View>
                     </View>
 
-                    {/* SECTION 4 - SOURCE CARD */}
+                    {/* SECTION 4 - SOURCE & STATUS CARD */}
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Source</Text>
+                        <Text style={styles.cardTitle}>Source & Status</Text>
+                        
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Lead Source</Text>
-                            <View style={styles.disabledInput}>
-                                <Text style={styles.disabledText}>Manual Enquiry</Text>
-                            </View>
+                            <Text style={styles.label}>Lead Status *</Text>
+                            <TouchableOpacity 
+                                style={[styles.pickerButton, errors.status && styles.inputError]} 
+                                onPress={() => setShowStatusPicker(true)}
+                            >
+                                <Text style={[styles.pickerButtonText, !leadStatus && { color: '#9CA3AF' }]}>
+                                    {leadStatus || 'Select Status'}
+                                </Text>
+                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
+                            </TouchableOpacity>
+                            {errors.status && <Text style={styles.errorText}>{errors.status}</Text>}
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Lead Source *</Text>
+                            <TouchableOpacity 
+                                style={[styles.pickerButton, errors.source && styles.inputError]} 
+                                onPress={() => setShowSourcePicker(true)}
+                            >
+                                <Text style={[styles.pickerButtonText, !leadSource && { color: '#9CA3AF' }]}>
+                                    {sourceOptions.find(o => o.value === leadSource)?.label || 'Select Source'}
+                                </Text>
+                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
+                            </TouchableOpacity>
+                            {errors.source && <Text style={styles.errorText}>{errors.source}</Text>}
                         </View>
                     </View>
 
@@ -295,6 +348,33 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
                     <Text style={styles.saveButtonText}>Save Enquiry</Text>
                 </TouchableOpacity>
             </View>
+            {/* Status Picker */}
+            <StatusPicker
+                visible={showStatusPicker}
+                onClose={() => setShowStatusPicker(false)}
+                title="Select Status"
+                options={statusOptions}
+                selectedValue={leadStatus}
+                onSelect={(value) => {
+                    setLeadStatus(value);
+                    if (errors.status) setErrors({ ...errors, status: null });
+                    setShowStatusPicker(false);
+                }}
+            />
+
+            {/* Source Picker */}
+            <StatusPicker
+                visible={showSourcePicker}
+                onClose={() => setShowSourcePicker(false)}
+                title="Select Source"
+                options={sourceOptions}
+                selectedValue={leadSource}
+                onSelect={(value) => {
+                    setLeadSource(value);
+                    if (errors.source) setErrors({ ...errors, source: null });
+                    setShowSourcePicker(false);
+                }}
+            />
         </SafeAreaView>
     );
 };
@@ -411,6 +491,21 @@ const styles = StyleSheet.create({
     disabledText: {
         fontSize: 16,
         color: '#6B7280',
+    },
+    pickerButton: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    pickerButtonText: {
+        fontSize: 16,
+        color: '#111827',
     },
     customFieldRow: {
         flexDirection: 'row',

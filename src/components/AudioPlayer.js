@@ -42,16 +42,20 @@ const AudioPlayer = ({ recording }) => {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.time}>
-                    {recording.date} | {recording.status} | {recording.duration}
-                </Text>
-                <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} style={styles.expandButton}>
+            <TouchableOpacity 
+                style={styles.header} 
+                onPress={() => setIsExpanded(!isExpanded)}
+                activeOpacity={0.7}
+            >
+                <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                    <Text style={styles.listenText}>Listen to Recording</Text>
+                </View>
+                <View style={styles.expandButton}>
                     <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
-                </TouchableOpacity>
-            </View>
+                </View>
+            </TouchableOpacity>
 
-            {isExpanded && recording.status === 'Connected' && (
+            {isExpanded && recording?.status === 'Connected' && (
                 <View style={styles.player}>
                     <TouchableOpacity onPress={playPauseAudio} style={styles.playButton}>
                         <Text style={styles.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
@@ -61,6 +65,12 @@ const AudioPlayer = ({ recording }) => {
                     </View>
                 </View>
             )}
+            
+            {isExpanded && recording?.status !== 'Connected' && (
+                <View style={styles.player}>
+                     <Text style={{fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic'}}>No recording available for missed/unanswered calls.</Text>
+                </View>
+            )}
         </View>
     );
 };
@@ -68,20 +78,21 @@ const AudioPlayer = ({ recording }) => {
 const styles = StyleSheet.create({
     container: {
         backgroundColor: '#FFFFFF',
-        marginBottom: SPACING.sm,
-        padding: SPACING.md,
+        marginTop: 8,
+        padding: 10,
         borderRadius: 8,
-        marginHorizontal: SPACING.md,
+        borderWidth: 1,
+        borderColor: '#EFEFEF',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    time: {
+    listenText: {
         fontSize: 13,
-        color: COLORS.text,
-        flex: 1,
+        fontWeight: '600',
+        color: COLORS.primary,
     },
     expandButton: {
         padding: SPACING.xs,

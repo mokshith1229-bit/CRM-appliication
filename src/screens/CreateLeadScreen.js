@@ -18,7 +18,8 @@ import { createLead, searchLeads, clearSearchResults, updateLead } from '../stor
 import StatusPicker from '../components/StatusPicker';
 import SearchDropdown from '../components/SearchDropdown';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../constants/theme';
 
 const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const { initialPhone, initialName } = route.params || {};
@@ -42,9 +43,9 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const [whatsappNumber, setWhatsappNumber] = useState(initialPhone || '');
     const [occupation, setOccupation] = useState('');
     const [companyName, setCompanyName] = useState('');
-    const [leadSource, setLeadSource] = useState('self');
-    const [leadStatus, setLeadStatus] = useState('New');
-    const [originalStatus, setOriginalStatus] = useState('New'); // Track original status
+    const [leadSource, setLeadSource] = useState('');
+    const [leadStatus, setLeadStatus] = useState('');
+    const [originalStatus, setOriginalStatus] = useState(''); // Track original status
     const [requirement, setRequirement] = useState('');
     const [customFields, setCustomFields] = useState([]);
     const [showAddField, setShowAddField] = useState(false);
@@ -154,8 +155,8 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
             setOccupation(data.occupation || '');
             setCompanyName(data.company_name || '');
             setLeadSource(data.lead_source || 'self');
-            setLeadStatus(data.status || 'New');
-            setOriginalStatus(data.status || 'New');
+            setLeadStatus(data.status || '');
+            setOriginalStatus(data.status || '');
             setRequirement(data.requirement || '');
             
             // Handle custom fields if any
@@ -229,6 +230,16 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const handleSaveLead = async () => {
         if (!phone.trim()) {
             Alert.alert('Error', 'Mobile number is required');
+            return;
+        }
+
+        if (!leadStatus) {
+            Alert.alert('Error', 'Please select a lead status');
+            return;
+        }
+
+        if (!leadSource) {
+            Alert.alert('Error', 'Please select a lead source');
             return;
         }
 
@@ -486,21 +497,30 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
                     <TouchableOpacity
                         style={[styles.button, styles.secondaryButton, { flex: 1, marginRight: SPACING.sm }]}
                         onPress={handleCancel}
+                        activeOpacity={0.8}
                     >
                         <Text style={styles.secondaryButtonText}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.button, styles.primaryButton, { flex: 1 }]}
+                        style={{ flex: 1 }}
                         onPress={handleSaveLead}
                         disabled={createLoading}
+                        activeOpacity={0.8}
                     >
-                        {createLoading ? (
-                            <ActivityIndicator color="#FFFFFF" />
-                        ) : (
-                            <Text style={styles.primaryButtonText}>
-                                {isUpdateMode ? 'Update Lead' : 'Save Lead'}
-                            </Text>
-                        )}
+                        <LinearGradient
+                            colors={createLoading ? ['#A0AEC0', '#718096'] : [COLORS.gradientStart, COLORS.gradientEnd]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={[styles.button, styles.primaryButton]}
+                        >
+                            {createLoading ? (
+                                <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                                <Text style={styles.primaryButtonText}>
+                                    {isUpdateMode ? 'Update Lead' : 'Save Lead'}
+                                </Text>
+                            )}
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
                 {/* Pickers */}
@@ -577,28 +597,31 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     form: {
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 12,
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 20,
     },
     fieldContainer: {
-        marginBottom: SPACING.md,
+        marginBottom: 20,
     },
     label: {
-        ...TYPOGRAPHY.subtitle,
-        marginBottom: SPACING.xs,
+        fontSize: 14,
         fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
+        marginLeft: 4,
     },
     input: {
         borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 8,
-        padding: SPACING.md,
-        fontSize: 16,
-        backgroundColor: COLORS.cardBackground,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        padding: 16,
+        fontSize: 15,
+        color: '#1F2937',
+        backgroundColor: '#F9FAFB',
     },
     textArea: {
-        minHeight: 100,
+        minHeight: 120,
         textAlignVertical: 'top',
     },
     selectButton: {
@@ -606,18 +629,18 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 8,
-        padding: SPACING.md,
-        backgroundColor: COLORS.cardBackground,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        padding: 16,
+        backgroundColor: '#F9FAFB',
     },
     selectButtonText: {
-        fontSize: 16,
-        color: COLORS.text,
+        fontSize: 15,
+        color: '#1F2937',
     },
     selectArrow: {
         fontSize: 12,
-        color: COLORS.textSecondary,
+        color: '#6B7280',
     },
     customFieldContainer: {
         marginBottom: SPACING.md,
@@ -667,33 +690,35 @@ const styles = StyleSheet.create({
     },
     footer: {
         flexDirection: 'row',
-        padding: SPACING.md,
+        padding: 20,
+        backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
-        borderTopColor: COLORS.border,
-        backgroundColor: COLORS.cardBackground,
+        borderTopColor: '#F3F4F6',
+        ...SHADOWS.medium,
     },
     button: {
-        paddingVertical: SPACING.md,
-        borderRadius: 8,
+        paddingVertical: 16,
+        borderRadius: 14,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     primaryButton: {
-        backgroundColor: COLORS.primary,
+        // Handled by LinearGradient now, so we remove the solid background color
     },
     primaryButtonText: {
         color: '#FFFFFF',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     secondaryButton: {
-        backgroundColor: '#F5F5F5',
-        borderWidth: 1,
-        borderColor: COLORS.border,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 0, // Removing border for a cleaner look
     },
     secondaryButtonText: {
-        color: COLORS.text,
+        color: '#4B5563',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
     },
 });
 

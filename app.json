@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Caller",
-    "slug": "caller",
+    "name": "Vivtej TeleCRM",
+    "slug": "vivtej-telecrm",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.jpg",
+    "icon": "./assets/app_logo.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.jpg",
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.jpg",
+        "foregroundImage": "./assets/app_logo.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.vivtej.telecrm",
@@ -30,17 +30,28 @@
         "POST_NOTIFICATIONS",
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
-        "READ_CALL_LOG"
+        "READ_CALL_LOG",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "FOREGROUND_SERVICE",
+        "READ_PHONE_STATE"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.jpg"
+      "favicon": "./assets/app_logo.png"
     },
     "plugins": [
       "@react-native-community/datetimepicker",
       "./plugins/withCallLogPermissions",
       "./plugins/withFirebaseConfig",
-      "./plugins/withCallModule"
+      "./plugins/withCallModule",
+      [
+        "expo-file-system",
+        {
+          "shouldHandleManagedDownloads": true
+        }
+      ],
+      "./plugins/withPhoneStateReceiver"
     ]
   }
 }

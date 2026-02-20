@@ -346,38 +346,6 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
         />
     );
 
-    if (isLoading && !refreshing) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={28} color="#111827" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{filterLabel}</Text>
-                </View>
-
-                {/* Floating Search Pill */}
-                <View style={styles.searchPillContainer}>
-                    <View style={styles.searchPill}>
-                        <TextInput
-                            style={styles.searchInputPill}
-                            placeholder="Search contacts"
-                            editable={false}
-                            placeholderTextColor="#9CA3AF"
-                        />
-                    </View>
-                </View>
-
-                <View style={[styles.listContent, { paddingTop: 10 }]}>
-                    {[1, 2, 3, 4, 5, 6].map((key) => (
-                        <ContactCardSkeleton key={key} />
-                    ))}
-                </View>
-            </SafeAreaView>
-        );
-    }
-
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
@@ -395,7 +363,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
                 <View style={styles.searchPill}>
                     <TextInput
                         style={styles.searchInputPill}
-                        placeholder="Search contacts"
+                        placeholder="Search contacts..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         placeholderTextColor="#9CA3AF"
@@ -455,24 +423,32 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
                 </View>
             )}
 
-            <FlatList
-                data={displayedContacts}
-                renderItem={renderContactCard}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={() => (
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No contacts found for {filterLabel}</Text>
-                    </View>
-                )}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={handleRefresh}
-                        colors={[COLORS.primary]}
-                    />
-                }
-            />
+            {isLoading && !refreshing && displayedContacts.length === 0 ? (
+                <View style={[styles.listContent, { paddingTop: 10 }]}>
+                    {[1, 2, 3, 4, 5, 6].map((key) => (
+                        <ContactCardSkeleton key={key} />
+                    ))}
+                </View>
+            ) : (
+                <FlatList
+                    data={displayedContacts}
+                    renderItem={renderContactCard}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={() => (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyText}>No contacts found for {filterLabel}</Text>
+                        </View>
+                    )}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={handleRefresh}
+                            colors={[COLORS.primary]}
+                        />
+                    }
+                />
+            )}
 
             <QuickActionsSheet
                 contact={selectedContact}

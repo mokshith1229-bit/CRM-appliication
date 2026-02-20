@@ -46,7 +46,8 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
             { id: 'magicbricks', label: 'Magic Bricks', icon: 'domain' },
             { id: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
             { id: 'referral', label: 'Referral', icon: 'people' },
-            { id: 'website', label: 'Website', icon: 'web' }
+            { id: 'website', label: 'Website', icon: 'web' },
+            { id: 'offline', label: 'Offline', icon: 'storefront' }
         ];
 
         sources.forEach(source => {

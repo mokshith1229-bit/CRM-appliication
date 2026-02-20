@@ -543,7 +543,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             )}
 
             {/* Content Area */}
-            {isLoading && pagination.page === 1 ? (
+            {isLoading && pagination.page === 1 && displayedContacts.length === 0 ? (
                 renderSkeletons()
             ) : (
                 <FlatList
