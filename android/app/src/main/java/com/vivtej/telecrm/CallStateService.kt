@@ -8,8 +8,8 @@ import com.facebook.react.jstasks.HeadlessJsTaskConfig
 
 class CallStateService : HeadlessJsTaskService() {
 
-    override fun getTaskConfig(intent: Intent): HeadlessJsTaskConfig? {
-        val extras = intent.extras ?: Bundle()
+    override fun getTaskConfig(intent: Intent?): HeadlessJsTaskConfig? {
+        val extras = intent?.extras ?: Bundle()
         return HeadlessJsTaskConfig(
             "CallStateTask",
             Arguments.fromBundle(extras),
