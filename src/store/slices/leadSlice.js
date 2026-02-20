@@ -384,6 +384,77 @@ export const validateLogOwnership = createAsyncThunk(
     }
 );
 
+
+// Thunk to fetch Combined Enquiries (Enquiries + Campaign Records)
+export const fetchCombinedEnquiries = createAsyncThunk(
+    'leads/fetchCombinedEnquiries',
+    async (filters = {}, { dispatch, rejectWithValue }) => {
+        try {
+            // 1. Fetch Enquiries
+            const enquiriesResponse = await axiosClient.get('/enquiries', { params: filters });
+            let combinedData = [];
+
+            if (enquiriesResponse.success || enquiriesResponse.data) {
+                if (enquiriesResponse.data && enquiriesResponse.data.records) {
+                     combinedData = [...enquiriesResponse.data.records];
+                } else {
+                     combinedData = [...(enquiriesResponse.data || enquiriesResponse.result || [])];
+                }
+            }
+
+            // 2. Fetch Campaigns
+            const campaignsResponse = await axiosClient.get('/campaigns');
+            const campaigns = campaignsResponse.data || campaignsResponse.result || [];
+
+            // 3. Fetch Records for each Campaign (Parallel)
+            // Note: We are fetching PAGE 1 only for now to avoid massive data load
+            const campaignPromises = campaigns.map(campaign => 
+                axiosClient.get(`/campaigns/${campaign._id || campaign.id}/records`, { params: { ...filters, page: 1, limit: 1000 } })
+                    .then(res => {
+                        const data = res.data || res.result;
+                        let records = [];
+                        if (Array.isArray(data)) records = data;
+                        else if (data && (data.records || data.leads)) records = data.records || data.leads;
+                        
+                        // Inject Campaign Info
+                        return records.map(r => ({
+                            ...r,
+                            campaignId: campaign._id || campaign.id,
+                            campaignName: campaign.name,
+                            source: campaign.name, // Ensure source is also set for Fallback
+                            isCampaignLead: true,
+                            attributes: {
+                                ...r.attributes,
+                                campaignName: campaign.name
+                            }
+                        }));
+                    })
+                    .catch(err => []) // Ignore errors for individual campaigns
+            );
+
+            const allCampaignRecords = await Promise.all(campaignPromises);
+            
+            // 4. Flatten and Merge
+            allCampaignRecords.forEach(records => {
+                // Normalize IDs and add to combined
+                 const normalizedRecords = records.map(r => ({ ...r, id: r._id || r.id }));
+                 combinedData = [...combinedData, ...normalizedRecords];
+            });
+            
+            // 5. Remove duplicates (by _id or id) just in case
+            const uniqueData = Array.from(new Map(combinedData.map(item => [item._id || item.id, item])).values());
+            
+            // Sort by date (createdAt desc)
+            uniqueData.sort((a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt));
+
+            return uniqueData;
+
+        } catch (error) {
+            return rejectWithValue(error.message || 'Failed to fetch combined enquiries');
+        }
+    }
+);
+
 const leadSlice = createSlice({
     name: 'leads',
     initialState: {
@@ -616,6 +687,21 @@ const leadSlice = createSlice({
             // Fetch Tenant Config
             .addCase(fetchTenantConfig.fulfilled, (state, action) => {
                 state.tenantConfig = action.payload;
+            })
+            // Combined Enquiries
+            .addCase(fetchCombinedEnquiries.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(fetchCombinedEnquiries.fulfilled, (state, action) => {
+                state.isLoading = false;
+                state.leads = action.payload;
+                // Reset pagination since we are doing custom aggregation
+                state.pagination = { page: 1, pages: 1, total: action.payload.length };
+            })
+            .addCase(fetchCombinedEnquiries.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload;
             });
     },
 });

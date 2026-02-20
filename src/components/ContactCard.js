@@ -289,11 +289,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderBottomWidth: 0.5,
-        borderBottomColor: '#E0E0E0',
+        backgroundColor: COLORS.background,
+        paddingVertical: 12, // Slightly reduced vertical padding
+        paddingHorizontal: 12, // Reduced horizontal padding
+        marginBottom: 8, // Reduced margin bottom
+        // marginHorizontal removed
+        borderRadius: 12, // Slightly less rounded
+        // More subtle shadow
+        shadowColor: COLORS.shadowBlue,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+        borderWidth: 1,
+        borderColor: '#F0F0F5', 
     },
     leftSection: {
         flexDirection: 'row',
@@ -301,16 +310,18 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 54,
+        height: 54,
+        borderRadius: 27,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
+        marginRight: 14,
+        borderWidth: 2,
+        borderColor: COLORS.lightViolet, // Light Violet border
     },
     avatarText: {
-        color: '#FFFFFF',
-        fontSize: 18,
+        color: COLORS.background,
+        fontSize: 20,
         fontWeight: '600',
     },
     info: {
@@ -319,27 +330,33 @@ const styles = StyleSheet.create({
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: 6,
+        flexWrap: 'wrap',
     },
     name: {
-        fontSize: 16,
-        fontWeight: '400',
-        color: '#000000',
+        fontSize: 17,
+        fontWeight: '700',
+        color: COLORS.royalBlue, // Royal Blue
         marginRight: 8,
+        letterSpacing: 0.3,
     },
     statusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+        borderRadius: 12,
+        backgroundColor: '#F3E5F5',
     },
     statusBadgeText: {
-        fontSize: 11,
-        fontWeight: '600',
+        fontSize: 10,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     phoneText: {
         fontSize: 14,
-        color: '#333',
-        marginBottom: 2, // Reverted to smaller spacing
+        fontWeight: '500',
+        color: COLORS.deepPurple, // Deep Purple
+        marginBottom: 4,
     },
     statusRow: {
         flexDirection: 'row',
@@ -357,70 +374,85 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     statusText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '500',
+        color: '#666',
     },
     bullet: {
         fontSize: 12,
-        color: '#999',
-        marginHorizontal: 16, // Significantly increased spacing
+        color: COLORS.lightViolet, // Light Violet bullet
+        marginHorizontal: 8,
     },
     timeText: {
-        fontSize: 13,
-        color: '#666',
+        fontSize: 12,
+        color: '#888',
+        fontWeight: '400',
     },
     assignedText: {
-        fontSize: 13,
-        color: '#666',
+        fontSize: 12,
+        color: COLORS.purple, // Purple
+        fontWeight: '500',
     },
     callButton: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: 'transparent',
+        backgroundColor: COLORS.lightVioletBg, // Very light violet bg
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: COLORS.lightPurpleBorder, // Light purple border
+        marginLeft: 8,
     },
     callIconCustom: {
-        width: 24,
-        height: 24,
-        // tintColor: COLORS.primary, // Removed to show original image (black) as it is a JPG
+        width: 22,
+        height: 22,
     },
     callButtonIcon: {
         fontSize: 18,
     },
     assignedByText: {
-        fontSize: 12,
-        color: '#8E8E93',
+        fontSize: 11,
+        color: COLORS.violet, // Violet
         marginTop: 2,
+        fontStyle: 'italic',
     },
     leadSourceText: {
-        fontSize: 12,
-        color: '#007AFF',
-        fontWeight: '600',
+        fontSize: 11,
+        color: COLORS.purple, // Purple
+        fontWeight: '700',
         marginTop: 2,
+        backgroundColor: COLORS.violetAccent,
+        alignSelf: 'flex-start',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        overflow: 'hidden',
     },
     transferredByText: {
-        fontSize: 12,
-        color: '#8E8E93',
+        fontSize: 11,
+        color: COLORS.violet, // Violet
         marginTop: 1,
+        fontStyle: 'italic',
     },
     attributesContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        marginTop: 4,
+        marginTop: 6,
         gap: 6,
     },
     attributeChip: {
-        backgroundColor: '#F3F4F6',
+        backgroundColor: COLORS.lightVioletBg, // Light violet
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: 8,
+        borderRadius: 6,
+        borderWidth: 0.5,
+        borderColor: '#DDD6FE',
     },
     attributeText: {
-        fontSize: 11,
-        color: '#374151',
-        fontWeight: '500',
+        fontSize: 10,
+        color: COLORS.darkPurpleText, // Darker purple text
+        fontWeight: '600',
     },
 });
 

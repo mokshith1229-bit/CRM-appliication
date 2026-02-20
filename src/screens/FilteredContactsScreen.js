@@ -16,7 +16,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateLeadStatus, updateLead, fetchLeads, fetchEnquiries, clearLeads, ensureLead } from '../store/slices/leadSlice';
+import { 
+    fetchLeads, 
+    fetchEnquiries, 
+    fetchCombinedEnquiries,
+    clearLeads, 
+    ensureLead, 
+    updateLeadStatus,
+    updateLead 
+} from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
 import ContactCardSkeleton from '../components/ContactCardSkeleton'; // Import Skeleton
@@ -140,7 +148,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
 
          // Dispatch
          if (route.params?.isEnquiryMode) {
-             dispatch(fetchEnquiries(filters));
+             dispatch(fetchCombinedEnquiries(filters));
          } else {
              // Include enquiries only when filtering by lead source from CustomDrawer
              if (filterId && filterId.startsWith('source_')) {
@@ -575,7 +583,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     listContent: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 0, // Removed padding
         paddingBottom: 100,
     },
     emptyState: {

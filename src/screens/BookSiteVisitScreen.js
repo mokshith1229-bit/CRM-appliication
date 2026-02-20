@@ -167,9 +167,11 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
             occupation: occupation.trim(),
             company_name: companyName.trim(),
             lead_source: leadSource,
-            status: leadStatus,
+            lead_source: leadSource,
+            // Only include status if creating new or if updating and status changed
+            ...((!isUpdateMode || leadStatus !== (route.params?.lead?.status || 'New')) && { status: leadStatus }),
             requirement: requirement.trim(),
-            site_visit_done: true, // Always true from this screen
+            site_visit_done: true,
             site_visit_review: siteVisitReview.trim(),
             site_visit_done_by: siteVisitDoneBy || undefined,
             project_id: projectId || undefined,

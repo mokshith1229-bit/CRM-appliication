@@ -20,6 +20,18 @@ export const COLORS = {
     // Filter bar
     filterActive: '#007AFF',
     filterInactive: '#8E8E93',
+
+    // New Palette - Royal Blue & Purple Theme
+    royalBlue: '#2850DC',
+    deepPurple: '#5014B4',
+    purple: '#6414B4',
+    violet: '#7850DC',
+    lightViolet: '#8C50DC',
+    lightVioletBg: '#F5F3FF', // Very light violet for backgrounds
+    lightPurpleBorder: '#E9D5FF', // Light purple for borders
+    violetAccent: '#F3E8FF', // Accent background
+    darkPurpleText: '#5B21B6', // Darker purple for text
+    shadowBlue: '#2850DC', // Shadow color
 };
 
 export const SPACING = {

@@ -134,7 +134,9 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                 phone: editedContact.phone,
                 email: editedContact.email,
                 whatsapp_number: editedContact.whatsapp,
-                status: editedContact.status,
+                whatsapp_number: editedContact.whatsapp,
+                // Only include status if it changed to prevent auto-conversion
+                ...(editedContact.status !== contact.status && { status: editedContact.status }),
                 lead_source: editedContact.lead_source || editedContact.source,
                 photo: editedContact.photo,
                 call_logs: editedContact.callLogs,

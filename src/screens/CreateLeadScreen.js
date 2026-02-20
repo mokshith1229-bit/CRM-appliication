@@ -44,6 +44,7 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const [companyName, setCompanyName] = useState('');
     const [leadSource, setLeadSource] = useState('self');
     const [leadStatus, setLeadStatus] = useState('New');
+    const [originalStatus, setOriginalStatus] = useState('New'); // Track original status
     const [requirement, setRequirement] = useState('');
     const [customFields, setCustomFields] = useState([]);
     const [showAddField, setShowAddField] = useState(false);
@@ -120,6 +121,7 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
         setCompanyName(lead.company_name || '');
         setLeadSource(lead.lead_source || '');
         setLeadStatus(lead.status || 'New');
+        setOriginalStatus(lead.status || 'New');
         setRequirement(lead.requirement || '');
         
         // Handle custom fields if they exist
@@ -153,6 +155,7 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
             setCompanyName(data.company_name || '');
             setLeadSource(data.lead_source || 'self');
             setLeadStatus(data.status || 'New');
+            setOriginalStatus(data.status || 'New');
             setRequirement(data.requirement || '');
             
             // Handle custom fields if any
@@ -238,12 +241,15 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
             occupation: occupation.trim() || '',
             company_name: companyName.trim() || '',
             lead_source: leadSource,
-            status: leadStatus,
+            lead_source: leadSource,
+            // status: leadStatus, // Removed unconditional status
             requirement: requirement.trim() || '',
             custom_fields: customFields.reduce((acc, field) => {
                 acc[field.name] = field.value;
                 return acc;
             }, {}),
+            // Only include status if creating new or if updating and status changed
+            ...((!isUpdateMode || leadStatus !== originalStatus) && { status: leadStatus }),
         };
 
         try {

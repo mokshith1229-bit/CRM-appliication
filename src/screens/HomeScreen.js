@@ -22,7 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 // import { useContactStore } from '../store/contactStore'; // Replaced by Redux
 // import { useCampaignStore } from '../store/campaignStore'; // Replaced by Redux
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchLeads, fetchEnquiries, setActiveFilter, updateLeadStatus, ensureLead, validateLogOwnership } from '../store/slices/leadSlice';
+import { fetchLeads, fetchEnquiries, fetchCombinedEnquiries, setActiveFilter, updateLeadStatus, ensureLead, validateLogOwnership } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
 import FilterBar from '../components/FilterBar';
@@ -252,7 +252,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         }
 
         if (activeFilter === 'new_leads') {
-           dispatch(fetchEnquiries(filters)); 
+           dispatch(fetchCombinedEnquiries(filters)); 
         } else {
            // Fetch leads for 'all', 'contacts', and status filters
            dispatch(fetchLeads(filters));
@@ -591,7 +591,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                          }
                          // For New Leads (Enquiries)
                          else if (activeFilter === 'new_leads' && !isLoading && pagination.page < pagination.pages) {
-                             dispatch(fetchEnquiries({
+                             dispatch(fetchCombinedEnquiries({
                                  page: pagination.page + 1,
                                  search: searchQuery,
                                  startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),
