@@ -160,7 +160,6 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
-
     return (
         <TouchableOpacity
             style={styles.card}

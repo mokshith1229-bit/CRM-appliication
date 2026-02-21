@@ -23,7 +23,8 @@ import {
     clearLeads,
     ensureLead,
     updateLeadStatus,
-    updateLead
+    updateLead,
+    fetchLeadDetails
 } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
@@ -107,6 +108,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     // Unified Fetch Logic for this Screen
     const fetchWithFilters = React.useCallback(() => {
+        dispatch(clearLeads());
         const filters = {};
 
         // 1. Apply Base Filter from Drawer (filterId)
@@ -199,7 +201,8 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     // For now, implementing the removal of client-side logic as priority.
     // I will replace the previous `useEffect` block completely.
 
-    const selectedContact = selectedContactId ? displayedContacts.find(c => c.id === selectedContactId) : null;
+    const [fullSelectedContact, setFullSelectedContact] = useState(null);
+    const selectedContact = fullSelectedContact || (selectedContactId ? displayedContacts.find(c => c.id === selectedContactId) : null);
 
     // Check for reminders
     useEffect(() => {
@@ -333,11 +336,57 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     const renderContactCard = ({ item }) => (
         <ContactCard
             contact={item}
-            onPress={(contact) => {
-                setSelectedContactId(contact.id);
+            onPress={async (contact) => {
+                setFullSelectedContact(null); // Clear previously cached full contact
+                // Check if it's a real lead and not a device log
+                if (contact && contact.id && !String(contact.id).startsWith('log-')) {
+                    try {
+                        const fullLead = await dispatch(fetchLeadDetails(contact.id)).unwrap();
+                        const mappedContact = {
+                            ...contact, 
+                            ...fullLead,
+                            id: fullLead._id || fullLead.id,
+                            leadSource: fullLead.lead_source || fullLead.source,
+                            campaignId: fullLead.campaign_id,
+                            campaignName: fullLead.attributes?.campaignName || contact.campaignName,
+                            callLogs: fullLead.call_logs || contact.callLogs,
+                            notes: fullLead.notes || contact.notes,
+                            isNewLead: fullLead.status === 'New' || fullLead.status === 'Unprocessed',
+                            attributes: fullLead.attributes || contact.attributes
+                        };
+                        setFullSelectedContact(mappedContact);
+                        setSelectedContactId(mappedContact.id);
+                    } catch (error) {
+                        console.error("Failed to fetch full lead details:", error);
+                        setSelectedContactId(contact.id);
+                    }
+                } else {
+                     setSelectedContactId(contact.id);
+                }
                 setShowQuickActions(true);
             }}
-            onLongPress={(contact) => {
+            onLongPress={async (contact) => {
+                setFullSelectedContact(null);
+                if (contact && contact.id && !String(contact.id).startsWith('log-')) {
+                    try {
+                        const fullLead = await dispatch(fetchLeadDetails(contact.id)).unwrap();
+                         const mappedContact = {
+                            ...contact, 
+                            ...fullLead,
+                            id: fullLead._id || fullLead.id,
+                            leadSource: fullLead.lead_source || fullLead.source,
+                            campaignId: fullLead.campaign_id,
+                            campaignName: fullLead.attributes?.campaignName || contact.campaignName,
+                            callLogs: fullLead.call_logs || contact.callLogs,
+                            notes: fullLead.notes || contact.notes,
+                            isNewLead: fullLead.status === 'New' || fullLead.status === 'Unprocessed',
+                            attributes: fullLead.attributes || contact.attributes
+                        };
+                        setFullSelectedContact(mappedContact);
+                    } catch (error) {
+                         console.error("Failed to fetch full lead details:", error);
+                    }
+                }
                 setSelectedContactId(contact.id);
                 setShowStatusOverlay(true);
             }}

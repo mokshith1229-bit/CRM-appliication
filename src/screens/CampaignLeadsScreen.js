@@ -110,9 +110,13 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     // Unified Fetch Logic
     const fetchWithFilters = (pageOrReset = 1) => {
+        if (pageOrReset === 1) {
+            dispatch(clearCampaignLeads());
+        }
         const filters = {
             campaignId,
             page: pageOrReset,
+            limit: 20
         };
 
         if (searchQuery) filters.search = searchQuery;
@@ -233,10 +237,6 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         });
     };
 
-    const handleAvatarPress = (contact) => {
-        setSelectedContactId(contact.id);
-        setShowQuickActions(true);
-    };
 
     const renderContactCard = ({ item }) => (
         <ContactCard
@@ -249,8 +249,8 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 setSelectedContactId(contact.id);
                 setShowStatusOverlay(true);
             }}
-            onAvatarPress={handleAvatarPress}
-            onCallPress={handleCallAction}
+            onAvatarPress={handleCallAction}
+            onCallPress={null}
         />
     );
 
@@ -321,8 +321,9 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 )}
                 ListFooterComponent={() => (
                     isLoading && displayedLeads.length > 0 ? (
-                        <View style={styles.footerLoader}>
-                            <ActivityIndicator size="small" color={COLORS.primaryPurple} />
+                        <View style={{ paddingVertical: 10 }}>
+                            <ContactCardSkeleton />
+                            <ContactCardSkeleton />
                         </View>
                     ) : null
                 )}

@@ -25,13 +25,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const CustomDrawer = ({ visible, onClose, navigation }) => {
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [showTestCallModal, setShowTestCallModal] = useState(false);
+    const [shouldRender, setShouldRender] = useState(visible);
     const contacts = useContactStore(state => state.contacts);
     const dispatch = useDispatch();
     const campaigns = useSelector(state => state.leads.campaigns);
     const { sources, statuses } = useSelector(state => state.config);
     const clearProfile = useProfileStore((state) => state.clearProfile);
     const clearSubscription = useSubscriptionStore((state) => state.clearSubscription);
-    const slideAnim = React.useRef(new Animated.Value(-300)).current;
+    const slideAnim = React.useRef(new Animated.Value(-320)).current;
 
     const groupedSources = React.useMemo(() => {
         const groups = {};
@@ -94,6 +95,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
 
     React.useEffect(() => {
         if (visible) {
+            setShouldRender(true);
             Animated.spring(slideAnim, {
                 toValue: 0,
                 useNativeDriver: true,
@@ -102,10 +104,12 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
             }).start();
         } else {
             Animated.timing(slideAnim, {
-                toValue: -300,
+                toValue: -320,
                 duration: 250,
                 useNativeDriver: true,
-            }).start();
+            }).start(() => {
+                setShouldRender(false);
+            });
         }
     }, [visible]);
 
@@ -192,12 +196,12 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
         // },
     ];
 
-    if (!visible) return null;
+    if (!shouldRender && !visible) return null;
 
     return (
         <>
             <Modal
-                visible={visible}
+                visible={shouldRender || visible}
                 transparent
                 animationType="none"
                 onRequestClose={onClose}
@@ -219,7 +223,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                     >
                         <SafeAreaView style={styles.drawerContent}>
                             <View style={styles.header}>
-                                <TouchableOpacity onPress={() => navigation.navigate('MyProfile')}>
+                                <TouchableOpacity onPress={() => { onClose(); navigation.navigate('MyProfile'); }}>
                                     <View style={styles.profileAvatarContainer}>
                                         <Text style={styles.profileAvatarText}>
                                             {useProfileStore.getState().profile?.name?.charAt(0) || 'U'}

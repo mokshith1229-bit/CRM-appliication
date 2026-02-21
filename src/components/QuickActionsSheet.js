@@ -28,6 +28,7 @@ import TransferLeadModal from './TransferLeadModal';
 import StatusPicker from './StatusPicker';
 import CallLogService from '../services/CallLogService';
 import AudioPlayer from './AudioPlayer';
+import { formatRequirementsFromFields } from '../utils/sourceHelper';
 
 // Helper to format date relative or absolute
 const formatDate = (dateString) => {
@@ -132,8 +133,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
     useEffect(() => {
         if (visible && freshContact) {
+            const dynamicRequirement = formatRequirementsFromFields(freshContact);
             setLocalLeadInfo({
-                requirement: freshContact.requirement || '',
+                requirement: dynamicRequirement || freshContact.requirement || '',
                 remark: freshContact.remark || '',
             });
         }
@@ -143,12 +145,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         if (newNote.trim() && freshContact) {
             try {
                 // VALIDATION: If log contact, must have status and source
-                if (freshContact._source === 'log') {
-                    if (!freshContact.status || (!freshContact.lead_source && !freshContact.leadSource)) {
-                        Alert.alert("Required Fields", "Please select Lead Status and Lead Source before adding a note.");
-                        return;
-                    }
-                }
+                // if (freshContact._source === 'log') {
+                //     if (!freshContact.status || (!freshContact.lead_source && !freshContact.leadSource)) {
+                //         Alert.alert("Required Fields", "Please select Lead Status and Lead Source before adding a note.");
+                //         return;
+                //     }
+                // }
 
                 // Ensure lead exists first
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
@@ -203,12 +205,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         if (freshContact) {
             try {
                 // VALIDATION: If log contact, must have status and source
-                if (freshContact._source === 'log') {
-                    if (!freshContact.status || (!freshContact.lead_source && !freshContact.leadSource)) {
-                        Alert.alert("Required Fields", "Please select Lead Status and Lead Source before transferring.");
-                        return;
-                    }
-                }
+                // if (freshContact._source === 'log') {
+                //     if (!freshContact.status)   {
+                //         Alert.alert("Required Fields", "Please select Lead Status before transferring.");
+                //         return;
+                //     }
+                // }
 
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
@@ -248,12 +250,12 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
         try {
             // VALIDATION: If log contact, must have status and source
-            if (freshContact._source === 'log') {
-                if (!freshContact.status || (!freshContact.lead_source && !freshContact.leadSource)) {
-                    Alert.alert("Required Fields", "Please select Lead Status and Lead Source before setting a reminder.");
-                    return;
-                }
-            }
+            // if (freshContact._source === 'log') {
+            //     if (!freshContact.status || (!freshContact.lead_source && !freshContact.leadSource)) {
+            //         Alert.alert("Required Fields", "Please select Lead Status and Lead Source before setting a reminder.");
+            //         return;
+            //     }
+            // }
 
             const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 

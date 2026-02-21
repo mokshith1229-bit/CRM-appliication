@@ -190,13 +190,17 @@ export const fetchCampaignRecords = createAsyncThunk(
     'leads/fetchCampaignRecords',
     async ({ campaignId, ...filters }, { rejectWithValue }) => {
         try {
-            // Include flags in payload to help reducer
             const page = filters.page || 1;
             const response = await axiosClient.get(`/campaigns/${campaignId}/records`, { params: filters });
-            console.log('API FETCH CAMPAIGN RECORDS RESPONSE:', response); 
             if (response.success || response.data) {
                 const data = response.data || response.result;
-                return { ...data, meta_page: page }; // Pass page for reducer
+                const records = Array.isArray(data) ? data : (data.records || data.leads || []);
+                const pagination = data.pagination || {
+                    page: data.page || filters.page || 1,
+                    pages: data.pages || data.totalPages || 1,
+                    total: data.total || records.length
+                };
+                return { records, pagination, meta_page: page };
             } else {
                 return rejectWithValue(response.message);
             }
@@ -255,32 +259,12 @@ export const syncCallLogs = createAsyncThunk(
 
             const logs = await CallLogService.getLogsForNumber(phone, 20);
             
+            
             if (logs.length > 0) {
-                // Map to our schema
-                const newLogs = logs.map(log => ({
-                    id: log.timestamp, // Use timestamp as ID for uniqueness
-                    date: new Date(parseInt(log.timestamp)).toISOString(),
-                    status: log.type === 'MISSED' ? 'Missed' : (log.type === 'INCOMING' ? 'Received' : 'Dialed'),
-                    duration: log.duration + 's',
-                    notes: 'Auto-synced from device',
-                    type: 'Call',
-                    agentName: 'System'
-                }));
-
-                // Merge with existing logs
-                const existingLogs = lead.call_logs || [];
-                const existingIds = new Set(existingLogs.map(l => l.id));
-                const uniqueNewLogs = newLogs.filter(l => !existingIds.has(String(l.id))); // Ensure ID string comparison
-
-                if (uniqueNewLogs.length > 0) {
-                     const updatedLogs = [...uniqueNewLogs, ...existingLogs];
-                     // Update lead
-                     await dispatch(updateLead({ 
-                         id: leadId, 
-                         data: { call_logs: updatedLogs } 
-                     }));
-                     return updatedLogs;
-                }
+                // Previously this pushed directly to Lead document array locally.
+                // CallLogService handles backend sync automatically now.
+                // We should just refresh the lead or let the backend serve them.
+                return null;
             }
             return null;
         } catch (error) {
@@ -333,34 +317,35 @@ export const ensureLead = createAsyncThunk(
                 const state = getState();
                 const currentUser = state.auth?.user;
                 const agentName = currentUser ? currentUser.name : 'System';
-                
                 // Create payload for new lead
                 const leadPayload = {
                     name: contact.name || contact.phone,
                     phone: contact.phone,
-                    lead_source: contact.lead_source || '',
+                    lead_source: contact.lead_source || 'Offline',
                     status: initialStatus || '', // No default to 'New'
                     // Add other fields if available
                     email: contact.email,
-                    whatsapp_number: contact.whatsapp || contact.phone,
-                    call_logs: contact.lastCallRecord ? [{
-                        date: contact.lastCallRecord.date || new Date().toISOString(),
-                        status: contact.callStatus === 'missed' ? 'Missed' : 'Received',
-                        duration: contact.lastCallRecord.duration || '0s',
-                        notes: 'Auto-imported from device',
-                        type: 'Call',
-                        agentName: agentName
-                    }] : []
+                    whatsapp_number: contact.whatsapp || contact.phone
                 };
 
                 // VALIDATION: Ensure status and source are provided
-                if (!leadPayload.status || !leadPayload.lead_source) {
-                    return rejectWithValue('Please select lead status and source before performing this action.');
+                if (!leadPayload.status) {
+                    return rejectWithValue('Please select lead status before performing this action.');
                 }
 
                 console.log('ensureLead: Creating lead...', leadPayload);
                 // Dispatch createLead
                 const result = await dispatch(createLead(leadPayload)).unwrap();
+                
+                // CRITICAL: After conversion, trigger a full historical sync for this number
+                // to ensure all old logs on the device are uploaded to the newly created lead.
+                if (result && (result._id || result.id)) {
+                    // Fire and forget, or background task, to not block the UI transition
+                    CallLogService.syncAllLogsForNumber(leadPayload.phone).catch(err => 
+                        console.error('ensureLead: Historical sync failed', err)
+                    );
+                }
+                
                 return result; // This is the new lead with _id
             }
             
@@ -512,6 +497,8 @@ const leadSlice = createSlice({
     reducers: {
         setActiveFilter: (state, action) => {
             state.activeFilter = action.payload;
+            state.leads = []; // Clear current leads to show skeleton
+            state.isLoading = true; // Set loading to true immediately
             // Reset pagination when filter changes so skeleton shows correctly
             state.pagination = {
                 page: 1,
@@ -643,48 +630,33 @@ const leadSlice = createSlice({
                 state.isLoading = false;
                 state.error = action.payload;
             })
-            .addCase(fetchCampaignRecords.pending, (state, action) => {
-                // Only show full-screen loader if we are on page 1 and have no records
-                if (!action.meta.arg.page || action.meta.arg.page === 1) {
-                    if (state.campaignLeads.length === 0) {
-                        state.isLoading = true;
-                    }
-                }
+            .addCase(fetchCampaignRecords.pending, (state) => {
+                state.isLoading = true;
                 state.error = null;
             })
             .addCase(fetchCampaignRecords.fulfilled, (state, action) => {
-                 state.isLoading = false;
-                 // Normalize response to ensure we have pagination data
-                 const response = action.payload; // This is directly from return response.data || response.result
-                 
-                 // If the payload is the array of records directly (old behavior) or has pagination
-                 if (Array.isArray(response)) {
-                    state.campaignLeads = response.map(l => ({ 
-                        ...l, 
-                        id: l._id || l.id 
-                    }));
-                    state.campaignPagination = { page: 1, pages: 1, total: response.length };
-                  } else if (response.records || response.leads) {
-                    const records = (response.records || response.leads).map(l => ({
+                state.isLoading = false;
+                const { records, pagination, meta_page } = action.payload || {};
+                
+                if (records) {
+                    const normalizedRecords = records.map(l => ({
                         ...l,
-                        id: l._id // Normalize to id for UI consistency
+                        id: l._id || l.id
                     }));
                     
-                    // Extract from nested pagination object if present
-                    const paginationData = response.pagination || {};
-                    const page = paginationData.page || response.page || 1;
-                    const pages = paginationData.totalPages || paginationData.pages || response.pages || 1;
-                    const total = paginationData.total || response.total || records.length;
+                    const page = pagination?.page || meta_page || 1;
+                    const pages = pagination?.pages || pagination?.totalPages || 1;
+                    const total = pagination?.total || normalizedRecords.length;
                     
                     if (page === 1) {
-                        state.campaignLeads = records;
+                        state.campaignLeads = normalizedRecords;
                     } else {
-                        const existingIds = new Set(state.campaignLeads.map(l => l._id));
-                        const newRecords = records.filter(l => !existingIds.has(l._id));
+                        const existingIds = new Set(state.campaignLeads.map(l => String(l.id || l._id)));
+                        const newRecords = normalizedRecords.filter(l => !existingIds.has(String(l.id || l._id)));
                         state.campaignLeads = [...state.campaignLeads, ...newRecords];
                     }
                     state.campaignPagination = { page, pages, total };
-                 }
+                }
             })
             .addCase(fetchCampaignRecords.rejected, (state, action) => {
                 state.isLoading = false;
