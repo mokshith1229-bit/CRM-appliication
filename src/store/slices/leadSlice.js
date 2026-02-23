@@ -7,7 +7,7 @@ export const fetchLeads = createAsyncThunk(
     async (filters = {}, { rejectWithValue }) => {
         try {
             const response = await axiosClient.get('/leads', { params: filters });
-        if (response.data) {
+            if (response.data) {
                 const { leads, total, page, pages } = response.data;
                 const mappedLeads = leads.map(lead => ({
                     ...lead,
@@ -71,11 +71,11 @@ export const searchLeads = createAsyncThunk(
             if (!query || query.length < 2) {
                 return []; // Don't search for very short queries
             }
-            
+
             const response = await axiosClient.get('/leads/search', {
                 params: { q: query, field }
             });
-            
+
             if (response.success) {
                 return response.data || [];
             } else {
@@ -100,14 +100,14 @@ export const updateLeadStatus = createAsyncThunk(
             }
         } catch (error) {
             // 1. Extract the most specific message possible
-    const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || 'An unknown error occurred';
+            const errorMessage = error.response?.data?.message  // The custom backend message
+                || error.response?.data           // Fallback to data object
+                || error.message                  // Fallback to "Request failed..."
+                || 'An unknown error occurred';
 
-    // 2. Log it for your own debugging
-    // 3. Return it to your Redux state / UI
-    return rejectWithValue(errorMessage);
+            // 2. Log it for your own debugging
+            // 3. Return it to your Redux state / UI
+            return rejectWithValue(errorMessage);
         }
     }
 );
@@ -121,27 +121,32 @@ export const updateLead = createAsyncThunk(
             // Payload is sent as is, status key is already standard
             const payload = { ...data };
             const response = await axiosClient.put(`/leads/${id}`, payload);
-            
+
             if (response.success || response.data) {
                 // Support both result and data keys based on apiResponse utility
                 const updatedLead = response.result || response.data;
                 return {
                     ...updatedLead,
-                    status: updatedLead.status // Normalize
-                }; 
+                    ...data,
+                    attributes: {
+                        ...(updatedLead.attributes || {}),
+                        ...(data.attributes || {})
+                    },
+                    status: updatedLead.status || data.status // Normalize
+                };
             } else {
                 return rejectWithValue(response.message || 'Failed to update lead');
             }
         } catch (error) {
             // 1. Extract the most specific message possible
-    const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || 'An unknown error occurred';
+            const errorMessage = error.response?.data?.message  // The custom backend message
+                || error.response?.data           // Fallback to data object
+                || error.message                  // Fallback to "Request failed..."
+                || 'An unknown error occurred';
 
 
-    // 3. Return it to your Redux state / UI
-    return rejectWithValue(errorMessage);
+            // 3. Return it to your Redux state / UI
+            return rejectWithValue(errorMessage);
         }
     }
 );
@@ -152,7 +157,7 @@ export const fetchEnquiries = createAsyncThunk(
     async (filters = {}, { rejectWithValue }) => {
         try {
             const response = await axiosClient.get('/enquiries', { params: filters });
-            console.log('API FETCH ENQUIRIES RESPONSE:', response.data ? response.data.length : 'No Data'); 
+            console.log('API FETCH ENQUIRIES RESPONSE:', response.data ? response.data.length : 'No Data');
             if (response.success || response.data) {
                 // Return full response to handle pagination in reducer
                 return response;
@@ -171,7 +176,7 @@ export const fetchCampaignRecords = createAsyncThunk(
     async ({ campaignId, ...filters }, { rejectWithValue }) => {
         try {
             const response = await axiosClient.get(`/campaigns/${campaignId}/records`, { params: filters });
-            console.log('API FETCH CAMPAIGN RECORDS RESPONSE:', response); 
+            console.log('API FETCH CAMPAIGN RECORDS RESPONSE:', response);
             if (response.success || response.data) {
                 return response.data || response.result;
             } else {
@@ -231,7 +236,7 @@ export const syncCallLogs = createAsyncThunk(
             if (!phone) return rejectWithValue('No phone number for lead');
 
             const logs = await CallLogService.getLogsForNumber(phone, 20);
-            
+
             if (logs.length > 0) {
                 // Map to our schema
                 const newLogs = logs.map(log => ({
@@ -250,13 +255,13 @@ export const syncCallLogs = createAsyncThunk(
                 const uniqueNewLogs = newLogs.filter(l => !existingIds.has(String(l.id))); // Ensure ID string comparison
 
                 if (uniqueNewLogs.length > 0) {
-                     const updatedLogs = [...uniqueNewLogs, ...existingLogs];
-                     // Update lead
-                     await dispatch(updateLead({ 
-                         id: leadId, 
-                         data: { call_logs: updatedLogs } 
-                     }));
-                     return updatedLogs;
+                    const updatedLogs = [...uniqueNewLogs, ...existingLogs];
+                    // Update lead
+                    await dispatch(updateLead({
+                        id: leadId,
+                        data: { call_logs: updatedLogs }
+                    }));
+                    return updatedLogs;
                 }
             }
             return null;
@@ -293,24 +298,24 @@ export const ensureLead = createAsyncThunk(
             // 2. ensureLead({ contact, initialStatus }) - destructured object
             const contact = payload?.contact || payload;
             const initialStatus = payload?.initialStatus;
-            
+
             // Validate contact exists
             if (!contact) {
                 return rejectWithValue('Contact is required');
             }
-            
+
             // Check if it's a device log or temporary contact
             if (contact._source === 'log' || (typeof contact.id === 'string' && contact.id.startsWith('log-'))) {
                 // VALIDATION: Ignore service numbers / IVR
                 if (!contact.phone || contact.phone.length < 10) {
-                     return rejectWithValue('Cannot convert service numbers (IVR) to leads.');
+                    return rejectWithValue('Cannot convert service numbers (IVR) to leads.');
                 }
 
                 // Get current user info
                 const state = getState();
                 const currentUser = state.auth?.user;
                 const agentName = currentUser ? currentUser.name : 'System';
-                
+
                 // Create payload for new lead
                 const leadPayload = {
                     name: contact.name || contact.phone,
@@ -334,16 +339,16 @@ export const ensureLead = createAsyncThunk(
                 const result = await dispatch(createLead(leadPayload)).unwrap();
                 return result; // This is the new lead with _id
             }
-            
+
             // Already a lead
             return contact;
         } catch (error) {
             // 1. Extract the most specific message possible
-    const errorMessage = error.response?.data?.message  // The custom backend message
-                      || error.response?.data           // Fallback to data object
-                      || error.message                  // Fallback to "Request failed..."
-                      || error || 'An unknown error occurred';
-                      
+            const errorMessage = error.response?.data?.message  // The custom backend message
+                || error.response?.data           // Fallback to data object
+                || error.message                  // Fallback to "Request failed..."
+                || error || 'An unknown error occurred';
+
             return rejectWithValue(errorMessage || 'Failed to ensure lead existence');
         }
     }
@@ -396,9 +401,9 @@ export const fetchCombinedEnquiries = createAsyncThunk(
 
             if (enquiriesResponse.success || enquiriesResponse.data) {
                 if (enquiriesResponse.data && enquiriesResponse.data.records) {
-                     combinedData = [...enquiriesResponse.data.records];
+                    combinedData = [...enquiriesResponse.data.records];
                 } else {
-                     combinedData = [...(enquiriesResponse.data || enquiriesResponse.result || [])];
+                    combinedData = [...(enquiriesResponse.data || enquiriesResponse.result || [])];
                 }
             }
 
@@ -408,14 +413,14 @@ export const fetchCombinedEnquiries = createAsyncThunk(
 
             // 3. Fetch Records for each Campaign (Parallel)
             // Note: We are fetching PAGE 1 only for now to avoid massive data load
-            const campaignPromises = campaigns.map(campaign => 
+            const campaignPromises = campaigns.map(campaign =>
                 axiosClient.get(`/campaigns/${campaign._id || campaign.id}/records`, { params: { ...filters, page: 1, limit: 1000 } })
                     .then(res => {
                         const data = res.data || res.result;
                         let records = [];
                         if (Array.isArray(data)) records = data;
                         else if (data && (data.records || data.leads)) records = data.records || data.leads;
-                        
+
                         // Inject Campaign Info
                         return records.map(r => ({
                             ...r,
@@ -433,17 +438,17 @@ export const fetchCombinedEnquiries = createAsyncThunk(
             );
 
             const allCampaignRecords = await Promise.all(campaignPromises);
-            
+
             // 4. Flatten and Merge
             allCampaignRecords.forEach(records => {
                 // Normalize IDs and add to combined
-                 const normalizedRecords = records.map(r => ({ ...r, id: r._id || r.id }));
-                 combinedData = [...combinedData, ...normalizedRecords];
+                const normalizedRecords = records.map(r => ({ ...r, id: r._id || r.id }));
+                combinedData = [...combinedData, ...normalizedRecords];
             });
-            
+
             // 5. Remove duplicates (by _id or id) just in case
             const uniqueData = Array.from(new Map(combinedData.map(item => [item._id || item.id, item])).values());
-            
+
             // Sort by date (createdAt desc)
             uniqueData.sort((a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt));
 
@@ -508,7 +513,7 @@ const leadSlice = createSlice({
         },
         removeLead: (state, action) => {
             // Remove lead by id - useful after transfer
-            state.leads = state.leads.filter(lead => 
+            state.leads = state.leads.filter(lead =>
                 (lead._id || lead.id) !== action.payload
             );
         }
@@ -523,7 +528,7 @@ const leadSlice = createSlice({
                 state.isLoading = false;
                 const { leads, pagination } = action.payload;
                 state.pagination = pagination;
-                
+
                 if (pagination.page == 1) {
                     state.leads = leads;
                 } else {
@@ -549,14 +554,14 @@ const leadSlice = createSlice({
             .addCase(updateLead.fulfilled, (state, action) => {
                 const originalId = action.meta.arg.id;
                 const newLead = action.payload;
-                
+
                 // If ID changed (Conversion occurred)
                 if (originalId !== newLead._id) {
                     // 1. Remove from leads/enquiries
                     state.leads = state.leads.filter(l => l._id !== originalId);
                     // 2. Remove from campaign records if it was there
                     state.campaignLeads = state.campaignLeads.filter(l => l._id !== originalId);
-                    
+
                     // 3. Add to leads if not already there (shouldn't be, but safe)
                     const existingIndex = state.leads.findIndex(l => l._id === newLead._id);
                     if (existingIndex === -1) {
@@ -582,27 +587,27 @@ const leadSlice = createSlice({
                 state.error = null;
             })
             .addCase(fetchEnquiries.fulfilled, (state, action) => {
-                 state.isLoading = false;
-                 const response = action.payload;
-                 
-                 // Handle new paginated structure
-                 if (response.data && response.data.records) {
-                     const { records, page, total, limit } = response.data;
-                     const pages = Math.ceil(total / limit);
-                     
-                     if (page === 1) {
-                         state.leads = records;
-                     } else {
-                         // Check for duplicates
-                         const existingIds = new Set(state.leads.map(l => l._id));
-                         const newRecords = records.filter(l => !existingIds.has(l._id));
-                         state.leads = [...state.leads, ...newRecords];
-                     }
-                     state.pagination = { page, pages, total };
-                 } else {
-                     // Fallback for old structure or non-paginated response
-                     state.leads = response.data || response.result || [];
-                 }
+                state.isLoading = false;
+                const response = action.payload;
+
+                // Handle new paginated structure
+                if (response.data && response.data.records) {
+                    const { records, page, total, limit } = response.data;
+                    const pages = Math.ceil(total / limit);
+
+                    if (page === 1) {
+                        state.leads = records;
+                    } else {
+                        // Check for duplicates
+                        const existingIds = new Set(state.leads.map(l => l._id));
+                        const newRecords = records.filter(l => !existingIds.has(l._id));
+                        state.leads = [...state.leads, ...newRecords];
+                    }
+                    state.pagination = { page, pages, total };
+                } else {
+                    // Fallback for old structure or non-paginated response
+                    state.leads = response.data || response.result || [];
+                }
             })
             .addCase(fetchEnquiries.rejected, (state, action) => {
                 state.isLoading = false;
@@ -613,24 +618,24 @@ const leadSlice = createSlice({
                 state.error = null;
             })
             .addCase(fetchCampaignRecords.fulfilled, (state, action) => {
-                 state.isLoading = false;
-                 // Normalize response to ensure we have pagination data
-                 const response = action.payload; // This is directly from return response.data || response.result
-                 
-                 // If the payload is the array of records directly (old behavior) or has pagination
-                 if (Array.isArray(response)) {
-                    state.campaignLeads = response.map(l => ({ 
-                        ...l, 
-                        id: l._id || l.id 
+                state.isLoading = false;
+                // Normalize response to ensure we have pagination data
+                const response = action.payload; // This is directly from return response.data || response.result
+
+                // If the payload is the array of records directly (old behavior) or has pagination
+                if (Array.isArray(response)) {
+                    state.campaignLeads = response.map(l => ({
+                        ...l,
+                        id: l._id || l.id
                     }));
                     state.campaignPagination = { page: 1, pages: 1, total: response.length };
-                  } else if (response.records || response.leads) {
+                } else if (response.records || response.leads) {
                     const records = (response.records || response.leads).map(l => ({
                         ...l,
                         id: l._id // Normalize to id for UI consistency
                     }));
                     const { page, pages, total } = response;
-                    
+
                     if (page === 1) {
                         state.campaignLeads = records;
                     } else {
@@ -639,7 +644,7 @@ const leadSlice = createSlice({
                         state.campaignLeads = [...state.campaignLeads, ...newRecords];
                     }
                     state.campaignPagination = { page, pages, total };
-                 }
+                }
             })
             .addCase(fetchCampaignRecords.rejected, (state, action) => {
                 state.isLoading = false;
@@ -706,11 +711,11 @@ const leadSlice = createSlice({
     },
 });
 
-export const { 
-    setActiveFilter, 
-    clearLeads, 
-    clearLeadDetails, 
-    clearSearchResults, 
+export const {
+    setActiveFilter,
+    clearLeads,
+    clearLeadDetails,
+    clearSearchResults,
     removeLead,
     clearCampaignLeads
 } = leadSlice.actions;

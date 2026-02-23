@@ -15,6 +15,24 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { useDispatch, useSelector } from 'react-redux';
 import { setActiveFilter, createLead } from '../store/slices/leadSlice';
+import StatusPicker from '../components/StatusPicker';
+
+const BUDGET_OPTIONS = [
+    { label: '5 Lakhs to 50 Lakhs', value: '5 Lakhs to 50 Lakhs' },
+    { label: '50 Lakhs to 1 Cr', value: '50 Lakhs to 1 Cr' },
+    { label: '1 Cr to 3 Cr', value: '1 Cr to 3 Cr' },
+    { label: '3 Cr to 5 Cr', value: '3 Cr to 5 Cr' },
+    { label: '5 Cr to 7 Cr', value: '5 Cr to 7 Cr' },
+    { label: '7 Cr to 9 Cr', value: '7 Cr to 9 Cr' },
+    { label: '10 Cr +', value: '10 Cr +' }
+]
+const TIMELINE_OPTIONS = [
+    { label: '1 Month', value: '1 Month' },
+    { label: '3 Months', value: '3 Months' },
+    { label: '6 Months', value: '6 Months' },
+    { label: '1 Year', value: '1 Year' },
+    { label: 'More than 1 year', value: 'More than 1 year' }
+];
 
 const generateId = () => '_' + Math.random().toString(36).substr(2, 9);
 
@@ -35,20 +53,8 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
     const [location, setLocation] = useState('');
     const [timeline, setTimeline] = useState('');
 
-    // Section 5: Custom Fields
-    const [customFields, setCustomFields] = useState([]);
-
-    const handleAddCustomField = () => {
-        setCustomFields([...customFields, { id: generateId(), key: '', value: '' }]);
-    };
-
-    const handleUpdateCustomField = (id, field, text) => {
-        setCustomFields(customFields.map(f => f.id === id ? { ...f, [field]: text } : f));
-    };
-
-    const handleRemoveCustomField = (id) => {
-        setCustomFields(customFields.filter(f => f.id !== id));
-    };
+    const [showBudgetPicker, setShowBudgetPicker] = useState(false);
+    const [showTimelinePicker, setShowTimelinePicker] = useState(false);
 
     const validate = () => {
         const newErrors = {};
@@ -69,15 +75,16 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
             phone: phone.trim(),
             email: email.trim(),
             occupation: occupation.trim(),
-            requirement: requirement.trim(),
-            budget: budget.trim(),
-            location: location.trim(),
-            timeline: timeline.trim(),
             assignedTo: currentUser?.name || 'Self',
             assignedBy: currentUser?.name || 'System',
             leadSource: 'Manual Enquiry',
             status: 'New',
-            customFields,
+            attributes: {
+                requirement: requirement.trim(),
+                budget: budget.trim(),
+                location: location.trim(),
+                timeline: timeline.trim(),
+            }
         };
 
         try {
@@ -190,12 +197,16 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Budget (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="E.g. 1.5 Cr to 2 Cr"
-                                value={budget}
-                                onChangeText={setBudget}
-                            />
+                            <TouchableOpacity
+                                style={styles.pickerSelector}
+                                onPress={() => setShowBudgetPicker(true)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.pickerSelectorText, !budget && { color: '#9CA3AF' }]}>
+                                    {budget || 'Select Budget'}
+                                </Text>
+                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
+                            </TouchableOpacity>
                         </View>
 
                         <View style={styles.inputContainer}>
@@ -203,6 +214,7 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
                             <TextInput
                                 style={styles.input}
                                 placeholder="E.g. Whitefield, Bengaluru"
+                                placeholderTextColor="#9CA3AF"
                                 value={location}
                                 onChangeText={setLocation}
                             />
@@ -210,36 +222,20 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Timeline (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="E.g. Immediately, Within 3 months"
-                                value={timeline}
-                                onChangeText={setTimeline}
-                            />
-                        </View>
-                    </View>
-
-                    {/* SECTION 3 - ASSIGNMENT CARD */}
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Assignment Information</Text>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Assigned To</Text>
-                            <View style={styles.disabledInput}>
-                                <Text style={styles.disabledText}>{currentUser?.name || 'Self'}</Text>
+                            <TouchableOpacity
+                                style={styles.pickerSelector}
+                                onPress={() => setShowTimelinePicker(true)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.pickerSelectorText, !timeline && { color: '#9CA3AF' }]}>
+                                    {timeline || 'Select Timeline'}
+                                </Text>
                                 <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Assigned By</Text>
-                            <View style={styles.disabledInput}>
-                                <Text style={styles.disabledText}>{currentUser?.name || 'Self'}</Text>
-                            </View>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
-                    {/* SECTION 4 - SOURCE CARD */}
+                    {/* SECTION 3 - SOURCE CARD */}
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>Source</Text>
                         <View style={styles.inputContainer}>
@@ -250,44 +246,29 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
                         </View>
                     </View>
 
-                    {/* SECTION 5 - CUSTOM FIELDS */}
-                    <View style={styles.card}>
-                        <View style={styles.cardHeaderRow}>
-                            <Text style={styles.cardTitle}>Custom Fields</Text>
-                            <TouchableOpacity onPress={handleAddCustomField} style={styles.addButton}>
-                                <MaterialIcons name="add" size={20} color={COLORS.primaryPurple} />
-                                <Text style={styles.addButtonText}>Add Field</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {customFields.map((field, index) => (
-                            <View key={field.id} style={styles.customFieldRow}>
-                                <TextInput
-                                    style={[styles.input, styles.customInputKey]}
-                                    placeholder="Field Name"
-                                    value={field.key}
-                                    onChangeText={(text) => handleUpdateCustomField(field.id, 'key', text)}
-                                />
-                                <TextInput
-                                    style={[styles.input, styles.customInputValue]}
-                                    placeholder="Value"
-                                    value={field.value}
-                                    onChangeText={(text) => handleUpdateCustomField(field.id, 'value', text)}
-                                />
-                                <TouchableOpacity
-                                    onPress={() => handleRemoveCustomField(field.id)}
-                                    style={styles.removeButton}
-                                >
-                                    <MaterialIcons name="remove-circle-outline" size={24} color="#EF4444" />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                    </View>
-
                     {/* Bottom Padding for floating button */}
                     <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* BUDGET & TIMELINE PICKERS */}
+            <StatusPicker
+                visible={showBudgetPicker}
+                onClose={() => setShowBudgetPicker(false)}
+                options={BUDGET_OPTIONS}
+                selectedValue={budget}
+                onSelect={setBudget}
+                title="Select Budget"
+            />
+
+            <StatusPicker
+                visible={showTimelinePicker}
+                onClose={() => setShowTimelinePicker(false)}
+                options={TIMELINE_OPTIONS}
+                selectedValue={timeline}
+                onSelect={setTimeline}
+                title="Select Timeline"
+            />
 
             {/* FIXED BOTTOM BUTTON */}
             <View style={styles.bottomBar}>
@@ -411,6 +392,22 @@ const styles = StyleSheet.create({
     disabledText: {
         fontSize: 16,
         color: '#6B7280',
+    },
+    pickerSelector: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    pickerSelectorText: {
+        fontSize: 16,
+        color: '#111827',
+        fontFamily: 'SF Pro Display',
     },
     customFieldRow: {
         flexDirection: 'row',

@@ -10,10 +10,9 @@ import {
     Platform,
     Alert,
     Linking,
-    FlatList,
     ActivityIndicator
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { openWhatsApp, sendSMS, sendEmail } from '../utils/intents';
@@ -27,6 +26,24 @@ import * as Notifications from 'expo-notifications';
 import TransferLeadModal from './TransferLeadModal';
 import StatusPicker from './StatusPicker';
 import CallLogService from '../services/CallLogService';
+
+const BUDGET_OPTIONS = [
+    { label: '5 Lakhs to 50 Lakhs', value: '5 Lakhs to 50 Lakhs' },
+    { label: '50 Lakhs to 1 Cr', value: '50 Lakhs to 1 Cr' },
+    { label: '1 Cr to 3 Cr', value: '1 Cr to 3 Cr' },
+    { label: '3 Cr to 5 Cr', value: '3 Cr to 5 Cr' },
+    { label: '5 Cr to 7 Cr', value: '5 Cr to 7 Cr' },
+    { label: '7 Cr to 9 Cr', value: '7 Cr to 9 Cr' },
+    { label: '10 Cr +', value: '10 Cr +' }
+];
+
+const TIMELINE_OPTIONS = [
+    { label: '1 Month', value: '1 Month' },
+    { label: '3 Months', value: '3 Months' },
+    { label: '6 Months', value: '6 Months' },
+    { label: '1 Year', value: '1 Year' },
+    { label: 'More than 1 year', value: 'More than 1 year' }
+];
 
 // Helper to format date relative or absolute
 const formatDate = (dateString) => {
@@ -106,8 +123,14 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     // Local state for editing lead info
     const [localLeadInfo, setLocalLeadInfo] = useState({
         requirement: '',
+        budget: '',
+        location: '',
+        timeline: '',
         remark: '',
     });
+
+    const [showBudgetPicker, setShowBudgetPicker] = useState(false);
+    const [showTimelinePicker, setShowTimelinePicker] = useState(false);
 
     // Fetch team members and detailed lead info when sheet becomes visible
     useEffect(() => {
@@ -132,7 +155,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     useEffect(() => {
         if (visible && freshContact) {
             setLocalLeadInfo({
-                requirement: freshContact.requirement || '',
+                requirement: freshContact.attributes?.requirement || freshContact.requirement || '',
+                budget: freshContact.attributes?.budget || freshContact.budget || '',
+                location: freshContact.attributes?.location || freshContact.location || '',
+                timeline: freshContact.attributes?.timeline || freshContact.timeline || '',
                 remark: freshContact.remark || '',
             });
         }
@@ -176,9 +202,18 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
                 await dispatch(updateLead({
                     id: targetLead.id || targetLead._id,
-                    data: { requirement: localLeadInfo.requirement }
+                    data: {
+                        attributes: {
+                            ...targetLead.attributes,
+                            requirement: localLeadInfo.requirement,
+                            budget: localLeadInfo.budget,
+                            location: localLeadInfo.location,
+                            timeline: localLeadInfo.timeline
+                        }
+                    }
                 })).unwrap();
                 setIsEditingLead(false);
+                Alert.alert('Success', 'Requirement details saved successfully');
             } catch (error) {
                 // const errorMessage = typeof error === 'string' ? error : (error.message || "Failed to update requirement");
                 const errorMessage = error.response?.data?.message  // The custom backend message
@@ -731,31 +766,70 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                             {/* Lead Requirement Section */}
                             <View style={styles.leadSection}>
                                 <View style={styles.leadHeader}>
-                                    <Text style={styles.sectionTitle}>Lead Requirement</Text>
-                                    <TouchableOpacity onPress={() => setIsEditingLead(!isEditingLead)}>
-                                        <Text style={styles.editButton}>{isEditingLead ? 'Cancel' : 'Edit'}</Text>
-                                    </TouchableOpacity>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <MaterialCommunityIcons name="clipboard-text-outline" size={20} color={COLORS.primary} />
+                                        <Text style={styles.sectionTitle}>Requirement Details</Text>
+                                    </View>
                                 </View>
 
-                                {isEditingLead ? (
-                                    <View>
+                                <View>
+                                    <View style={styles.inputContainer}>
+                                        <Text style={styles.label}>Requirement</Text>
                                         <TextInput
-                                            style={styles.textInput}
+                                            style={[styles.input, styles.multilineInput]}
                                             multiline
-                                            numberOfLines={3}
+                                            numberOfLines={4}
                                             value={localLeadInfo.requirement}
                                             onChangeText={(text) => setLocalLeadInfo({ ...localLeadInfo, requirement: text })}
-                                            placeholder="Add lead description..."
+                                            placeholder="Looking for 3BHK villa in gated community"
+                                            placeholderTextColor="#D1D5DB"
                                         />
-                                        <TouchableOpacity style={styles.saveButton} onPress={handleSaveLead}>
-                                            <Text style={styles.saveButtonText}>Save</Text>
+                                    </View>
+
+                                    <View style={styles.inputContainer}>
+                                        <Text style={styles.label}>Budget (Optional)</Text>
+                                        <TouchableOpacity
+                                            style={styles.pickerSelector}
+                                            onPress={() => setShowBudgetPicker(true)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={[styles.pickerSelectorText, !localLeadInfo.budget && { color: '#9CA3AF' }]}>
+                                                {localLeadInfo.budget || 'Select Budget'}
+                                            </Text>
+                                            <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
                                         </TouchableOpacity>
                                     </View>
-                                ) : (
-                                    <Text style={styles.leadDescText}>
-                                        {localLeadInfo.requirement || 'No lead description added yet. Tap Edit to add.'}
-                                    </Text>
-                                )}
+
+                                    <View style={styles.inputContainer}>
+                                        <Text style={styles.label}>Preferred Location (Optional)</Text>
+                                        <TextInput
+                                            style={styles.input}
+                                            value={localLeadInfo.location}
+                                            onChangeText={(text) => setLocalLeadInfo({ ...localLeadInfo, location: text })}
+                                            placeholder="E.g. Whitefield, Bengaluru"
+                                            placeholderTextColor="#9CA3AF"
+                                        />
+                                    </View>
+
+                                    <View style={styles.inputContainer}>
+                                        <Text style={styles.label}>Timeline (Optional)</Text>
+                                        <TouchableOpacity
+                                            style={styles.pickerSelector}
+                                            onPress={() => setShowTimelinePicker(true)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={[styles.pickerSelectorText, !localLeadInfo.timeline && { color: '#9CA3AF' }]}>
+                                                {localLeadInfo.timeline || 'Select Timeline'}
+                                            </Text>
+                                            <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Show save button only when fields have been modified to save space, or always. I'll show it always to be explicit. */}
+                                    <TouchableOpacity style={[styles.saveButton, { marginTop: 8 }]} onPress={handleSaveLead}>
+                                        <Text style={styles.saveButtonText}>Save Details</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
 
                             {/* Site Visit Information */}
@@ -1053,6 +1127,35 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                     </View>
                 </View>
             </Modal>
+
+            {/* BUDGET & TIMELINE PICKERS */}
+            <StatusPicker
+                visible={showBudgetPicker}
+                onClose={() => setShowBudgetPicker(false)}
+                options={BUDGET_OPTIONS}
+                selectedValue={localLeadInfo.budget}
+                onSelect={(val) => setLocalLeadInfo({ ...localLeadInfo, budget: val })}
+                title="Select Budget"
+            />
+
+            <StatusPicker
+                visible={showTimelinePicker}
+                onClose={() => setShowTimelinePicker(false)}
+                options={TIMELINE_OPTIONS}
+                selectedValue={localLeadInfo.timeline}
+                onSelect={(val) => setLocalLeadInfo({ ...localLeadInfo, timeline: val })}
+                title="Select Timeline"
+            />
+
+            <TransferLeadModal
+                visible={isTransferModalVisible}
+                onClose={() => setIsTransferModalVisible(false)}
+                leadIds={freshContact ? [freshContact.id || freshContact._id] : []}
+                onSuccess={() => {
+                    setIsTransferModalVisible(false);
+                    onClose();
+                }}
+            />
         </Modal>
     );
 };
@@ -1448,6 +1551,48 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '400',
         color: '#6B7280',
+    },
+    inputContainer: {
+        marginBottom: 16,
+    },
+    label: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#4B5563',
+        marginBottom: 8,
+    },
+    input: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 14,
+        color: '#111827',
+        fontFamily: 'SF Pro Display',
+    },
+    pickerSelector: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    pickerSelectorText: {
+        fontSize: 14,
+        color: '#111827',
+        fontFamily: 'SF Pro Display',
+    },
+    multilineInput: {
+        height: 100,
+        paddingTop: 12,
+        textAlignVertical: 'top',
     },
 
     // Dialog / Modal Styles
