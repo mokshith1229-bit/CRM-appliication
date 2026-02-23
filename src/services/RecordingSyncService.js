@@ -76,16 +76,8 @@ class RecordingSyncService {
     this.isSyncing = true;
     try {
         const dir = new Directory(savedFolderUri);
-        
-        // Ensure we still have permission to read the directory.
-        // It's possible the user revoked the permission from app settings.
-        const canRead = await dir.canReadAsync();
-        if (!canRead) {
-            console.warn("Lost read permission for the recordings directory.");
-            return;
-        }
 
-        const files = await dir.list(); // Returns an array of File/Directory objects
+        const files = await dir.list(); // throws if permission was revoked — caught below
 
         for (const item of files) {
             // Check for common audio formats used for call recordings

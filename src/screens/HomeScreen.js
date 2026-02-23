@@ -22,7 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 // import { useContactStore } from '../store/contactStore'; // Replaced by Redux
 // import { useCampaignStore } from '../store/campaignStore'; // Replaced by Redux
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchLeads, fetchEnquiries, fetchCombinedEnquiries, setActiveFilter, updateLeadStatus, ensureLead, validateLogOwnership, fetchLeadDetails } from '../store/slices/leadSlice';
+import { fetchLeads, fetchEnquiries, fetchCombinedEnquiries, fetchAllCalls, setActiveFilter, updateLeadStatus, ensureLead, validateLogOwnership, fetchLeadDetails } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
 import FilterBar from '../components/FilterBar';
@@ -58,119 +58,207 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     const [callLogsPage, setCallLogsPage] = useState(1); // Pagination for call logs
     const [hasMoreLogs, setHasMoreLogs] = useState(true); // Track if more logs available
     const [loadingMoreLogs, setLoadingMoreLogs] = useState(false); // Loading state for pagination
+    const [logEntityMap, setLogEntityMap] = useState({}); // Entity context per phone from checkNumbers
 
     // Redux
     const dispatch = useDispatch();
     const { leads, isLoading, activeFilter, pagination } = useSelector((state) => state.leads);
+    const { sources, statuses } = useSelector(state => state.config);
     const { user } = useSelector((state) => state.auth);
     const loadLogs = async () => {
         try {
             setCallLogsPage(1);
             const logsPerPage = 50;
             const logs = await CallLogService.getAllRecentLogs(logsPerPage);
+            setLocalCallLogs(logs);
+            setHasMoreLogs(logs.length === logsPerPage);
 
-            // VALIDATION: Filter out logs that belong to other agents
-            let verifiedLogs = logs;
-            /*
+            // Background: resolve entity context (lead/enquiry/campaign) for source labels
             if (logs.length > 0) {
-                const phoneNumbers = logs.map(l => l.phoneNumber);
-                // validateLogOwnership checks backend for ownership
-                const ownershipMap = await dispatch(validateLogOwnership(phoneNumbers)).unwrap();
-                
-                // Filter out logs where status is 'other'
-                verifiedLogs = logs.filter(log => {
-                    const status = ownershipMap[log.phoneNumber];
-                    return status !== 'other'; // Keep 'mine', 'free', or undefined
-                });
-                console.log(`Filtered ${logs.length - verifiedLogs.length} logs belonging to others`);
+                const phoneNumbers = [...new Set(logs.map(l => l.phoneNumber).filter(Boolean))];
+                dispatch(validateLogOwnership(phoneNumbers))
+                    .unwrap()
+                    .then(entityMap => setLogEntityMap(entityMap))
+                    .catch(e => console.warn('[HomeScreen] Entity check failed:', e.message));
             }
-            */
-
-            setLocalCallLogs(verifiedLogs);
-            setHasMoreLogs(logs.length === logsPerPage);
-
-            setLocalCallLogs(verifiedLogs);
-            setHasMoreLogs(logs.length === logsPerPage);
         } catch (error) {
             console.error("Error loading logs:", error);
             setLocalCallLogs([]);
             setHasMoreLogs(false);
         }
     };
-    // Fetch logs when filter is 'all'
-    useEffect(() => {
-        if (activeFilter === 'all') {
-
-            loadLogs();
-        } else {
-            // Reset call logs when switching away from 'all' filter
-            setLocalCallLogs([]);
-            setCallLogsPage(1);
-            setHasMoreLogs(true);
+    // Helper to match phone numbers robustly (last 10 digits)
+    const isPhoneMatch = (p1, p2) => {
+        if (!p1 || !p2) return false;
+        const n1 = p1.replace(/[^0-9]/g, '');
+        const n2 = p2.replace(/[^0-9]/g, '');
+        if (n1.length >= 10 && n2.length >= 10) {
+            return n1.slice(-10) === n2.slice(-10);
         }
-    }, [activeFilter, refreshing]);
+        return n1 === n2;
+    };
+
+    // Fetch logs - only on mount or refreshing
+    // We persist them when switching filters to allow merging
+    useEffect(() => {
+        if (localCallLogs.length === 0 || refreshing) {
+            loadLogs();
+        }
+    }, [refreshing]);
 
     // Filter leads on frontend for display logic if needed or rely on backend.
     // Backend `fetchLeads` returns generic list.
     // We map them to match expected 'contact' shape for UI.
 
+    // Derive a display source label from a checkNumbers entity result
+    const getLogSource = (entity) => {
+        if (!entity) return { label: 'Device Log', type: 'device' };
+        const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+
+        // Helper to resolve source label from ID if needed
+        const resolveSourceLabel = (val) => {
+            if (!sources || sources.length === 0 || !val) return val;
+            const matchingSource = sources.find(s => {
+                const keyWithoutPrefix = s.key?.startsWith('source_') ? s.key.replace('source_', '') : s.key;
+                return keyWithoutPrefix === val || s.key === val || s.label === val;
+            });
+            return matchingSource ? matchingSource.label : val;
+        };
+
+        if (entity.type === 'lead') {
+            const rawSource = entity.lead_source || entity.source;
+            const resolved = resolveSourceLabel(rawSource);
+            return { label: resolved ? `Lead · ${cap(resolved)}` : 'Lead', type: 'lead' };
+        }
+        if (entity.type === 'enquiry') {
+            const rawSource = entity.source || entity.lead_source;
+            const resolved = resolveSourceLabel(rawSource);
+            return { label: resolved ? `Enquiry · ${resolved}` : 'Enquiry', type: 'enquiry' };
+        }
+        if (entity.type === 'campaign_record') {
+            return { label: entity.campaign_name ? `Campaign · ${entity.campaign_name}` : 'Campaign', type: 'campaign' };
+        }
+        return { label: 'Device Log', type: 'device' };
+    };
+
+    // Resolve best display name for a device log: prefer CRM entity name > device contact name > phone
+    const getLogName = (log) => {
+        const entity = logEntityMap[log.phoneNumber];
+        return entity?.name || log.name || log.phoneNumber;
+    };
+
     // Map leads from store directly for display
     // We rely on backend filtering now.
     const displayedContacts = React.useMemo(() => {
-        const mapLead = (lead) => ({
-            id: lead._id, // Map _id to id
-            name: lead.name,
-            phone: lead.phone,
-            email: lead.email,
-            status: lead.status,
-            leadSource: lead.lead_source || lead.source,
-            assignedTo: lead.assigned_to?.name || 'Unknown',
-            assigned_by: lead.assigned_by, // Pass full user object (or string for legacy)
-            transferredBy: lead.transfer_history && lead.transfer_history.length > 0
-                ? lead.transfer_history[lead.transfer_history.length - 1].transferred_by
-                : null, // Extract most recent transfer
-            photo: lead.photo, // Map photo
-            callLogs: lead.call_logs || [], // Map call_logs
-            notes: lead.notes || [], // Map notes
-            lastCallTime: lead.last_call_at || lead.updatedAt || lead.received_at,
-            callStatus: lead.attributes?.callStatus || 'none',
-            callSchedule: lead.attributes?.callSchedule,
-            isNewLead: lead.status === 'New' || lead.status === 'Unprocessed',
-            attributes: lead.attributes || {},
-            campaignId: lead.campaign_id, // Ensure campaignId is mapped
-            campaignName: lead.attributes?.campaignName, // Ensure campaignName is mapped
-            site_visit_done: lead.site_visit_done,
-            lastCallRecord: lead.call_logs && lead.call_logs.length > 0
-                ? lead.call_logs[lead.call_logs.length - 1]
-                : null
-        });
+        const mapLead = (item) => {
+            // Detect if this is a CallLog object (has entity populations) or a Lead/Enquiry object
+            let lead = item;
+            let logInfo = null;
 
-        if (activeFilter === 'all') {
-            const uniqueContacts = new Map();
+            if (item.lead_id || item.enquiry_id || item.campaign_record_id) {
+                // This is a CallLog document from /allcalls
+                lead = item.lead_id || item.enquiry_id || item.campaign_record_id;
+                logInfo = {
+                    duration: (item.duration || 0) + 's',
+                    date: item.timestamp,
+                    status: item.status
+                };
+                
+                // For campaign records, data is inside .data
+                if (item.campaign_record_id && item.campaign_record_id.data) {
+                    lead = { 
+                        ...item.campaign_record_id.data, 
+                        _id: item.campaign_record_id._id,
+                        campaign_name: item.campaign_record_id.batch_name 
+                    };
+                }
+            }
 
-            // 1. Add all Leads first
-            leads.forEach(lead => {
-                const mapped = mapLead(lead);
-                const normalizedPhone = mapped.phone?.replace(/[^0-9]/g, '');
-                if (normalizedPhone) {
+            // Priority 1: Log info from the CallLog itself (if this was a log entry)
+            // Priority 2: already normalized lastCallRecord in slice
+            // Priority 3: last_call field 
+            // Priority 4: Last item in call_logs array
+            let lastCallRecord = logInfo || lead.lastCallRecord || null;
+            if (!lastCallRecord) {
+                if (lead.last_call) {
+                    lastCallRecord = {
+                        duration: (lead.last_call.duration || 0) + 's',
+                        date: lead.last_call.timestamp,
+                        status: lead.last_call.status
+                    };
+                } else if (lead.call_logs && lead.call_logs.length > 0) {
+                    lastCallRecord = lead.call_logs[lead.call_logs.length - 1];
+                }
+            }
+
+            return {
+                id: lead._id || item._id, // Map _id to id
+                name: lead.name || 'Unknown',
+                phone: lead.phone,
+                email: lead.email,
+                status: lead.status || 'No Status',
+                leadSource: lead.lead_source || lead.source || lead.campaign_name,
+                assignedTo: lead.assigned_to?.name || 'Unknown',
+                assigned_by: lead.assigned_by, 
+                transferredBy: lead.transfer_history && lead.transfer_history.length > 0
+                    ? lead.transfer_history[lead.transfer_history.length - 1].transferred_by
+                    : null, 
+                photo: lead.photo, 
+                callLogs: lead.call_logs || [], 
+                notes: lead.notes || [], 
+                lastCallTime: logInfo?.date || lead.lastCallTime || lead.last_call?.timestamp || lead.last_call_at || lead.updatedAt || lead.received_at,
+                callStatus: logInfo?.status || lead.attributes?.callStatus || 'none',
+                callSchedule: lead.attributes?.callSchedule,
+                isNewLead: lead.status === 'New' || lead.status === 'Unprocessed',
+                attributes: lead.attributes || {},
+                campaignId: lead.campaign_id || item.campaign_record_id?._id, 
+                campaignName: lead.campaign_name || lead.attributes?.campaignName, 
+                site_visit_done: lead.site_visit_done,
+                lastCallRecord: lastCallRecord,
+                _logId: logInfo ? item._id : null // Flag to distinguish log-based entries
+            };
+        };
+
+        const uniqueContacts = new Map();
+
+        // 1. Add all Leads from current state (filtered by backend)
+        (leads || []).forEach(item => {
+            const mapped = mapLead(item);
+            const normalizedPhone = mapped.phone?.replace(/[^0-9]/g, '');
+            if (normalizedPhone) {
+                // If it's the "All Calls" tab, backend returns individual logs sorted DESC.
+                // We keep the first one encountered (newest) to avoid duplicates in the list.
+                // If it's "All Leads" or "New Enquiries", backend returns unique entities.
+                if (!uniqueContacts.has(normalizedPhone)) {
                     uniqueContacts.set(normalizedPhone, { ...mapped, _source: 'lead' });
                 }
-            });
+            }
+        });
 
-            // 2. Merge Logs
+        // 2. Merge Logs (Global device logs) - ONLY for "All Calls" tab
+        if (activeFilter === 'all') {
             localCallLogs.forEach(log => {
                 const normalizedPhone = log.phoneNumber?.replace(/[^0-9]/g, '');
                 if (!normalizedPhone) return;
 
-                const existing = uniqueContacts.get(normalizedPhone);
-                // Using timestamp from call log lib (usually ms or string)
+                // Try to find matching lead by phone
+                let existing = uniqueContacts.get(normalizedPhone);
+                if (!existing) {
+                    // Fallback: search for match using robust 10-digit logic
+                    for (const [phone, contact] of uniqueContacts.entries()) {
+                        if (isPhoneMatch(phone, normalizedPhone)) {
+                            existing = contact;
+                            break;
+                        }
+                    }
+                }
+
                 const logTimeStr = log.timestamp;
-                // Ensure logTime is valid date object
                 const logDate = new Date(parseInt(logTimeStr));
                 const logIso = logDate.toISOString();
 
                 if (existing) {
-                    // Update existing if log is newer
+                    // Update existing if device log is newer than what we have from backend
                     const existingTime = new Date(existing.lastCallTime || 0).getTime();
                     if (logDate.getTime() > existingTime) {
                         existing.lastCallTime = logIso;
@@ -180,20 +268,23 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                             date: logIso
                         };
                     }
-                    uniqueContacts.set(normalizedPhone, existing);
+                    // Save back with the normalized phone used to find it
+                    const key = existing.phone?.replace(/[^0-9]/g, '') || normalizedPhone;
+                    uniqueContacts.set(key, existing);
                 } else {
-                    // Create transient contact from log
-                    // Check specific types from react-native-call-log: 1=INCOMING, 2=OUTGOING, 3=MISSED
+                    // Only create transient contact from log if we are in "All" view
+                    // This prevents "Unsaved" logs from cluttering specific status filters
                     let callStatus = 'none';
                     if (log.type === 'MISSED' || log.type === '3') callStatus = 'missed';
-                    else callStatus = 'connected'; // Assume connected for others roughly
+                    else callStatus = 'connected';
 
                     uniqueContacts.set(normalizedPhone, {
                         id: `log-${log.timestamp}-${normalizedPhone}`,
-                        name: log.name || log.phoneNumber,
+                        name: getLogName(log),   // CRM name > device contact name > phone number
                         phone: log.phoneNumber,
                         status: 'Unsaved',
                         leadSource: 'Device Log',
+                        logSource: getLogSource(logEntityMap[log.phoneNumber]),
                         callStatus: callStatus,
                         lastCallTime: logIso,
                         lastCallRecord: {
@@ -206,16 +297,12 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                     });
                 }
             });
-
-            return Array.from(uniqueContacts.values()).sort((a, b) =>
-                new Date(b.lastCallTime || 0) - new Date(a.lastCallTime || 0)
-            );
-
-        } else {
-            // Standard mapping for other filters
-            return leads.map(mapLead);
         }
-    }, [leads, localCallLogs, activeFilter]);
+
+        return Array.from(uniqueContacts.values()).sort((a, b) =>
+            new Date(b.lastCallTime || 0) - new Date(a.lastCallTime || 0)
+        );
+    }, [leads, localCallLogs, activeFilter, logEntityMap]);
 
 
     // Unified Fetch Logic
@@ -251,16 +338,13 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             filters.endDate = dateRange.end.toISOString();
         }
 
-        if (activeFilter === 'new_leads') {
+        if (activeFilter === 'all') {
+            dispatch(fetchAllCalls(filters));
+        } else if (activeFilter === 'new_leads') {
             dispatch(fetchCombinedEnquiries(filters));
         } else {
-            // Fetch leads for 'all', 'contacts', and status filters
+            // Fetch leads for 'contacts' and specific status filters
             dispatch(fetchLeads(filters));
-
-            if (activeFilter === 'all') {
-                // Trigger log refresh explicitly if needed, though useEffect handles it on filter change
-                // Here purely for pagination if we wanted to fetch more logs? (Logs usually fixed size for now)
-            }
         }
     }, [activeFilter, searchQuery, dateFilter, dateRange, dispatch]);
 
@@ -622,7 +706,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                         if (activeFilter === 'all') {
                             // Fetch more leads from API
                             if (!isLoading && pagination.page < pagination.pages) {
-                                dispatch(fetchLeads({
+                                dispatch(fetchAllCalls({
                                     page: pagination.page + 1,
                                     search: searchQuery,
                                     startDate: dateFilter ? dateFilter.toISOString() : (dateRange ? dateRange.start.toISOString() : undefined),

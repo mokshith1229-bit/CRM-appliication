@@ -159,11 +159,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         if (visible && freshContact) {
             const dynamicRequirement = formatRequirementsFromFields(freshContact);
             setLocalLeadInfo({
-                requirement: freshContact.attributes?.requirement || freshContact.requirement || '',
                 budget: freshContact.attributes?.budget || freshContact.budget || '',
                 location: freshContact.attributes?.location || freshContact.location || '',
                 timeline: freshContact.attributes?.timeline || freshContact.timeline || '',
-                requirement: dynamicRequirement || freshContact.requirement || '',
+                requirement: freshContact.attributes?.requirement || freshContact.requirement ||dynamicRequirement ||  '',
                 remark: freshContact.remark || '',
             });
         }
@@ -472,7 +471,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                     subtitle: `Duration: ${item.duration}`,
                     note: item.notes,
                     icon: 'phone',
-                    color: item.status === 'Missed' ? '#F44336' : '#4CAF50'
+                    color: item.status === 'Missed' ? '#F44336' : '#4CAF50',
+                    duration: item.duration,
+                    recording_url: item.recording_url
                 });
             });
         }
@@ -564,12 +565,14 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                         </View>
                     )}
 
-                    {/* Audio Player for Calls */}
-                    {isCall && (
+                    {/* Audio Player for Calls - Hide if 0 duration or no recording URL */}
+                    {isCall && item.recording_url && parseFloat(item.duration || 0) > 0 && (
                         <View style={{ marginTop: 4, marginHorizontal: -6 }}>
                             <AudioPlayer
                                 recording={{
                                     status: item.title?.includes('Missed') ? 'Missed' : 'Connected',
+                                    recording_url: item.recording_url,
+                                    duration: item.duration
                                 }}
                             />
                         </View>

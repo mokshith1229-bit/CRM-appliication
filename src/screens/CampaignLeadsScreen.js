@@ -27,6 +27,7 @@ import ContactDetailScreen from './ContactDetailScreen';
 import ReminderModal from '../components/ReminderModal';
 import DateRangeModal from '../components/DateRangeModal';
 import { MaterialIcons } from '@expo/vector-icons';
+import CallLogService from '../services/CallLogService';
 
 const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     const { campaignId, campaignName } = route.params;
@@ -41,6 +42,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     const [dateRange, setDateRange] = useState(null); // Range filter { start, end }
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [reminderContact, setReminderContact] = useState(null);
+    const [localCallLogs, setLocalCallLogs] = useState([]);
 
     const dispatch = useDispatch();
     const leads = useSelector(state => state.leads.campaignLeads);
@@ -103,10 +105,70 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         }
     }, [route.params, leads]);
 
-    // Display leads directly from store
-    // Use mapped version if specific fields needed, but 'allLeads' usually has what we need
-    // We map to ensure consistent structure if backend response varies
-    const displayedLeads = leads; // Assuming leads are already in correct format from fetchLeads
+    // Helper to match phone numbers robustly (last 10 digits)
+    const isPhoneMatch = (p1, p2) => {
+        if (!p1 || !p2) return false;
+        const n1 = p1.replace(/[^0-9]/g, '');
+        const n2 = p2.replace(/[^0-9]/g, '');
+        if (n1.length >= 10 && n2.length >= 10) {
+            return n1.slice(-10) === n2.slice(-10);
+        }
+        return n1 === n2;
+    };
+
+    const loadLogs = async () => {
+        try {
+            const logs = await CallLogService.getAllRecentLogs(50);
+            setLocalCallLogs(logs);
+        } catch (error) {
+            console.error("[CampaignLeads] Error loading logs:", error);
+        }
+    };
+
+    // Display leads merged with local logs
+    const displayedLeads = React.useMemo(() => {
+        return leads.map(lead => {
+            const mapped = { 
+                ...lead,
+                campaignName: lead.campaign_name || lead.attributes?.campaignName || campaignName,
+                campaignId: lead.campaign_id || campaignId
+            };
+            const normalizedPhone = lead.phone?.replace(/[^0-9]/g, '');
+
+            // Normalization check if not already done in slice
+            if (!mapped.lastCallRecord && lead.last_call) {
+                mapped.lastCallRecord = {
+                    duration: (lead.last_call.duration || 0) + 's',
+                    date: lead.last_call.timestamp,
+                    status: lead.last_call.status
+                };
+                mapped.lastCallTime = lead.last_call.timestamp;
+            }
+
+            // Merge with local logs
+            if (normalizedPhone) {
+                const match = localCallLogs.find(log => {
+                    const logPhone = log.phoneNumber?.replace(/[^0-9]/g, '');
+                    return isPhoneMatch(normalizedPhone, logPhone);
+                });
+
+                if (match) {
+                    const logTime = new Date(parseInt(match.timestamp)).getTime();
+                    const existingTime = new Date(mapped.lastCallTime || 0).getTime();
+
+                    if (logTime > existingTime) {
+                        const logIso = new Date(logTime).toISOString();
+                        mapped.lastCallTime = logIso;
+                        mapped.lastCallRecord = {
+                            duration: match.duration + 's',
+                            date: logIso
+                        };
+                    }
+                }
+            }
+            return mapped;
+        });
+    }, [leads, localCallLogs]);
 
     // Unified Fetch Logic
     const fetchWithFilters = (pageOrReset = 1) => {
@@ -146,6 +208,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         dispatch(clearCampaignLeads());
         if (campaignId) {
             fetchWithFilters(1);
+            loadLogs();
         }
         return () => { dispatch(clearCampaignLeads()); };
     }, [campaignId, dispatch]);
@@ -154,6 +217,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         setRefreshing(true);
         if (campaignId) {
             fetchWithFilters(1);
+            await loadLogs();
         }
         setRefreshing(false);
     };

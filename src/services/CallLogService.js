@@ -60,6 +60,7 @@ const getLogsForNumber = async (phoneNumber, limit = 10) => {
 };
 
 const getAllRecentLogs = async (limit = 50) => {
+    
     if (Platform.OS !== 'android' || isExpoGo) return [];
     
     // Safety check if module failed to load
@@ -67,11 +68,12 @@ const getAllRecentLogs = async (limit = 50) => {
         console.warn('CallLogs native module is not available.');
         return [];
     }
-
+    
     const hasPermission = await requestPermission();
     if (!hasPermission) return [];
 
-    return await CallLogs.load(limit);
+    const data =  await CallLogs.load(limit);
+    return data;
 };
 
 const getLastSyncTimestamp = async () => {
@@ -92,11 +94,13 @@ const setLastSyncTimestamp = async (timestamp) => {
     }
 };
 
-const syncAllLogsForNumber = async (phoneNumber) => {
+// Sync all historical logs for a phone number, with an optional entity context
+// context: { type: 'lead', lead_id } | { type: 'enquiry', enquiry_id } | { type: 'campaign_record', campaign_id, campaign_record_id }
+const syncAllLogsForNumber = async (phoneNumber, context = null) => {
     if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
     
     try {
-        console.log(`Force syncing all logs for number: ${phoneNumber}...`);
+        console.log(`Force syncing all logs for number: ${phoneNumber}...`, context ? `Context: ${JSON.stringify(context)}` : 'No context');
         
         // Use a much larger limit to catch older history for this specific number
         const allLogs = await getAllRecentLogs(500);
@@ -114,14 +118,132 @@ const syncAllLogsForNumber = async (phoneNumber) => {
             return { success: true, message: 'No logs found for this number', updated: 0 };
         }
 
-        console.log(`Syncing ${targetedLogs.length} historical logs for ${phoneNumber} to server...`);
+        // Enrich each log with entity context if provided
+        const enrichedLogs = context
+            ? targetedLogs.map(log => ({ ...log, ...context }))
+            : targetedLogs;
+
+        console.log(`Syncing ${enrichedLogs.length} historical logs for ${phoneNumber} to server...`);
 
         const axiosClient = require('../api/axiosClient').default;
-        const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: targetedLogs });
+        const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
         
         return response.data;
     } catch (error) {
         console.error(`Error force syncing logs for ${phoneNumber}:`, error);
+        return { success: false, message: error.message };
+    }
+};
+
+// Sync call logs linked to a specific Lead
+const syncCallLogsForLead = async (lead_id, phoneNumber) => {
+    if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
+    
+    try {
+        console.log(`[CallLogService] Syncing logs for lead ${lead_id}, phone: ${phoneNumber}`);
+        const allLogs = await getAllRecentLogs(100);
+        console.log(`[CallLogService] Total device logs fetched: ${allLogs?.length ?? 0}`);
+        if (!allLogs || allLogs.length === 0) return { success: true, updated: 0 };
+
+        const normalizedTarget = phoneNumber.replace(/[^0-9]/g, '');
+        console.log(`[CallLogService] normalizedTarget: "${normalizedTarget}"`);
+
+        // Sample the first 5 numbers so we can see the format differences
+        console.log('[CallLogService] Sample log phoneNumbers (raw):',
+            allLogs.slice(0, 5).map(l => l.phoneNumber));
+
+        const targetedLogs = allLogs.filter(log => {
+            const logPhone = log.phoneNumber?.replace(/[^0-9]/g, '') ?? '';
+            const match = logPhone.includes(normalizedTarget) || normalizedTarget.includes(logPhone);
+            return match;
+        });
+
+        console.log(`[CallLogService] Matched logs for this number: ${targetedLogs.length}`);
+        if (targetedLogs.length === 0) return { success: true, updated: 0 };
+
+        const enrichedLogs = targetedLogs.map(log => ({
+            ...log,
+            callType: log.type,   // preserve device call direction before overwriting type
+            type: 'lead',         // entity type for backend routing
+            lead_id,
+        }));
+
+        console.log(`[CallLogService] Sending ${enrichedLogs.length} lead-linked logs to server...`);
+        const axiosClient = require('../api/axiosClient').default;
+        const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
+        console.log('[CallLogService] Sync response:', JSON.stringify(response.data ?? response));
+        return response.data;
+    } catch (error) {
+        console.error('[CallLogService] Error syncing lead call logs:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+// Sync call logs linked to a specific Enquiry
+const syncCallLogsForEnquiry = async (enquiry_id, phoneNumber) => {
+    if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
+    
+    try {
+        console.log(`[CallLogService] Syncing logs for enquiry ${enquiry_id}, phone: ${phoneNumber}`);
+        const allLogs = await getAllRecentLogs(100);
+        if (!allLogs || allLogs.length === 0) return { success: true, updated: 0 };
+
+        const normalizedTarget = phoneNumber.replace(/[^0-9]/g, '');
+        const targetedLogs = allLogs.filter(log => {
+            const logPhone = log.phoneNumber.replace(/[^0-9]/g, '');
+            return logPhone.includes(normalizedTarget) || normalizedTarget.includes(logPhone);
+        });
+
+        if (targetedLogs.length === 0) return { success: true, updated: 0 };
+
+        const enrichedLogs = targetedLogs.map(log => ({
+            ...log,
+            callType: log.type,   // preserve device call direction before overwriting type
+            type: 'enquiry',      // entity type for backend routing
+            enquiry_id,
+        }));
+
+        console.log(`[CallLogService] Sending ${enrichedLogs.length} enquiry-linked logs to server...`);
+        const axiosClient = require('../api/axiosClient').default;
+        const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
+        return response.data;
+    } catch (error) {
+        console.error('[CallLogService] Error syncing enquiry call logs:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+// Sync call logs linked to a specific Campaign Record
+const syncCallLogsForCampaignRecord = async (campaign_id, campaign_record_id, phoneNumber) => {
+    if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
+    
+    try {
+        console.log(`[CallLogService] Syncing logs for campaign record ${campaign_record_id}, phone: ${phoneNumber}`);
+        const allLogs = await getAllRecentLogs(100);
+        if (!allLogs || allLogs.length === 0) return { success: true, updated: 0 };
+
+        const normalizedTarget = phoneNumber.replace(/[^0-9]/g, '');
+        const targetedLogs = allLogs.filter(log => {
+            const logPhone = log.phoneNumber.replace(/[^0-9]/g, '');
+            return logPhone.includes(normalizedTarget) || normalizedTarget.includes(logPhone);
+        });
+
+        if (targetedLogs.length === 0) return { success: true, updated: 0 };
+
+        const enrichedLogs = targetedLogs.map(log => ({
+            ...log,
+            callType: log.type,      // preserve device call direction before overwriting type
+            type: 'campaign_record', // entity type for backend routing
+            campaign_id,
+            campaign_record_id,
+        }));
+
+        console.log(`[CallLogService] Sending ${enrichedLogs.length} campaign-record-linked logs to server...`);
+        const axiosClient = require('../api/axiosClient').default;
+        const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
+        return response.data;
+    } catch (error) {
+        console.error('[CallLogService] Error syncing campaign record call logs:', error);
         return { success: false, message: error.message };
     }
 };
@@ -168,6 +290,9 @@ const CallLogService = {
     getAllRecentLogs,
     syncCallLogsToServer,
     syncAllLogsForNumber,
+    syncCallLogsForLead,
+    syncCallLogsForEnquiry,
+    syncCallLogsForCampaignRecord,
     getLastSyncTimestamp,
     setLastSyncTimestamp,
 };

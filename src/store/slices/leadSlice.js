@@ -254,7 +254,7 @@ import CallLogService from '../../services/CallLogService';
 
 export const syncCallLogs = createAsyncThunk(
     'leads/syncCallLogs',
-    async (leadId, { getState, dispatch, rejectWithValue }) => {
+    async (leadId, { getState, rejectWithValue }) => {
         try {
             const state = getState();
             const lead = state.leads.leads.find(l => l._id === leadId);
@@ -263,42 +263,10 @@ export const syncCallLogs = createAsyncThunk(
             const phone = lead.phone;
             if (!phone) return rejectWithValue('No phone number for lead');
 
-            const logs = await CallLogService.getLogsForNumber(phone, 20);
-
-
-
-            if (logs.length > 0) {
-                // Previously this pushed directly to Lead document array locally.
-                // CallLogService handles backend sync automatically now.
-                // We should just refresh the lead or let the backend serve them.
-                return null;
-                // Map to our schema
-                const newLogs = logs.map(log => ({
-                    id: log.timestamp, // Use timestamp as ID for uniqueness
-                    date: new Date(parseInt(log.timestamp)).toISOString(),
-                    status: log.type === 'MISSED' ? 'Missed' : (log.type === 'INCOMING' ? 'Received' : 'Dialed'),
-                    duration: log.duration + 's',
-                    notes: 'Auto-synced from device',
-                    type: 'Call',
-                    agentName: 'System'
-                }));
-
-                // Merge with existing logs
-                const existingLogs = lead.call_logs || [];
-                const existingIds = new Set(existingLogs.map(l => l.id));
-                const uniqueNewLogs = newLogs.filter(l => !existingIds.has(String(l.id))); // Ensure ID string comparison
-
-                if (uniqueNewLogs.length > 0) {
-                    const updatedLogs = [...uniqueNewLogs, ...existingLogs];
-                    // Update lead
-                    await dispatch(updateLead({
-                        id: leadId,
-                        data: { call_logs: updatedLogs }
-                    }));
-                    return updatedLogs;
-                }
-            }
-            return null;
+            // Use the typed sync helper so logs are linked to this lead in the backend
+            const result = await CallLogService.syncCallLogsForLead(lead._id, phone);
+            console.log('[syncCallLogs] Result:', result);
+            return result;
         } catch (error) {
             return rejectWithValue(error.message);
         }
@@ -371,11 +339,12 @@ export const ensureLead = createAsyncThunk(
                 const result = await dispatch(createLead(leadPayload)).unwrap();
 
                 // CRITICAL: After conversion, trigger a full historical sync for this number
-                // to ensure all old logs on the device are uploaded to the newly created lead.
+                // linked to the newly created lead so all old logs are properly attributed.
                 if (result && (result._id || result.id)) {
-                    // Fire and forget, or background task, to not block the UI transition
-                    CallLogService.syncAllLogsForNumber(leadPayload.phone).catch(err =>
-                        console.error('ensureLead: Historical sync failed', err)
+                    const newLeadId = result._id || result.id;
+                    // Fire and forget — do not block the UI transition
+                    CallLogService.syncCallLogsForLead(newLeadId, leadPayload.phone).catch(err =>
+                        console.error('ensureLead: Historical lead sync failed', err)
                     );
                 }
 
@@ -421,7 +390,8 @@ export const validateLogOwnership = createAsyncThunk(
             if (!phoneNumbers || phoneNumbers.length === 0) return {};
             const response = await axiosClient.post('/leads/check-numbers', { phoneNumbers });
             if (response.success) {
-                return response.data; // Returns map { phone: 'mine' | 'other' | 'free' }
+                // Returns: { [phone]: { type, lead_id|enquiry_id|campaign_record_id, campaign_id?, ownership: 'mine'|'other' } | null }
+                return response.data;
             } else {
                 return rejectWithValue(response.message);
             }
@@ -442,51 +412,73 @@ export const fetchCombinedEnquiries = createAsyncThunk(
             let combinedData = [];
 
             if (enquiriesResponse.success || enquiriesResponse.data) {
-                if (enquiriesResponse.data && enquiriesResponse.data.records) {
-                    combinedData = [...enquiriesResponse.data.records];
-                } else {
-                    combinedData = [...(enquiriesResponse.data || enquiriesResponse.result || [])];
-                }
+                const results = enquiriesResponse.data?.records || enquiriesResponse.data || enquiriesResponse.result || [];
+                const normalizedEnquiries = results.map(l => {
+                    const normalized = { ...l };
+                    if (l.last_call) {
+                        normalized.lastCallRecord = {
+                            duration: (l.last_call.duration || 0) + 's',
+                            date: l.last_call.timestamp,
+                            status: l.last_call.status
+                        };
+                        normalized.lastCallTime = l.last_call.timestamp;
+                    }
+                    return normalized;
+                });
+                combinedData = [...normalizedEnquiries];
             }
 
-            // 2. Fetch Campaigns
-            const campaignsResponse = await axiosClient.get('/campaigns');
-            const campaigns = campaignsResponse.data || campaignsResponse.result || [];
+            // // 2. Fetch Campaigns
+            // const campaignsResponse = await axiosClient.get('/campaigns');
+            // const campaigns = campaignsResponse.data || campaignsResponse.result || [];
 
-            // 3. Fetch Records for each Campaign (Parallel)
-            // Note: We are fetching PAGE 1 only for now to avoid massive data load
-            const campaignPromises = campaigns.map(campaign =>
-                axiosClient.get(`/campaigns/${campaign._id || campaign.id}/records`, { params: { ...filters, page: 1, limit: 1000 } })
-                    .then(res => {
-                        const data = res.data || res.result;
-                        let records = [];
-                        if (Array.isArray(data)) records = data;
-                        else if (data && (data.records || data.leads)) records = data.records || data.leads;
+            // // 3. Fetch Records for each Campaign (Parallel)
+            // // Note: We are fetching PAGE 1 only for now to avoid massive data load
+            // const campaignPromises = campaigns.map(campaign =>
+            //     axiosClient.get(`/campaigns/${campaign._id || campaign.id}/records`, { params: { ...filters, page: 1, limit: 1000 } })
+            //         .then(res => {
+            //             const data = res.data || res.result;
+            //             let records = [];
+            //             if (Array.isArray(data)) records = data;
+            //             else if (data && (data.records || data.leads)) records = data.records || data.leads;
 
-                        // Inject Campaign Info
-                        return records.map(r => ({
-                            ...r,
-                            campaignId: campaign._id || campaign.id,
-                            campaignName: campaign.name,
-                            source: campaign.name, // Ensure source is also set for Fallback
-                            isCampaignLead: true,
-                            attributes: {
-                                ...r.attributes,
-                                campaignName: campaign.name
-                            }
-                        }));
-                    })
-                    .catch(err => []) // Ignore errors for individual campaigns
-            );
+            //             // Inject Campaign Info
+            //             return records.map(r => {
+            //                 const normalized = {
+            //                     ...r,
+            //                     campaignId: campaign._id || campaign.id,
+            //                     campaignName: campaign.name,
+            //                     source: campaign.name, // Ensure source is also set for Fallback
+            //                     isCampaignLead: true,
+            //                     attributes: {
+            //                         ...r.attributes,
+            //                         campaignName: campaign.name
+            //                     }
+            //                 };
 
-            const allCampaignRecords = await Promise.all(campaignPromises);
+            //                 // Normalization for last_call if available
+            //                 if (r.last_call) {
+            //                     normalized.lastCallRecord = {
+            //                         duration: (r.last_call.duration || 0) + 's',
+            //                         date: r.last_call.timestamp,
+            //                         status: r.last_call.status
+            //                     };
+            //                     normalized.lastCallTime = r.last_call.timestamp;
+            //                 }
+            //                 return normalized;
+            //             });
+            //         })
+            //         .catch(err => []) // Ignore errors for individual campaigns
+            // );
 
-            // 4. Flatten and Merge
-            allCampaignRecords.forEach(records => {
-                // Normalize IDs and add to combined
-                const normalizedRecords = records.map(r => ({ ...r, id: r._id || r.id }));
-                combinedData = [...combinedData, ...normalizedRecords];
-            });
+            // const allCampaignRecords = await Promise.all(campaignPromises);
+
+            // // 4. Flatten and Merge
+            // allCampaignRecords.forEach(records => {
+            //     // Normalize IDs and add to combined
+            //     const normalizedRecords = records.map(r => ({ ...r, id: r._id || r.id }));
+            //     combinedData = [...combinedData, ...normalizedRecords];
+            // });
 
             // 5. Remove duplicates (by _id or id) just in case
             const uniqueData = Array.from(new Map(combinedData.map(item => [item._id || item.id, item])).values());
@@ -498,6 +490,25 @@ export const fetchCombinedEnquiries = createAsyncThunk(
 
         } catch (error) {
             return rejectWithValue(error.message || 'Failed to fetch combined enquiries');
+        }
+    }
+);
+
+// Thunk to fetch All Calls (Unified Leads/Enquiries/Campaigns with logs)
+export const fetchAllCalls = createAsyncThunk(
+    'leads/fetchAllCalls',
+    async (filters = {}, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.get('/calls/allcalls', { params: filters });
+            // Normalize: endpoint could return array directly, or wrapped in data/result
+            if (Array.isArray(response)) return response;
+            if (response.success || response.data || response.result) {
+                return response.data || response.result || [];
+            } else {
+                return rejectWithValue(response.message || 'Invalid response format');
+            }
+        } catch (error) {
+            return rejectWithValue(error.message || 'Failed to fetch all calls history');
         }
     }
 );
@@ -576,14 +587,25 @@ const leadSlice = createSlice({
                 const { leads, pagination } = action.payload;
                 state.pagination = pagination;
 
+                const normalizedLeads = leads.map(l => {
+                    const normalized = { ...l };
+                    if (l.last_call) {
+                        normalized.lastCallRecord = {
+                            duration: (l.last_call.duration || 0) + 's',
+                            date: l.last_call.timestamp,
+                            status: l.last_call.status
+                        };
+                        normalized.lastCallTime = l.last_call.timestamp;
+                    }
+                    return normalized;
+                });
+
                 if (pagination.page == 1) {
-                    state.leads = leads;
+                    state.leads = normalizedLeads;
                 } else {
-                    // Check for duplicates before appending?
-                    // Ideally backend pagination is clean, but for safety:
-                    // Only add leads not already in state
+                    // Check for duplicates before appending
                     const existingIds = new Set(state.leads.map(l => l._id));
-                    const newLeads = leads.filter(l => !existingIds.has(l._id));
+                    const newLeads = normalizedLeads.filter(l => !existingIds.has(l._id));
                     state.leads = [...state.leads, ...newLeads];
                 }
             })
@@ -645,18 +667,43 @@ const leadSlice = createSlice({
                     const { records, page, total, limit } = response.data;
                     const pages = Math.ceil(total / limit);
 
+                    const normalizedRecords = records.map(l => {
+                        const normalized = { ...l };
+                        if (l.last_call) {
+                            normalized.lastCallRecord = {
+                                duration: (l.last_call.duration || 0) + 's',
+                                date: l.last_call.timestamp,
+                                status: l.last_call.status
+                            };
+                            normalized.lastCallTime = l.last_call.timestamp;
+                        }
+                        return normalized;
+                    });
+
                     if (page === 1) {
-                        state.leads = records;
+                        state.leads = normalizedRecords;
                     } else {
                         // Check for duplicates
                         const existingIds = new Set(state.leads.map(l => l._id));
-                        const newRecords = records.filter(l => !existingIds.has(l._id));
+                        const newRecords = normalizedRecords.filter(l => !existingIds.has(l._id));
                         state.leads = [...state.leads, ...newRecords];
                     }
                     state.pagination = { page, pages, total };
                 } else {
                     // Fallback for old structure or non-paginated response
-                    state.leads = response.data || response.result || [];
+                    const data = response.data || response.result || [];
+                    state.leads = data.map(l => {
+                        const normalized = { ...l };
+                        if (l.last_call) {
+                            normalized.lastCallRecord = {
+                                duration: (l.last_call.duration || 0) + 's',
+                                date: l.last_call.timestamp,
+                                status: l.last_call.status
+                            };
+                            normalized.lastCallTime = l.last_call.timestamp;
+                        }
+                        return normalized;
+                    });
                 }
             })
             .addCase(fetchEnquiries.rejected, (state, action) => {
@@ -672,10 +719,21 @@ const leadSlice = createSlice({
                 const { records, pagination, meta_page } = action.payload || {};
 
                 if (records) {
-                    const normalizedRecords = records.map(l => ({
-                        ...l,
-                        id: l._id || l.id
-                    }));
+                    const normalizedRecords = records.map(l => {
+                        const normalized = {
+                            ...l,
+                            id: l._id || l.id
+                        };
+                        if (l.last_call) {
+                            normalized.lastCallRecord = {
+                                duration: (l.last_call.duration || 0) + 's',
+                                date: l.last_call.timestamp,
+                                status: l.last_call.status
+                            };
+                            normalized.lastCallTime = l.last_call.timestamp;
+                        }
+                        return normalized;
+                    });
 
                     const page = pagination?.page || meta_page || 1;
                     const pages = pagination?.pages || 1;
@@ -741,7 +799,19 @@ const leadSlice = createSlice({
             })
             .addCase(searchLeads.fulfilled, (state, action) => {
                 state.isSearching = false;
-                state.searchResults = action.payload;
+                const leads = action.payload || [];
+                state.searchResults = leads.map(l => {
+                    const normalized = { ...l };
+                    if (l.last_call) {
+                        normalized.lastCallRecord = {
+                            duration: (l.last_call.duration || 0) + 's',
+                            date: l.last_call.timestamp,
+                            status: l.last_call.status
+                        };
+                        normalized.lastCallTime = l.last_call.timestamp;
+                    }
+                    return normalized;
+                });
             })
             .addCase(searchLeads.rejected, (state, action) => {
                 state.isSearching = false;
@@ -754,8 +824,6 @@ const leadSlice = createSlice({
             // Combined Enquiries
             .addCase(fetchCombinedEnquiries.pending, (state, action) => {
                 const page = action.meta.arg.page || 1;
-                // Since combined data uses 'leads' (reused state) in HomeScreen, 
-                // we check if we have any combined data (which usually populates 'leads' for New Enquiries)
                 if (page === 1 && state.leads.length === 0) {
                     state.isLoading = true;
                 }
@@ -764,10 +832,31 @@ const leadSlice = createSlice({
             .addCase(fetchCombinedEnquiries.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.leads = action.payload;
-                // Reset pagination since we are doing custom aggregation
                 state.pagination = { page: 1, pages: 1, total: action.payload.length };
             })
             .addCase(fetchCombinedEnquiries.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload;
+            })
+            // All Calls
+            .addCase(fetchAllCalls.pending, (state, action) => {
+                const page = action.meta.arg.page || 1;
+                if (page === 1 && state.leads.length === 0) {
+                    state.isLoading = true;
+                }
+                state.error = null;
+            })
+            .addCase(fetchAllCalls.fulfilled, (state, action) => {
+                state.isLoading = false;
+                if (Array.isArray(action.payload)) {
+                    state.leads = action.payload;
+                    state.pagination = { page: 1, pages: 1, total: action.payload.length };
+                } else {
+                    state.leads = action.payload.records || [];
+                    state.pagination = action.payload.pagination || { page: 1, pages: 1, total: (action.payload.records || []).length };
+                }
+            })
+            .addCase(fetchAllCalls.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload;
             });

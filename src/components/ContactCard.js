@@ -193,54 +193,59 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                     {/* Phone Number */}
                     <Text style={styles.phoneText}>{contact.phone}</Text>
 
-                    {/* Lead Source & Assignment Info */}
+                    {/* Lead Source Chip - Unified "Calls UI" everywhere */}
                     <View>
-                        {contact.leadSource && (
-                            <Text style={styles.leadSourceText}>
-                                {(() => {
-                                    const sourceValue = contact.leadSource;
-                                    if (!sources || sources.length === 0) return sourceValue;
-                                    
-                                    const matchingSource = sources.find(s => {
-                                        const keyWithoutPrefix = s.key?.startsWith('source_') ? s.key.replace('source_', '') : s.key;
-                                        return keyWithoutPrefix === sourceValue || s.key === sourceValue || s.label === sourceValue;
+                        {(() => {
+                            let chipType = 'lead';
+                            let chipLabel = 'Lead';
+                            
+                            if (contact._source === 'log' && contact.logSource) {
+                                chipType = contact.logSource.type;
+                                chipLabel = contact.logSource.label;
+                            } else {
+                                const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+                                const resolveSourceLabel = (val) => {
+                                    if (!sources || sources.length === 0 || !val) return val;
+                                    const match = sources.find(s => {
+                                        const k = s.key?.startsWith('source_') ? s.key.replace('source_', '') : s.key;
+                                        return k === val || s.key === val || s.label === val;
                                     });
-                                    
-                                    return matchingSource ? matchingSource.label : sourceValue;
-                                })()}
-                            </Text>
-                        )}
+                                    return match ? match.label : val;
+                                };
 
-                        {/* Only show assignment info for CRM leads, not device logs */}
-                        {contact._source !== 'log' && (
-                            <>
-                                {contact.transferredBy ? (
-                                    <Text style={styles.transferredByText}>
-                                        Transferred by: {
-                                            typeof contact.transferredBy === 'object'
-                                                ? contact.transferredBy.name || contact.transferredBy.role
-                                                : contact.transferredBy
-                                        }
+                                const rawSource = contact.leadSource || contact.source;
+                                const resolved = resolveSourceLabel(rawSource);
+
+                                if (contact.isCampaignLead || contact.campaignName || contact.campaignId) {
+                                    chipType = 'campaign';
+                                    chipLabel = contact.campaignName ? `Campaign · ${contact.campaignName}` : (resolved ? `Campaign · ${resolved}` : 'Campaign');
+                                } else if (contact.isNewLead || contact.status === 'New' || contact.status === 'Unprocessed') {
+                                    chipType = 'enquiry';
+                                    chipLabel = resolved ? `Enquiry · ${cap(resolved)}` : 'Enquiry';
+                                } else {
+                                    chipType = 'lead';
+                                    chipLabel = resolved ? `Lead · ${cap(resolved)}` : 'Lead';
+                                }
+                            }
+
+                            return (
+                                <View style={[
+                                    styles.logSourceChip,
+                                    { backgroundColor: logSourceStyles[chipType]?.bg ?? '#F3F4F6' }
+                                ]}>
+                                    <Text style={[
+                                        styles.logSourceChipText,
+                                        { color: logSourceStyles[chipType]?.text ?? '#6B7280' }
+                                    ]}>
+                                        {logSourceStyles[chipType]?.icon ?? '📱'}  {chipLabel}
                                     </Text>
-                                ) : (
-                                    <Text style={styles.assignedByText}>
-                                        Assigned by: {
-                                            contact.assigned_by
-                                                ? (typeof contact.assigned_by === 'object'
-                                                    ? contact.assigned_by.name || contact.assigned_by.role
-                                                    : contact.assigned_by)
-                                                : (contact.assignedBy || 'System')
-                                        }
-                                    </Text>
-                                )}
-                            </>
-                        )}
+                                </View>
+                            );
+                        })()}
                     </View>
 
 
                     {/* Search Result / Status Row */}
-                    {/* Hide for New Enquiries - only show for regular contacts */}
-                    {!contact.isNewLead && (
                         <View style={styles.statusRow}>
                             {contact.lastCallRecord ? (
                                 <Text style={styles.statusLine} numberOfLines={1} ellipsizeMode="tail">
@@ -275,7 +280,6 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                                 </View>
                             )}
                         </View>
-                    )}
                 </View>
             </View>
 
@@ -296,6 +300,13 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
             </TouchableOpacity>
         </TouchableOpacity>
     );
+};
+
+const logSourceStyles = {
+    device:   { bg: '#F3F4F6', text: '#6B7280', icon: '📱' },
+    lead:     { bg: '#EDE9FE', text: '#6C4DFF', icon: '👤' },
+    enquiry:  { bg: '#DBEAFE', text: '#2563EB', icon: '📋' },
+    campaign: { bg: '#CCFBF1', text: '#0D9488', icon: '📢' },
 };
 
 const styles = StyleSheet.create({
@@ -477,6 +488,19 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: COLORS.darkPurpleText, // Darker purple text
         fontWeight: '600',
+    },
+    logSourceChip: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        marginTop: 3,
+        marginBottom: 2,
+    },
+    logSourceChipText: {
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 0.2,
     },
 });
 

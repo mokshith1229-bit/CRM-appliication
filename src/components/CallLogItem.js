@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, CALL_OUTCOMES } from '../constants/theme';
 import EditableField from './EditableField';
+import AudioPlayer from './AudioPlayer';
 
 const CallLogItem = ({ call, onUpdateNote }) => {
     const [isExpanded, setIsExpanded] = useState(true);
@@ -64,6 +65,18 @@ const CallLogItem = ({ call, onUpdateNote }) => {
                         placeholder="Add notes about this call..."
                         multiline
                     />
+
+                    {call.recording_url && parseFloat(call.duration || 0) > 0 && (
+                        <View style={{ marginTop: 10 }}>
+                            <AudioPlayer
+                                recording={{
+                                    status: call.status === 'Missed' ? 'Missed' : 'Connected',
+                                    recording_url: call.recording_url,
+                                    duration: call.duration
+                                }}
+                            />
+                        </View>
+                    )}
                 </View>
             )}
 

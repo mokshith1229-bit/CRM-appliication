@@ -81,10 +81,15 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
         registerForPushNotificationsAsync();
     }, []);
 
-    // Sync call logs when screen opens (skip for device logs)
+    // Sync call logs when screen opens (skip for device logs).
+    // 3s delay: Android writes to CallLog.Calls asynchronously after a call ends,
+    // so syncing immediately races against that write and misses the latest call.
     React.useEffect(() => {
         if (visible && contact?.id && contact?._source !== 'log') {
-            dispatch(syncCallLogs(contact.id));
+            const timer = setTimeout(() => {
+                dispatch(syncCallLogs(contact.id));
+            }, 3000);
+            return () => clearTimeout(timer);
         }
     }, [visible, contact?.id, contact?._source]);
 

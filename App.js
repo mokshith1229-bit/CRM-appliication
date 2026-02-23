@@ -74,21 +74,82 @@ const AppContent = () => {
             if (nextAppState === 'active') {
                 console.log('[Global] App active - triggering call log sync...');
                 try {
-                    // Fetch recent logs (e.g. last 50)
                     const logs = await CallLogService.getAllRecentLogs(50);
-                    if (logs && logs.length > 0) {
-                        const result = await CallLogService.syncCallLogsToServer(logs);
-                        if (result.success) {
-                            console.log(`[Global] Synced ${result.data?.updated || 0} call logs`);
-                            
-                            // Also try syncing any pending recordings for the newly synced logs
-                            if (result.data?.syncedTimestamps && result.data.syncedTimestamps.length > 0) {
-                                const uri = await RecordingSyncService.getSavedFolderUri();
-                                if (uri) {
-                                    console.log(`[Global] Triggering recording sync for ${result.data.syncedTimestamps.length} recent logs...`);
-                                    await RecordingSyncService.syncNewRecordings(uri, result.data.syncedTimestamps);
-                                }
-                            }
+                    if (!logs || logs.length === 0) return;
+
+                    // Get unique phone numbers from the recent logs
+                    const phoneNumbers = [...new Set(logs.map(l => l.phoneNumber).filter(Boolean))];
+
+                    // Ask backend which entity each number belongs to
+                    const axiosClient = require('./src/api/axiosClient').default;
+                    let entityMap = {};
+                    try {
+                        const res = await axiosClient.post('/leads/check-numbers', { phoneNumbers });
+                        if (res.success) entityMap = res.data;
+                    } catch (e) {
+                        console.warn('[Global] check-numbers failed, falling back to unlinked sync:', e.message);
+                    }
+
+                    // Group logs by entity context
+                    const leadLogsMap = {};    // lead_id -> [logs]
+                    const enquiryLogsMap = {}; // enquiry_id -> [logs]
+                    const campaignLogsMap = {}; // `${campaign_id}::${campaign_record_id}` -> { ids, logs }
+                    const unlinkedLogs = [];
+
+                    for (const log of logs) {
+                        const entity = entityMap[log.phoneNumber];
+                        if (!entity) { unlinkedLogs.push(log); continue; }
+
+                        if (entity.type === 'lead' && entity.ownership === 'mine') {
+                            const id = entity.lead_id;
+                            leadLogsMap[id] = leadLogsMap[id] || { lead_id: id, phone: log.phoneNumber, logs: [] };
+                            leadLogsMap[id].logs.push(log);
+                        } else if (entity.type === 'enquiry' && entity.ownership === 'mine') {
+                            const id = entity.enquiry_id;
+                            enquiryLogsMap[id] = enquiryLogsMap[id] || { enquiry_id: id, phone: log.phoneNumber, logs: [] };
+                            enquiryLogsMap[id].logs.push(log);
+                        } else if (entity.type === 'campaign_record' && entity.ownership === 'mine') {
+                            const key = `${entity.campaign_id}::${entity.campaign_record_id}`;
+                            campaignLogsMap[key] = campaignLogsMap[key] || {
+                                campaign_id: entity.campaign_id,
+                                campaign_record_id: entity.campaign_record_id,
+                                phone: log.phoneNumber, logs: []
+                            };
+                            campaignLogsMap[key].logs.push(log);
+                        }
+                        // skip 'other' ownership — not our logs
+                    }
+
+                    // Fire typed syncs in parallel
+                    const syncPromises = [
+                        ...Object.values(leadLogsMap).map(({ lead_id, phone }) =>
+                            CallLogService.syncCallLogsForLead(lead_id, phone).catch(e =>
+                                console.warn(`[Global] Lead sync failed for ${lead_id}:`, e.message)
+                            )
+                        ),
+                        ...Object.values(enquiryLogsMap).map(({ enquiry_id, phone }) =>
+                            CallLogService.syncCallLogsForEnquiry(enquiry_id, phone).catch(e =>
+                                console.warn(`[Global] Enquiry sync failed for ${enquiry_id}:`, e.message)
+                            )
+                        ),
+                        ...Object.values(campaignLogsMap).map(({ campaign_id, campaign_record_id, phone }) =>
+                            CallLogService.syncCallLogsForCampaignRecord(campaign_id, campaign_record_id, phone).catch(e =>
+                                console.warn(`[Global] Campaign record sync failed for ${campaign_record_id}:`, e.message)
+                            )
+                        ),
+                    ];
+
+                    const results = await Promise.all(syncPromises);
+                    const totalSynced = results.reduce((acc, r) => acc + (r?.updated || 0), 0);
+                    console.log(`[Global] Typed sync complete. ${totalSynced} logs synced across ${syncPromises.length} entities.`);
+
+                    // Handle recording uploads for synced logs
+                    const allSyncedTimestamps = results.flatMap(r => r?.syncedTimestamps || []);
+                    if (allSyncedTimestamps.length > 0) {
+                        const uri = await RecordingSyncService.getSavedFolderUri();
+                        if (uri) {
+                            console.log(`[Global] Triggering recording sync for ${allSyncedTimestamps.length} logs...`);
+                            await RecordingSyncService.syncNewRecordings(uri, allSyncedTimestamps);
                         }
                     }
                 } catch (error) {

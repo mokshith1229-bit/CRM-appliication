@@ -37,6 +37,7 @@ import ContactDetailScreen from './ContactDetailScreen';
 import ReminderModal from '../components/ReminderModal';
 import DateRangeModal from '../components/DateRangeModal';
 import { MaterialIcons } from '@expo/vector-icons';
+import CallLogService from '../services/CallLogService';
 
 const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     const { filterId, filterLabel } = route.params || {};
@@ -52,6 +53,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [reminderContact, setReminderContact] = useState(null);
     const [selectedInstance, setSelectedInstance] = useState(null); // { key, label }
+    const [localCallLogs, setLocalCallLogs] = useState([]);
 
     const dispatch = useDispatch();
     const allLeads = useSelector(state => state.leads.leads);
@@ -77,34 +79,94 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
         });
     }, [sources, sourceGroupType]);
 
-    // Map leads from store directly
+    // Helper to match phone numbers robustly (last 10 digits)
+    const isPhoneMatch = (p1, p2) => {
+        if (!p1 || !p2) return false;
+        const n1 = p1.replace(/[^0-9]/g, '');
+        const n2 = p2.replace(/[^0-9]/g, '');
+        if (n1.length >= 10 && n2.length >= 10) {
+            return n1.slice(-10) === n2.slice(-10);
+        }
+        return n1 === n2;
+    };
+
+    const loadLogs = async () => {
+        try {
+            const logs = await CallLogService.getAllRecentLogs(50);
+            setLocalCallLogs(logs);
+        } catch (error) {
+            console.error("[FilteredContacts] Error loading logs:", error);
+        }
+    };
+
     // Map leads from store directly
     const displayedContacts = React.useMemo(() => {
-        return allLeads.map(lead => ({
-            ...lead,
-            id: lead.id || lead._id,
-            name: lead.name,
-            phone: lead.phone,
-            email: lead.email,
-            status: lead.status,
-            leadSource: lead.lead_source,
-            assignedTo: lead.assigned_to?.name || 'Unknown',
-            assigned_by: lead.assigned_by, // Pass full user object
-            photo: lead.photo,
-            callLogs: lead.call_logs || [],
-            notes: lead.notes || [],
-            lastCallTime: lead.last_call_at || lead.updatedAt,
-            callStatus: lead.attributes?.callStatus || 'none',
-            callSchedule: lead.attributes?.callSchedule,
-            isNewLead: lead.status === 'New',
-            attributes: lead.attributes || {},
-            campaignId: lead.campaign_id,
-            campaignName: lead.attributes?.campaignName,
-            lastCallRecord: lead.call_logs && lead.call_logs.length > 0
-                ? lead.call_logs[lead.call_logs.length - 1]
-                : null
-        })).sort((a, b) => new Date(b.lastCallTime || 0) - new Date(a.lastCallTime || 0)); // Note: Backend sort preferred, but keeping client sort for now as secondary
-    }, [allLeads]);
+        return allLeads.map(lead => {
+            // Priority 1: Normalized in slice
+            // Priority 2: backend field
+            // Priority 3: fallback to log array
+            let lastCallRecord = lead.lastCallRecord || null;
+            if (!lastCallRecord) {
+                if (lead.last_call) {
+                    lastCallRecord = {
+                        duration: (lead.last_call.duration || 0) + 's',
+                        date: lead.last_call.timestamp,
+                        status: lead.last_call.status
+                    };
+                } else if (lead.call_logs && lead.call_logs.length > 0) {
+                    lastCallRecord = lead.call_logs[lead.call_logs.length - 1];
+                }
+            }
+
+            const mapped = {
+                ...lead,
+                id: lead.id || lead._id,
+                name: lead.name,
+                phone: lead.phone,
+                email: lead.email,
+                status: lead.status,
+                leadSource: lead.lead_source || lead.source,
+                assignedTo: lead.assigned_to?.name || 'Unknown',
+                assigned_by: lead.assigned_by, // Pass full user object
+                photo: lead.photo,
+                callLogs: lead.call_logs || [],
+                notes: lead.notes || [],
+                lastCallTime: lead.lastCallTime || lead.last_call?.timestamp || lead.last_call_at || lead.updatedAt,
+                callStatus: lead.attributes?.callStatus || 'none',
+                callSchedule: lead.attributes?.callSchedule,
+                isNewLead: lead.status === 'New',
+                attributes: lead.attributes || {},
+                campaignId: lead.campaign_id,
+                campaignName: lead.attributes?.campaignName,
+                lastCallRecord: lastCallRecord
+            };
+
+            // Merge with local logs
+            const normalizedPhone = mapped.phone?.replace(/[^0-9]/g, '');
+            if (normalizedPhone) {
+                const match = localCallLogs.find(log => {
+                    const logPhone = log.phoneNumber?.replace(/[^0-9]/g, '');
+                    return isPhoneMatch(normalizedPhone, logPhone);
+                });
+
+                if (match) {
+                    const logTime = new Date(parseInt(match.timestamp)).getTime();
+                    const existingTime = new Date(mapped.lastCallTime || 0).getTime();
+
+                    if (logTime > existingTime) {
+                        const logIso = new Date(logTime).toISOString();
+                        mapped.lastCallTime = logIso;
+                        mapped.lastCallRecord = {
+                            duration: match.duration + 's',
+                            date: logIso
+                        };
+                    }
+                }
+            }
+
+            return mapped;
+        }).sort((a, b) => new Date(b.lastCallTime || 0) - new Date(a.lastCallTime || 0));
+    }, [allLeads, localCallLogs]);
 
     // Unified Fetch Logic for this Screen
     const fetchWithFilters = React.useCallback(() => {
@@ -165,6 +227,7 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
         // Clear stale data
         dispatch(clearLeads());
         fetchWithFilters();
+        loadLogs();
 
         return () => {
             dispatch(clearLeads());
@@ -239,12 +302,8 @@ const FilteredContactsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     const handleRefresh = async () => {
         setRefreshing(true);
-        if (route.params?.isEnquiryMode) {
-            // Keep logic consistent
-            fetchWithFilters();
-        } else {
-            fetchWithFilters();
-        }
+        fetchWithFilters();
+        await loadLogs();
         setRefreshing(false);
     };
 

@@ -6,6 +6,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 const FilterBar = ({ activeFilter, onFilterChange, newLeadsCount = 0 }) => {
     const filters = [
         { id: 'all', label: 'All Calls' },
+        { id: 'contacts', label: 'All Leads' },
         { id: 'new_leads', label: 'New Enquiries' },
     ];
     return (

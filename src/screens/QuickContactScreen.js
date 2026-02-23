@@ -23,6 +23,7 @@ import { updateLead, fetchLeadDetails, clearLeadDetails, checkLeadByPhone, creat
 import defaultAvatar from '../assets/default_avatar.jpg';
 import { fetchTeamMembers } from '../store/slices/teamSlice';
 import CallLogService from '../services/CallLogService';
+import AudioPlayer from '../components/AudioPlayer';
 
 const QuickContactScreen = ({ route, navigation }) => {
     const insets = useSafeAreaInsets();
@@ -209,7 +210,6 @@ const QuickContactScreen = ({ route, navigation }) => {
             hour12: true
         });
     };
-
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -424,6 +424,18 @@ const QuickContactScreen = ({ route, navigation }) => {
                                         </View>
                                         <Text style={styles.logDate}>{formatLogDate(log.date || log.timestamp)}</Text>
                                     </View>
+
+                                    {log.recording_url && parseFloat(log.duration || 0) > 0 && (
+                                        <View style={{ marginTop: 4, marginHorizontal: -6 }}>
+                                            <AudioPlayer
+                                                recording={{
+                                                    status: log.status === 'Missed' ? 'Missed' : 'Connected',
+                                                    recording_url: log.recording_url,
+                                                    duration: log.duration
+                                                }}
+                                            />
+                                        </View>
+                                    )}
 
                                     {contact?._source !== 'log' && (
                                         <TouchableOpacity

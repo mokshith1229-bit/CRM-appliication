@@ -30,6 +30,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
     const dispatch = useDispatch();
     const campaigns = useSelector(state => state.leads.campaigns);
     const { sources, statuses } = useSelector(state => state.config);
+    const authUser = useSelector(state => state.auth.user);
     const clearProfile = useProfileStore((state) => state.clearProfile);
     const clearSubscription = useSubscriptionStore((state) => state.clearSubscription);
     const slideAnim = React.useRef(new Animated.Value(-320)).current;
@@ -226,16 +227,16 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                 <TouchableOpacity onPress={() => { onClose(); navigation.navigate('MyProfile'); }}>
                                     <View style={styles.profileAvatarContainer}>
                                         <Text style={styles.profileAvatarText}>
-                                            {useProfileStore.getState().profile?.name?.charAt(0) || 'U'}
+                                            {authUser?.name?.charAt(0)?.toUpperCase() || 'U'}
                                         </Text>
                                     </View>
                                 </TouchableOpacity>
                                 <View style={styles.headerTextContainer}>
                                     <Text style={styles.headerTitle}>
-                                        {useProfileStore.getState().profile?.name || 'User Name'}
+                                        {authUser?.name|| authUser?.email || authUser?.phone || 'User Name'}
                                     </Text>
                                     <Text style={styles.headerSubtitle}>
-                                        {useProfileStore.getState().profile?.role === 'admin' ? 'Omni Admin' : 'Sales Manager'}
+                                        {authUser?.role && authUser?.role.split('_')?.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || 'Sales Executive'}
                                     </Text>
                                 </View>
                                 <TouchableOpacity style={styles.closeButton} onPress={onClose}>
