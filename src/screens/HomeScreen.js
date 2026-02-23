@@ -22,7 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 // import { useContactStore } from '../store/contactStore'; // Replaced by Redux
 // import { useCampaignStore } from '../store/campaignStore'; // Replaced by Redux
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchLeads, fetchEnquiries, fetchCombinedEnquiries, setActiveFilter, updateLeadStatus, ensureLead, validateLogOwnership } from '../store/slices/leadSlice';
+import { fetchLeads, fetchEnquiries, fetchCombinedEnquiries, setActiveFilter, updateLeadStatus, ensureLead, validateLogOwnership, fetchLeadDetails } from '../store/slices/leadSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import ContactCard from '../components/ContactCard';
 import FilterBar from '../components/FilterBar';
@@ -35,7 +35,7 @@ import ContactDetailScreen from './ContactDetailScreen';
 import ReminderModal from '../components/ReminderModal';
 import DateRangeModal from '../components/DateRangeModal';
 import { registerForPushNotificationsAsync } from '../utils/NotificationService';
-import { useRoute } from '@react-navigation/native';
+
 import { MaterialIcons } from '@expo/vector-icons'; // Added for icons
 
 import CallLogService from '../services/CallLogService';
@@ -367,10 +367,40 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         setDateRange(null);
     };
 
-    const handleContactPress = (contact) => {
+    const handleContactPress = async (contact) => {
         console.log('🔵 handleContactPress called with contact:', contact?.name || contact?.phone);
-        console.log('🔵 Setting selectedContact and showQuickActions to true');
-        setSelectedContact(contact);
+        
+        // Check if it's a real lead and not a device log
+        if (contact && contact.id && !String(contact.id).startsWith('log-')) {
+            try {
+                // Fetch full lead details
+                const fullLead = await dispatch(fetchLeadDetails(contact.id)).unwrap();
+                
+                // Map the fetched details to our UI contact shape
+                const mappedContact = {
+                    ...contact, // keep existing formatting for things like lastCallTime
+                    ...fullLead,
+                    id: fullLead._id || fullLead.id,
+                    leadSource: fullLead.lead_source || fullLead.source,
+                    campaignId: fullLead.campaign_id,
+                    campaignName: fullLead.attributes?.campaignName || contact.campaignName,
+                    callLogs: fullLead.call_logs || contact.callLogs,
+                    notes: fullLead.notes || contact.notes,
+                    isNewLead: fullLead.status === 'New' || fullLead.status === 'Unprocessed',
+                    attributes: fullLead.attributes || contact.attributes
+                };
+                
+                setSelectedContact(mappedContact);
+            } catch (error) {
+                console.error("Failed to fetch full lead details:", error);
+                // Fallback to local data if fetch fails
+                setSelectedContact(contact);
+            }
+        } else {
+             setSelectedContact(contact);
+        }
+
+        console.log('🔵 Setting showQuickActions to true');
         setShowQuickActions(true);
         console.log('🔵 State updates dispatched');
     };
@@ -381,8 +411,36 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         navigation.navigate('QuickContact', { contact });
     };
 
-    const handleContactLongPress = (contact) => {
-        setSelectedContact(contact);
+    const handleContactLongPress = async (contact) => {
+         // Check if it's a real lead and not a device log
+        if (contact && contact.id && !String(contact.id).startsWith('log-')) {
+            try {
+                // Fetch full lead details
+                const fullLead = await dispatch(fetchLeadDetails(contact.id)).unwrap();
+                
+                // Map the fetched details to our UI contact shape
+                const mappedContact = {
+                    ...contact, 
+                    ...fullLead,
+                    id: fullLead._id || fullLead.id,
+                    leadSource: fullLead.lead_source || fullLead.source,
+                    campaignId: fullLead.campaign_id,
+                    campaignName: fullLead.attributes?.campaignName || contact.campaignName,
+                    callLogs: fullLead.call_logs || contact.callLogs,
+                    notes: fullLead.notes || contact.notes,
+                    isNewLead: fullLead.status === 'New' || fullLead.status === 'Unprocessed',
+                    attributes: fullLead.attributes || contact.attributes
+                };
+                
+                setSelectedContact(mappedContact);
+            } catch (error) {
+                console.error("Failed to fetch full lead details for long press:", error);
+                // Fallback to local data
+                setSelectedContact(contact);
+            }
+        } else {
+             setSelectedContact(contact);
+        }
         setShowStatusOverlay(true);
     };
 
@@ -543,7 +601,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
             )}
 
             {/* Content Area */}
-            {isLoading && pagination.page === 1 ? (
+            {isLoading && pagination.page === 1 && displayedContacts.length === 0 ? (
                 renderSkeletons()
             ) : (
                 <FlatList

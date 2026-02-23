@@ -92,6 +92,40 @@ const setLastSyncTimestamp = async (timestamp) => {
     }
 };
 
+const syncAllLogsForNumber = async (phoneNumber) => {
+    if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
+    
+    try {
+        console.log(`Force syncing all logs for number: ${phoneNumber}...`);
+        
+        // Use a much larger limit to catch older history for this specific number
+        const allLogs = await getAllRecentLogs(500);
+        if (!allLogs || allLogs.length === 0) return { success: true, updated: 0 };
+
+        const normalizedTarget = phoneNumber.replace(/[^0-9]/g, '');
+        
+        // Filter logs specifically for this number
+        const targetedLogs = allLogs.filter(log => {
+            const logPhone = log.phoneNumber.replace(/[^0-9]/g, '');
+            return logPhone.includes(normalizedTarget) || normalizedTarget.includes(logPhone);
+        });
+
+        if (targetedLogs.length === 0) {
+            return { success: true, message: 'No logs found for this number', updated: 0 };
+        }
+
+        console.log(`Syncing ${targetedLogs.length} historical logs for ${phoneNumber} to server...`);
+
+        const axiosClient = require('../api/axiosClient').default;
+        const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: targetedLogs });
+        
+        return response.data;
+    } catch (error) {
+        console.error(`Error force syncing logs for ${phoneNumber}:`, error);
+        return { success: false, message: error.message };
+    }
+};
+
 const syncCallLogsToServer = async (callLogs) => {
     if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
     
@@ -133,6 +167,7 @@ const CallLogService = {
     getLogsForNumber,
     getAllRecentLogs,
     syncCallLogsToServer,
+    syncAllLogsForNumber,
     getLastSyncTimestamp,
     setLastSyncTimestamp,
 };

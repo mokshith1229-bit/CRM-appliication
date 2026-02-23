@@ -17,6 +17,7 @@ import { MaterialIcons, MaterialCommunityIcons, Ionicons } from '@expo/vector-ic
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from '../constants/theme';
 import TransferLeadModal from '../components/TransferLeadModal';
+import StatusPicker from '../components/StatusPicker';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateLead, fetchLeadDetails, clearLeadDetails, checkLeadByPhone, createLead } from '../store/slices/leadSlice';
 import defaultAvatar from '../assets/default_avatar.jpg';
@@ -183,53 +184,17 @@ const QuickContactScreen = ({ route, navigation }) => {
         );
     };
 
-    const handleAddLead = async () => {
+    const triggerAddLeadFlow = () => {
         if (!contact) return;
-
-        try {
-            // 1. Check if lead exists by phone for this tenant
-            const checkResult = await dispatch(checkLeadByPhone(contact.phone)).unwrap();
-
-            if (checkResult.exists) {
-                // If lead exists, navigate to the correct list and open it
-                if (campaignId) {
-                    navigation.navigate('CampaignLeads', {
-                        campaignId,
-                        campaignName,
-                        openContactDetail: checkResult.lead.id
-                    });
-                } else {
-                    navigation.navigate('Home', {
-                        openContactDetail: checkResult.lead.id
-                    });
-                }
-            } else {
-                // 2. Create new lead if it doesn't exist
-                const newLead = await dispatch(createLead({
-                    name: contact.name || 'New Lead',
-                    phone: contact.phone,
-                    lead_source: campaignName || 'Quick Add',
-                    status: 'New'
-                })).unwrap();
-
-                Alert.alert("Success", "Lead created successfully");
-
-                // 3. Navigate after creation
-                if (campaignId) {
-                    navigation.navigate('CampaignLeads', {
-                        campaignId,
-                        campaignName,
-                        openContactDetail: newLead.id
-                    });
-                } else {
-                    navigation.navigate('Home', {
-                        openContactDetail: newLead.id
-                    });
-                }
+        
+        // Navigate to the full Create Lead form and pass the pre-filled data
+        navigation.navigate('CreateLead', {
+            initialLeadData: {
+                name: contact.name || 'New Lead',
+                phone: contact.phone || '',
+                lead_source: 'Offline', // Default source per user request
             }
-        } catch (error) {
-            Alert.alert("Error", typeof error === 'string' ? error : "Failed to add lead");
-        }
+        });
     };
 
 
@@ -256,7 +221,7 @@ const QuickContactScreen = ({ route, navigation }) => {
                 <View style={styles.headerRight}>
                     <TouchableOpacity
                         style={styles.headerBtn}
-                        onPress={handleAddLead}
+                        onPress={triggerAddLeadFlow}
                     >
                         <MaterialIcons name="person-add-alt" size={24} color="#444" />
                     </TouchableOpacity>

@@ -9,7 +9,7 @@ import defaultAvatar from '../assets/default_avatar.jpg';
 import customCallIcon from '../assets/custom_call_icon.jpg';
 
 const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress }) => {
-    const { statuses } = useSelector(state => state.config);
+    const { statuses, sources } = useSelector(state => state.config);
 
     const handleCallPress = (e) => {
         e.stopPropagation();
@@ -160,7 +160,6 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
-
     return (
         <TouchableOpacity
             style={styles.card}
@@ -198,7 +197,17 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                     <View>
                         {contact.leadSource && (
                             <Text style={styles.leadSourceText}>
-                                {contact.leadSource}
+                                {(() => {
+                                    const sourceValue = contact.leadSource;
+                                    if (!sources || sources.length === 0) return sourceValue;
+                                    
+                                    const matchingSource = sources.find(s => {
+                                        const keyWithoutPrefix = s.key?.startsWith('source_') ? s.key.replace('source_', '') : s.key;
+                                        return keyWithoutPrefix === sourceValue || s.key === sourceValue || s.label === sourceValue;
+                                    });
+                                    
+                                    return matchingSource ? matchingSource.label : sourceValue;
+                                })()}
                             </Text>
                         )}
 

@@ -1,7 +1,7 @@
 import './shim'; // Polyfills for node-rsa
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { StyleSheet, StatusBar, Platform, AppState } from 'react-native';
+import { StyleSheet, StatusBar, Platform, AppState, AppRegistry } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
@@ -16,10 +16,14 @@ import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen';
 import SubscriptionExpiredScreen from './src/screens/SubscriptionExpiredScreen';
 import { setupAxiosInterceptors } from './src/api/axiosClient';
 import CallLogService from './src/services/CallLogService';
+import RecordingSyncService from './src/services/RecordingSyncService';
 import { SocketProvider } from './src/context/SocketContext';
 
 // Setup Interceptors
 setupAxiosInterceptors(store);
+
+// Register Headless JS Task for background call state events
+AppRegistry.registerHeadlessTask('CallStateTask', () => require('./src/services/CallStateTask'));
 
 // Configure global notification handler
 // Safe check for Android Expo Go (SDK 53+ crash fix)
@@ -76,6 +80,15 @@ const AppContent = () => {
                         const result = await CallLogService.syncCallLogsToServer(logs);
                         if (result.success) {
                             console.log(`[Global] Synced ${result.data?.updated || 0} call logs`);
+                            
+                            // Also try syncing any pending recordings for the newly synced logs
+                            if (result.data?.syncedTimestamps && result.data.syncedTimestamps.length > 0) {
+                                const uri = await RecordingSyncService.getSavedFolderUri();
+                                if (uri) {
+                                    console.log(`[Global] Triggering recording sync for ${result.data.syncedTimestamps.length} recent logs...`);
+                                    await RecordingSyncService.syncNewRecordings(uri, result.data.syncedTimestamps);
+                                }
+                            }
                         }
                     }
                 } catch (error) {

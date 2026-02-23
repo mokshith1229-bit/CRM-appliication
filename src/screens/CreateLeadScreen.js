@@ -18,7 +18,8 @@ import { createLead, searchLeads, clearSearchResults, updateLead } from '../stor
 import StatusPicker from '../components/StatusPicker';
 import SearchDropdown from '../components/SearchDropdown';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../constants/theme';
 
 const BUDGET_OPTIONS = [
     { label: '5 Lakhs to 50 Lakhs', value: '5 Lakhs to 50 Lakhs' },
@@ -60,9 +61,9 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const [whatsappNumber, setWhatsappNumber] = useState(initialPhone || '');
     const [occupation, setOccupation] = useState('');
     const [companyName, setCompanyName] = useState('');
-    const [leadSource, setLeadSource] = useState('self');
-    const [leadStatus, setLeadStatus] = useState('New');
-    const [originalStatus, setOriginalStatus] = useState('New'); // Track original status
+    const [leadSource, setLeadSource] = useState('');
+    const [leadStatus, setLeadStatus] = useState('');
+    const [originalStatus, setOriginalStatus] = useState(''); // Track original status
     const [requirement, setRequirement] = useState('');
     const [budget, setBudget] = useState('');
     const [location, setLocation] = useState('');
@@ -213,6 +214,16 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     const handleSaveLead = async () => {
         if (!phone.trim()) {
             Alert.alert('Error', 'Mobile number is required');
+            return;
+        }
+
+        if (!leadStatus) {
+            Alert.alert('Error', 'Please select a lead status');
+            return;
+        }
+
+        if (!leadSource) {
+            Alert.alert('Error', 'Please select a lead source');
             return;
         }
 
@@ -479,6 +490,47 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
 
                     <View style={{ height: 100 }} />
                 </ScrollView>
+
+                {/* Action Buttons */}
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[styles.button, styles.secondaryButton, { flex: 1, marginRight: SPACING.sm }]}
+                        onPress={handleCancel}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.secondaryButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={{ flex: 1 }}
+                        onPress={handleSaveLead}
+                        disabled={createLoading}
+                        activeOpacity={0.8}
+                    >
+                        <LinearGradient
+                            colors={createLoading ? ['#A0AEC0', '#718096'] : [COLORS.gradientStart, COLORS.gradientEnd]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={[styles.button, styles.primaryButton]}
+                        >
+                            {createLoading ? (
+                                <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                                <Text style={styles.primaryButtonText}>
+                                    {isUpdateMode ? 'Update Lead' : 'Save Lead'}
+                                </Text>
+                            )}
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
+                {/* Pickers */}
+                <StatusPicker
+                    visible={showSourcePicker}
+                    onClose={() => setShowSourcePicker(false)}
+                    options={sourceOptions}
+                    selectedValue={leadSource}
+                    onSelect={setLeadSource}
+                    title="Select Lead Source"
+                />
             </KeyboardAvoidingView>
 
             {/* STATUS & SOURCE PICKERS */}
@@ -517,20 +569,6 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
                 onSelect={setTimeline}
                 title="Select Timeline"
             />
-
-            {/* FIXED BOTTOM BUTTON */}
-            <View style={styles.bottomBar}>
-                <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSaveLead} disabled={createLoading}>
-                    {createLoading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                        <Text style={styles.saveButtonText}>{isUpdateMode ? 'Update Lead' : 'Save Lead'}</Text>
-                    )}
-                </TouchableOpacity>
-            </View>
         </SafeAreaView>
     );
 };
@@ -587,6 +625,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 16,
     },
+    form: {
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 20,
+    },
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -601,11 +644,15 @@ const styles = StyleSheet.create({
         marginLeft: 4,
         fontSize: 14,
     },
+    fieldContainer: {
+        marginBottom: 20,
+    },
     inputContainer: {
         marginBottom: 16,
         position: 'relative',
     },
     label: {
+        marginLeft: 4,
         fontSize: 14,
         fontWeight: '500',
         color: '#4B5563',
@@ -622,7 +669,7 @@ const styles = StyleSheet.create({
         color: '#111827',
     },
     multilineInput: {
-        height: 100,
+        height: 120,
         paddingTop: 12,
         textAlignVertical: 'top',
     },
@@ -636,19 +683,22 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     disabledInput: {
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#F9FAFB',
         borderWidth: 1,
         borderColor: '#E5E7EB',
         borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
+        padding: 16,
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'space-between',
+        alignItems: 'center',
     },
     disabledText: {
         fontSize: 16,
         color: '#6B7280',
+    },
+    selectButtonText: {
+        fontSize: 15,
+        color: '#1F2937',
     },
     pickerSelector: {
         backgroundColor: '#F9FAFB',
@@ -665,6 +715,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#111827',
         fontFamily: 'SF Pro Display',
+    },
+    selectArrow: {
+        fontSize: 12,
+        color: '#6B7280',
+    },
+    customFieldContainer: {
+        marginBottom: SPACING.md,
+        padding: SPACING.md,
+        backgroundColor: '#F9F9F9',
+        borderRadius: 8,
     },
     customFieldRow: {
         flexDirection: 'row',
@@ -712,6 +772,18 @@ const styles = StyleSheet.create({
         color: '#4B5563',
         fontSize: 18,
         fontWeight: '600',
+    },
+    footer: {
+        flexDirection: 'row',
+        padding: 20,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+        ...SHADOWS.medium,
+    },
+    button: {
+        paddingVertical: 16,
+        borderRadius: 14,
         fontFamily: 'SF Pro Display',
     },
     saveButton: {
@@ -720,6 +792,8 @@ const styles = StyleSheet.create({
         borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    primaryButton: {
         flex: 2,
         shadowColor: COLORS.primaryPurple || '#6C4DFF',
         shadowOffset: { width: 0, height: 4 },
@@ -729,10 +803,26 @@ const styles = StyleSheet.create({
     },
     saveButtonText: {
         color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    primaryButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    secondaryButton: {
+        backgroundColor: '#F3F4F6',
+        borderWidth: 0,
+    },
+    secondaryButtonText: {
+        color: '#4B5563',
         fontSize: 18,
         fontWeight: '600',
         fontFamily: 'SF Pro Display',
-    },
+    }
 });
 
 export default CreateLeadScreen;

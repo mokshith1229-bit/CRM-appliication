@@ -104,16 +104,7 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                     email: editedContact.email || '',
                     whatsapp_number: editedContact.whatsapp || editedContact.phone,
                     status: editedContact.status || 'new',
-                    lead_source: editedContact.lead_source || 'device_log',
-                    call_logs: contact.lastCallRecord ? [{
-                        id: Date.now().toString(),
-                        date: contact.lastCallRecord.date,
-                        status: contact.callStatus === 'missed' ? 'Missed' : 'Connected',
-                        duration: contact.lastCallRecord.duration,
-                        notes: 'Auto-imported from device',
-                        type: 'Call',
-                        agentName: 'System'
-                    }] : []
+                    lead_source: editedContact.lead_source || 'device_log'
                 };
                 
                 await dispatch(createLead(payload)).unwrap();

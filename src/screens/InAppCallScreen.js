@@ -68,30 +68,12 @@ const InAppCallScreen = ({ route, navigation }) => {
 
         try {
             if (contact && (contact.id || contact._id)) {
-                // Update existing lead
-                // Need to handle both normalized 'callLogs' (from prop) and 'call_logs' (from backend object)
-                const existingLogs = contact.call_logs || contact.callLogs || [];
-                const updatedLogs = [callLog, ...existingLogs];
-
-                // Use _id if available (Redux), else id (Prop)
-                const leadId = contact._id || contact.id;
-                
-                await dispatch(updateLead({ 
-                    id: leadId, 
-                    data: { call_logs: updatedLogs } 
-                })).unwrap();
-            } else if (number) {
-                // Create new lead
-                // Map to backend schema
-                const newLeadData = {
-                    name: number, // Use number as name initially
-                    phone: number,
-                    lead_source: leadSource,
-                    status: 'New', // Default
-                    call_logs: [callLog]
-                };
-                
-                await dispatch(createLead(newLeadData)).unwrap();
+                // We no longer manually push `call_logs` as CallLogService and
+                // backend handle all log synchronization seamlessly.
+                // Just log success or let the next Home refresh pull it.
+                console.log('Call ended for existing lead - will sync automatically');
+            } else {
+                 console.log('Call ended for unknown number. Lead will not be automatically created.');
             }
         } catch (error) {
             console.error('Failed to log call:', error);

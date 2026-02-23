@@ -46,7 +46,7 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
     const [occupation, setOccupation] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [leadSource, setLeadSource] = useState('');
-    const [leadStatus, setLeadStatus] = useState('New');
+    const [leadStatus, setLeadStatus] = useState('');
     const [requirement, setRequirement] = useState('');
     const [siteVisitDone] = useState(true); // Default true as per user request
     const [siteVisitReview, setSiteVisitReview] = useState('');
@@ -155,6 +155,26 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
     const handleSave = async () => {
         if (!phone.trim()) {
             Alert.alert('Error', 'Mobile number is required');
+            return;
+        }
+
+        if (!leadStatus) {
+            Alert.alert('Error', 'Please select a lead status');
+            return;
+        }
+
+        if (!leadSource) {
+            Alert.alert('Error', 'Please select a lead source');
+            return;
+        }
+
+        if (!projectId) {
+            Alert.alert('Error', 'Please select a project');
+            return;
+        }
+
+        if (!siteVisitDoneBy) {
+            Alert.alert('Error', 'Please select who did the site visit');
             return;
         }
 

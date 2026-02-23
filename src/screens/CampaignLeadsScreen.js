@@ -110,9 +110,13 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     // Unified Fetch Logic
     const fetchWithFilters = (pageOrReset = 1) => {
+        if (pageOrReset === 1) {
+            dispatch(clearCampaignLeads());
+        }
         const filters = {
             campaignId,
             page: pageOrReset,
+            limit: 20
         };
 
         if (searchQuery) filters.search = searchQuery;
@@ -233,10 +237,6 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
         });
     };
 
-    const handleAvatarPress = (contact) => {
-        setSelectedContactId(contact.id);
-        setShowQuickActions(true);
-    };
 
     const renderContactCard = ({ item }) => (
         <ContactCard
@@ -249,42 +249,12 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 setSelectedContactId(contact.id);
                 setShowStatusOverlay(true);
             }}
-            onAvatarPress={handleAvatarPress}
-            onCallPress={handleCallAction}
+            onAvatarPress={handleCallAction}
+            onCallPress={null}
         />
     );
 
-    if (isLoading && !refreshing) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={28} color="#111827" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{campaignName}</Text>
-                </View>
 
-                {/* Floating Search Pill */}
-                <View style={styles.searchPillContainer}>
-                    <View style={styles.searchPill}>
-                        <TextInput
-                            style={styles.searchInputPill}
-                            placeholder="Search contacts"
-                            editable={false}
-                            placeholderTextColor="#9CA3AF"
-                        />
-                    </View>
-                </View>
-
-                <View style={[styles.listContent, { paddingTop: 10 }]}>
-                    {[1, 2, 3, 4, 5, 6].map((key) => (
-                        <ContactCardSkeleton key={key} />
-                    ))}
-                </View>
-            </SafeAreaView>
-        );
-    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -295,7 +265,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <MaterialIcons name="arrow-back" size={28} color="#111827" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle} numberOfLines={1}>{campaignName}</Text>
+                <Text style={styles.headerTitle} numberOfLines={1}>{campaignName || 'Campaign Details'}</Text>
             </View>
 
             {/* Floating Search Pill wrapping the Search input and Calendar */}
@@ -303,7 +273,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 <View style={styles.searchPill}>
                     <TextInput
                         style={styles.searchInputPill}
-                        placeholder="Search contacts"
+                        placeholder="Search leads..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         placeholderTextColor="#9CA3AF"
@@ -331,9 +301,15 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 </View>
             )}
 
-
-
-            <FlatList
+            {isLoading && !refreshing && displayedLeads.length === 0 ? (
+                <View style={[styles.listContent, { paddingTop: 10 }]}>
+                    {[1, 2, 3, 4, 5, 6].map((key) => (
+                        <ContactCardSkeleton key={key} />
+                    ))}
+                </View>
+            ) : (
+                <>
+                <FlatList
                 data={displayedLeads}
                 renderItem={renderContactCard}
                 keyExtractor={(item) => item._id || item.id}
@@ -342,6 +318,14 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                     <View style={styles.emptyState}>
                         <Text style={styles.emptyText}>No leads found in this campaign</Text>
                     </View>
+                )}
+                ListFooterComponent={() => (
+                    isLoading && displayedLeads.length > 0 ? (
+                        <View style={{ paddingVertical: 10 }}>
+                            <ContactCardSkeleton />
+                            <ContactCardSkeleton />
+                        </View>
+                    ) : null
                 )}
                 refreshControl={
                     <RefreshControl
@@ -373,6 +357,8 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 }}
                 onEndReachedThreshold={0.5}
             />
+            </>
+            )}
 
             <QuickActionsSheet
                 contact={selectedContact}
@@ -541,6 +527,11 @@ const styles = StyleSheet.create({
     emptyText: {
         ...TYPOGRAPHY.body,
         color: COLORS.textSecondary,
+    },
+    footerLoader: {
+        paddingVertical: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });
 

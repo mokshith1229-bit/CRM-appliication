@@ -21,6 +21,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProjects } from '../store/slices/projectSlice';
 import { COLORS, SPACING } from '../constants/theme';
+import ProjectCardSkeleton from '../components/ProjectCardSkeleton';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IMAGE_WIDTH = SCREEN_WIDTH - 64;
@@ -98,9 +99,8 @@ const HighDemandProjectsScreen = ({ navigation }) => {
             </View>
 
             {isLoading && projects.length === 0 ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={COLORS.primary} />
-                    <Text style={styles.loadingText}>Loading projects...</Text>
+                <View style={{ paddingHorizontal: 0, paddingVertical: 0 }}>
+                    {[1, 2, 3].map(i => <ProjectCardSkeleton key={i} />)}
                 </View>
             ) : (
                 <ScrollView

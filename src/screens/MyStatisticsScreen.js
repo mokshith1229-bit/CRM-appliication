@@ -3,12 +3,13 @@ import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platf
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart } from 'react-native-chart-kit';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchMyStats } from '../store/slices/statsSlice';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { StatusBar } from 'expo-status-bar';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import StatsSkeleton from '../components/StatsSkeleton';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -23,11 +24,9 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
         dispatch(fetchMyStats(dateParam));
     }, [dateFilter, dispatch]);
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchStats();
-        }, [fetchStats])
-    );
+    useEffect(() => {
+        fetchStats();
+    }, [fetchStats]);
 
     const onRefresh = useCallback(() => {
         fetchStats();
@@ -157,10 +156,7 @@ const MyStatisticsScreen = ({ navigation, onOpenDrawer }) => {
 
                 {/* Loading State */}
                 {isLoading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={COLORS.primary} />
-                        <Text style={styles.loadingText}>Loading statistics...</Text>
-                    </View>
+                    <StatsSkeleton />
                 ) : (
                     <>
                         {/* Stats Grid */}

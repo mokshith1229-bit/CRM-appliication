@@ -63,6 +63,26 @@ export const createLead = createAsyncThunk(
     }
 );
 
+// Thunk to create a new enquiry
+export const createEnquiry = createAsyncThunk(
+    'leads/createEnquiry',
+    async (enquiryData, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.post('/enquiries', enquiryData);
+            if (response.success || response.data) {
+                return response.data || response.result; // Returns created enquiry
+            } else {
+                return rejectWithValue(response.message);
+            }
+        } catch (error) {
+            if (error.response && error.response.data && error.response.data.message) {
+                return rejectWithValue(error.response.data.message);
+            }
+            return rejectWithValue(error.message || 'Failed to create enquiry');
+        }
+    }
+);
+
 // Thunk to search leads by name, email, or mobile
 export const searchLeads = createAsyncThunk(
     'leads/searchLeads',
@@ -175,10 +195,18 @@ export const fetchCampaignRecords = createAsyncThunk(
     'leads/fetchCampaignRecords',
     async ({ campaignId, ...filters }, { rejectWithValue }) => {
         try {
+            const page = filters.page || 1;
             const response = await axiosClient.get(`/campaigns/${campaignId}/records`, { params: filters });
             console.log('API FETCH CAMPAIGN RECORDS RESPONSE:', response);
             if (response.success || response.data) {
-                return response.data || response.result;
+                const data = response.data || response.result;
+                const records = Array.isArray(data) ? data : (data.records || data.leads || []);
+                const pagination = data.pagination || {
+                    page: data.page || filters.page || 1,
+                    pages: data.pages || data.totalPages || 1,
+                    total: data.total || records.length
+                };
+                return { records, pagination, meta_page: page };
             } else {
                 return rejectWithValue(response.message);
             }
@@ -237,7 +265,13 @@ export const syncCallLogs = createAsyncThunk(
 
             const logs = await CallLogService.getLogsForNumber(phone, 20);
 
+
+
             if (logs.length > 0) {
+                // Previously this pushed directly to Lead document array locally.
+                // CallLogService handles backend sync automatically now.
+                // We should just refresh the lead or let the backend serve them.
+                return null;
                 // Map to our schema
                 const newLogs = logs.map(log => ({
                     id: log.timestamp, // Use timestamp as ID for uniqueness
@@ -320,23 +354,31 @@ export const ensureLead = createAsyncThunk(
                 const leadPayload = {
                     name: contact.name || contact.phone,
                     phone: contact.phone,
-                    lead_source: '',
-                    status: initialStatus || 'New', // Use provided status or default to 'New'
+                    lead_source: contact.lead_source || 'Offline',
+                    status: initialStatus || '', // No default to 'New'
                     // Add other fields if available
                     email: contact.email,
-                    whatsapp_number: contact.whatsapp || contact.phone,
-                    call_logs: contact.lastCallRecord ? [{
-                        date: contact.lastCallRecord.date || new Date().toISOString(),
-                        status: contact.callStatus === 'missed' ? 'Missed' : 'Received',
-                        duration: contact.lastCallRecord.duration || '0s',
-                        notes: 'Auto-imported from device',
-                        type: 'Call',
-                        agentName: agentName
-                    }] : []
+                    whatsapp_number: contact.whatsapp || contact.phone
                 };
+
+                // VALIDATION: Ensure status and source are provided
+                if (!leadPayload.status) {
+                    return rejectWithValue('Please select lead status before performing this action.');
+                }
+
                 console.log('ensureLead: Creating lead...', leadPayload);
                 // Dispatch createLead
                 const result = await dispatch(createLead(leadPayload)).unwrap();
+
+                // CRITICAL: After conversion, trigger a full historical sync for this number
+                // to ensure all old logs on the device are uploaded to the newly created lead.
+                if (result && (result._id || result.id)) {
+                    // Fire and forget, or background task, to not block the UI transition
+                    CallLogService.syncAllLogsForNumber(leadPayload.phone).catch(err =>
+                        console.error('ensureLead: Historical sync failed', err)
+                    );
+                }
+
                 return result; // This is the new lead with _id
             }
 
@@ -488,6 +530,8 @@ const leadSlice = createSlice({
     reducers: {
         setActiveFilter: (state, action) => {
             state.activeFilter = action.payload;
+            state.leads = []; // Clear current leads to show skeleton
+            state.isLoading = true; // Set loading to true immediately
             // Reset pagination when filter changes so skeleton shows correctly
             state.pagination = {
                 page: 1,
@@ -520,8 +564,11 @@ const leadSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            .addCase(fetchLeads.pending, (state) => {
-                state.isLoading = true;
+            .addCase(fetchLeads.pending, (state, action) => {
+                const page = action.meta.arg.page || 1;
+                if (page === 1 && state.leads.length === 0) {
+                    state.isLoading = true;
+                }
                 state.error = null;
             })
             .addCase(fetchLeads.fulfilled, (state, action) => {
@@ -582,8 +629,11 @@ const leadSlice = createSlice({
                     }
                 }
             })
-            .addCase(fetchEnquiries.pending, (state) => {
-                state.isLoading = true;
+            .addCase(fetchEnquiries.pending, (state, action) => {
+                const page = action.meta.arg.page || 1;
+                if (page === 1 && state.enquiries.length === 0) {
+                    state.isLoading = true;
+                }
                 state.error = null;
             })
             .addCase(fetchEnquiries.fulfilled, (state, action) => {
@@ -619,28 +669,23 @@ const leadSlice = createSlice({
             })
             .addCase(fetchCampaignRecords.fulfilled, (state, action) => {
                 state.isLoading = false;
-                // Normalize response to ensure we have pagination data
-                const response = action.payload; // This is directly from return response.data || response.result
+                const { records, pagination, meta_page } = action.payload || {};
 
-                // If the payload is the array of records directly (old behavior) or has pagination
-                if (Array.isArray(response)) {
-                    state.campaignLeads = response.map(l => ({
+                if (records) {
+                    const normalizedRecords = records.map(l => ({
                         ...l,
                         id: l._id || l.id
                     }));
-                    state.campaignPagination = { page: 1, pages: 1, total: response.length };
-                } else if (response.records || response.leads) {
-                    const records = (response.records || response.leads).map(l => ({
-                        ...l,
-                        id: l._id // Normalize to id for UI consistency
-                    }));
-                    const { page, pages, total } = response;
+
+                    const page = pagination?.page || meta_page || 1;
+                    const pages = pagination?.pages || 1;
+                    const total = pagination?.total || normalizedRecords.length;
 
                     if (page === 1) {
-                        state.campaignLeads = records;
+                        state.campaignLeads = normalizedRecords;
                     } else {
-                        const existingIds = new Set(state.campaignLeads.map(l => l._id));
-                        const newRecords = records.filter(l => !existingIds.has(l._id));
+                        const existingIds = new Set(state.campaignLeads.map(l => String(l.id || l._id)));
+                        const newRecords = normalizedRecords.filter(l => !existingIds.has(String(l.id || l._id)));
                         state.campaignLeads = [...state.campaignLeads, ...newRecords];
                     }
                     state.campaignPagination = { page, pages, total };
@@ -677,6 +722,19 @@ const leadSlice = createSlice({
                 state.createLoading = false;
                 state.error = action.payload;
             })
+            // Create Enquiry
+            .addCase(createEnquiry.pending, (state) => {
+                state.createLoading = true;
+                state.error = null;
+            })
+            .addCase(createEnquiry.fulfilled, (state, action) => {
+                state.createLoading = false;
+                state.leads.unshift(action.payload);
+            })
+            .addCase(createEnquiry.rejected, (state, action) => {
+                state.createLoading = false;
+                state.error = action.payload;
+            })
             // Search Leads
             .addCase(searchLeads.pending, (state) => {
                 state.isSearching = true;
@@ -694,8 +752,13 @@ const leadSlice = createSlice({
                 state.tenantConfig = action.payload;
             })
             // Combined Enquiries
-            .addCase(fetchCombinedEnquiries.pending, (state) => {
-                state.isLoading = true;
+            .addCase(fetchCombinedEnquiries.pending, (state, action) => {
+                const page = action.meta.arg.page || 1;
+                // Since combined data uses 'leads' (reused state) in HomeScreen, 
+                // we check if we have any combined data (which usually populates 'leads' for New Enquiries)
+                if (page === 1 && state.leads.length === 0) {
+                    state.isLoading = true;
+                }
                 state.error = null;
             })
             .addCase(fetchCombinedEnquiries.fulfilled, (state, action) => {

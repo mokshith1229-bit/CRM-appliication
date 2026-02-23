@@ -10,7 +10,8 @@ import {
     Platform,
     Alert,
     Linking,
-    ActivityIndicator
+    ActivityIndicator,
+    FlatList
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,6 +45,8 @@ const TIMELINE_OPTIONS = [
     { label: '1 Year', value: '1 Year' },
     { label: 'More than 1 year', value: 'More than 1 year' }
 ];
+import AudioPlayer from './AudioPlayer';
+import { formatRequirementsFromFields } from '../utils/sourceHelper';
 
 // Helper to format date relative or absolute
 const formatDate = (dateString) => {
@@ -154,11 +157,13 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
     useEffect(() => {
         if (visible && freshContact) {
+            const dynamicRequirement = formatRequirementsFromFields(freshContact);
             setLocalLeadInfo({
                 requirement: freshContact.attributes?.requirement || freshContact.requirement || '',
                 budget: freshContact.attributes?.budget || freshContact.budget || '',
                 location: freshContact.attributes?.location || freshContact.location || '',
                 timeline: freshContact.attributes?.timeline || freshContact.timeline || '',
+                requirement: dynamicRequirement || freshContact.requirement || '',
                 remark: freshContact.remark || '',
             });
         }
@@ -167,6 +172,14 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleAddNote = async () => {
         if (newNote.trim() && freshContact) {
             try {
+                // VALIDATION: If log contact, must have status and source
+                // if (freshContact._source === 'log') {
+                //     if (!freshContact.status || (!freshContact.lead_source && !freshContact.leadSource)) {
+                //         Alert.alert("Required Fields", "Please select Lead Status and Lead Source before adding a note.");
+                //         return;
+                //     }
+                // }
+
                 // Ensure lead exists first
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
@@ -228,6 +241,14 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const handleTransfer = async (teamMember, reason) => {
         if (freshContact) {
             try {
+                // VALIDATION: If log contact, must have status and source
+                // if (freshContact._source === 'log') {
+                //     if (!freshContact.status)   {
+                //         Alert.alert("Required Fields", "Please select Lead Status before transferring.");
+                //         return;
+                //     }
+                // }
+
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
                 // Use dedicated transfer endpoint
@@ -265,6 +286,14 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         if (!freshContact) return;
 
         try {
+            // VALIDATION: If log contact, must have status and source
+            // if (freshContact._source === 'log') {
+            //     if (!freshContact.status || (!freshContact.lead_source && !freshContact.leadSource)) {
+            //         Alert.alert("Required Fields", "Please select Lead Status and Lead Source before setting a reminder.");
+            //         return;
+            //     }
+            // }
+
             const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
 
             // Schedule notification
@@ -497,6 +526,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
         const isTransfer = item.type === 'transfer';
         const isStatus = item.type === 'status';
+        const isCall = item.type === 'call';
 
         // Custom formatting based on type
         let subText = '';
@@ -531,6 +561,17 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                         <View style={styles.historyNoteContainer}>
                             {isTransfer && <Text style={{ fontSize: 12, fontWeight: '600', color: '#555' }}>Reason:</Text>}
                             <Text style={styles.historyNoteText}>{item.note}</Text>
+                        </View>
+                    )}
+
+                    {/* Audio Player for Calls */}
+                    {isCall && (
+                        <View style={{ marginTop: 4, marginHorizontal: -6 }}>
+                            <AudioPlayer
+                                recording={{
+                                    status: item.title?.includes('Missed') ? 'Missed' : 'Connected',
+                                }}
+                            />
                         </View>
                     )}
                 </View>

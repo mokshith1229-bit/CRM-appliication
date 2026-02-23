@@ -22,6 +22,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import defaultAvatar from '../assets/default_avatar.jpg';
 import ProfileSkeleton from '../components/ProfileSkeleton';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import RecordingSyncService from '../services/RecordingSyncService';
 
 const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
     const dispatch = useDispatch();
@@ -31,6 +32,9 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
     const [editedProfile, setEditedProfile] = useState({});
     const [isDirty, setIsDirty] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
+    
+    // Call recording folder state
+    const [savedRecordingFolder, setSavedRecordingFolder] = useState(null);
 
     // Sync local state with Redux user when it loads
     useEffect(() => {
@@ -46,6 +50,16 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
         }
     }, [user]);
 
+    // Load saved recording folder URI
+    useEffect(() => {
+        const loadFolderUri = async () => {
+            const uri = await RecordingSyncService.getSavedFolderUri();
+            if (uri) {
+                setSavedRecordingFolder(uri);
+            }
+        };
+        loadFolderUri();
+    }, []);
     const handleUpdateField = (field, value) => {
         setEditedProfile(prev => ({ ...prev, [field]: value }));
         setIsDirty(true);
@@ -79,6 +93,26 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
         } else {
             Alert.alert('Permission Required', 'We need permission to access your photos.');
         }
+    };
+
+    const handleSelectRecordingFolder = async () => {
+        Alert.alert(
+            'Select Call Recordings Folder',
+            'To automatically sync your call recordings:\n\n1. Ensure "Auto-record calls" is enabled in your Dialer settings.\n2. Tap "Continue" and choose the folder where your phone saves the recordings (often named "Recordings" or "Call").',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                    text: 'Continue', 
+                    onPress: async () => {
+                        const uri = await RecordingSyncService.requestCallFolderAccess();
+                        if (uri) {
+                            setSavedRecordingFolder(uri);
+                            Alert.alert('Success', 'Call recording folder selected successfully. Recordings will now be synced.');
+                        }
+                    } 
+                },
+            ]
+        );
     };
 
     if (isLoading) {
@@ -190,8 +224,39 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
                     </View>
                 </View>
 
+                {/* Call Recording Sync Settings */}
+                <View style={styles.card}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialCommunityIcons name="microphone-outline" size={24} color={COLORS.primary} style={styles.sectionIcon} />
+                        <Text style={styles.sectionTitle}>Call Recording Sync</Text>
+                    </View>
+                    
+                    <View style={styles.folderStatusContainer}>
+                        <Text style={styles.folderStatusLabel}>Status:</Text>
+                        <Text style={[styles.folderStatusText, { color: savedRecordingFolder ? '#10B981' : '#EF4444' }]}>
+                            {savedRecordingFolder ? 'Folder Configured' : 'Not Configured'}
+                        </Text>
+                    </View>
+                    
+                    {savedRecordingFolder && (
+                         <Text style={styles.folderUriText} numberOfLines={1} ellipsizeMode="middle">
+                            {savedRecordingFolder}
+                        </Text>
+                    )}
+
+                    <TouchableOpacity 
+                        style={styles.actionButtonSecondary}
+                        onPress={handleSelectRecordingFolder}
+                    >
+                        <MaterialCommunityIcons name="folder-open-outline" size={20} color={COLORS.primary} />
+                        <Text style={styles.actionTextSecondary}>
+                            {savedRecordingFolder ? 'Change Recording Folder' : 'Select Recording Folder'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Change Password Button */}
-                <TouchableOpacity 
+                {/* <TouchableOpacity 
                     style={styles.actionButton}
                     onPress={() => setShowPasswordModal(true)}
                 >
@@ -202,15 +267,15 @@ const MyProfileScreen = ({ navigation, onOpenDrawer }) => {
                         <Text style={styles.actionText}>Change Password</Text>
                     </View>
                     <MaterialCommunityIcons name="chevron-right" size={24} color="#CBD5E1" />
-                </TouchableOpacity>
+                </TouchableOpacity> */}
 
             </ScrollView>
 
             {/* Change Password Modal */}
-            <ChangePasswordModal
+            {/* <ChangePasswordModal
                 visible={showPasswordModal}
                 onClose={() => setShowPasswordModal(false)}
-            />
+            /> */}
         </SafeAreaView>
     );
 };
@@ -370,6 +435,61 @@ const styles = StyleSheet.create({
         color: '#1E293B',
         fontWeight: '500',
         marginLeft: 0, // Icon container has space
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        marginBottom: 8,
+    },
+    sectionIcon: {
+        marginRight: 10,
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1E293B',
+    },
+    folderStatusContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        marginBottom: 4,
+    },
+    folderStatusLabel: {
+        fontSize: 14,
+        color: '#64748B',
+        marginRight: 6,
+    },
+    folderStatusText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    folderUriText: {
+        fontSize: 12,
+        color: '#94A3B8',
+        marginBottom: 16,
+        marginTop: 4,
+    },
+    actionButtonSecondary: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingVertical: 12,
+        borderRadius: 12,
+        marginTop: 10,
+        marginBottom: 8,
+    },
+    actionTextSecondary: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: COLORS.primary,
+        marginLeft: 8,
     },
 });
 
