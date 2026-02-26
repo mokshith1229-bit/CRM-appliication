@@ -9,10 +9,15 @@ import { fetchChats } from '../store/slices/whatsappSlice';
 const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
     const dispatch = useDispatch();
     const { chats, isLoading } = useSelector((state) => state.whatsapp);
+    const { isWhatsAppIntegrated } = useSelector((state) => state.config);
 
     useEffect(() => {
+        if (!isWhatsAppIntegrated) {
+            navigation.replace('Home');
+            return;
+        }
         dispatch(fetchChats());
-    }, [dispatch]);
+    }, [dispatch, isWhatsAppIntegrated, navigation]);
 
     useEffect(() => {
         const backAction = () => {

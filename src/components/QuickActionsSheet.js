@@ -80,7 +80,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const listContact = contact ? leads.find(l => (l._id || l.id) === (contact._id || contact.id)) : null;
     const freshContact = detailedContact || listContact || contact;
 
-    const { sources, statuses } = useSelector(state => state.config);
+    const { sources, statuses, isWhatsAppIntegrated } = useSelector(state => state.config);
     const allTeamMembers = useSelector(state => state.team.members);
 
     const { user } = useSelector(state => state.auth);
@@ -747,11 +747,15 @@ const updateSiteVisit = async () => {
                                     style={styles.actionButton} 
                                     onPress={() => {
                                         if (freshContact) {
-                                            onClose();
-                                            navigation.navigate('ChatDetail', { 
-                                                chatId: freshContact.phone || freshContact._id || freshContact.id,
-                                                chatName: freshContact.name || freshContact.phone
-                                            });
+                                            if (isWhatsAppIntegrated) {
+                                                onClose();
+                                                navigation.navigate('ChatDetail', { 
+                                                    chatId: freshContact.phone || freshContact._id || freshContact.id,
+                                                    chatName: freshContact.name || freshContact.phone
+                                                });
+                                            } else {
+                                                openWhatsApp(freshContact.phone);
+                                            }
                                         }
                                     }}
                                 >

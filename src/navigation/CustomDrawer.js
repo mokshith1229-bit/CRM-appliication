@@ -29,7 +29,7 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
     const contacts = useContactStore(state => state.contacts);
     const dispatch = useDispatch();
     const campaigns = useSelector(state => state.leads.campaigns);
-    const { sources, statuses } = useSelector(state => state.config);
+    const { sources, statuses, isWhatsAppIntegrated } = useSelector(state => state.config);
     const authUser = useSelector(state => state.auth.user);
     const clearProfile = useProfileStore((state) => state.clearProfile);
     const clearSubscription = useSubscriptionStore((state) => state.clearSubscription);
@@ -263,7 +263,9 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                             </View>
 
                             <ScrollView style={styles.menuList}>
-                                {menuItems.map((item) => (
+                                {menuItems
+                                    .filter(item => item.id !== 'hot-chats' || isWhatsAppIntegrated)
+                                    .map((item) => (
                                     <TouchableOpacity
                                         key={item.id}
                                         style={styles.menuItem}

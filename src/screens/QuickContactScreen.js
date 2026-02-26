@@ -24,6 +24,7 @@ import defaultAvatar from '../assets/default_avatar.jpg';
 import { fetchTeamMembers } from '../store/slices/teamSlice';
 import CallLogService from '../services/CallLogService';
 import AudioPlayer from '../components/AudioPlayer';
+import { openWhatsApp } from '../utils/intents';
 
 const QuickContactScreen = ({ route, navigation }) => {
     const insets = useSafeAreaInsets();
@@ -32,7 +33,7 @@ const QuickContactScreen = ({ route, navigation }) => {
     const leads = useSelector(state => state.leads.leads);
     const currentLeadDetails = useSelector(state => state.leads.currentLeadDetails);
     const allTeamMembers = useSelector(state => state.team.members);
-    const { statuses } = useSelector(state => state.config);
+    const { statuses, isWhatsAppIntegrated } = useSelector(state => state.config);
 
     // Filter out admin users from team members
     const { user } = useSelector(state => state.auth);
@@ -95,10 +96,14 @@ const QuickContactScreen = ({ route, navigation }) => {
     }, [dispatch, initialContact]);
     const handleWhatsApp = () => {
         if (!contact) return;
-        navigation.navigate('ChatDetail', { 
-            chatId: contact.phone || contact.id || contact._id,
-            chatName: contact.name || contact.phone
-        });
+        if (isWhatsAppIntegrated) {
+            navigation.navigate('ChatDetail', { 
+                chatId: contact.phone || contact.id || contact._id,
+                chatName: contact.name || contact.phone
+            });
+        } else {
+            openWhatsApp(contact.phone);
+        }
     };
 
     const handleMessage = () => {

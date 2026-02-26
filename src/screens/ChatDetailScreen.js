@@ -20,10 +20,17 @@ const ChatDetailScreen = ({ route, navigation }) => {
     
     // Instead of local mock state, get real messages from redux based on effectiveId
     const allMessages = useSelector(state => state.whatsapp.messages || {});
+    const { isWhatsAppIntegrated } = useSelector(state => state.config);
     const rawMessages = allMessages[effectiveId] || []; 
     const messages = React.useMemo(() => {
         return [...rawMessages].sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0));
     }, [rawMessages]);
+
+    React.useEffect(() => {
+        if (!isWhatsAppIntegrated) {
+            navigation.replace('Home');
+        }
+    }, [isWhatsAppIntegrated]);
 
     const [inputText, setInputText] = useState('');
     const [keyboardVisible, setKeyboardVisible] = useState(false);
