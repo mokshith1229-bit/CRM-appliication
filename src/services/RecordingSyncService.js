@@ -22,6 +22,15 @@ class RecordingSyncService {
    */
   async requestCallFolderAccess() {
     try {
+      // Show Prominent Disclosure before opening picker
+      const ProminentDisclosure = require('../utils/ProminentDisclosure').default;
+      const userAgreed = await ProminentDisclosure.showRecordingFolderDisclosure();
+      
+      if (!userAgreed) {
+          console.log('[RecordingSyncService] User declined folder access disclosure.');
+          return null;
+      }
+
       const directory = await Directory.pickDirectoryAsync();
       
       if (directory) {
@@ -84,6 +93,13 @@ class RecordingSyncService {
             if (item instanceof File && (item.name.endsWith('.m4a') || item.name.endsWith('.mp3') || item.name.endsWith('.amr') || item.name.endsWith('.wav'))) {
                 const info = await item.info();
                 
+                // Expo SDK 54 File.info() returns modificationTime in SECONDS.
+                // Device call log timestamps (from react-native-call-log) are in MILLISECONDS.
+                // Normalise to ms so the comparison is apples-to-apples.
+                const fileModMs = info.modificationTime < 1e11
+                    ? info.modificationTime * 1000   // was in seconds — convert to ms
+                    : info.modificationTime;          // already in ms
+
                 // We no longer use a hardcoded 15-minute window if syncedTimestamps are provided.
                 // The syncedTimestamps list FROM THE SERVER is our definitive "to-do" list.
                 // We filter out any that are currently being uploaded by this instance.
@@ -95,7 +111,10 @@ class RecordingSyncService {
                     
                     for (const ts of pendingTimestamps) {
                         const startTimestamp = parseInt(ts);
-                        const diff = info.modificationTime - startTimestamp;
+                        if (isNaN(startTimestamp)) continue;
+
+                        const diff = fileModMs - startTimestamp;
+                        console.log(`[Sync] File ${item.name}: modMs=${fileModMs}, callStart=${startTimestamp}, diff=${diff}ms`);
                         
                         // Match if file was modified after call start AND within a 4-hour window 
                         // (handles long calls + significant sync latency)
@@ -131,6 +150,101 @@ class RecordingSyncService {
   }
 
   /**
+   * Fetches server call logs missing `recording_gcs_path` and uploads local recordings for them.
+   * This method attempts to match local recordings to server-side call logs that are missing a recording.
+   */
+  async syncMissingRecordings() {
+    if (this.isSyncing) {
+      console.log("[Sync] Sync already in progress, skipping missing recordings check...");
+      return;
+    }
+
+    const savedFolderUri = await this.getSavedFolderUri();
+    if (!savedFolderUri) {
+      console.warn("No folder URI saved. Cannot sync missing recordings.");
+      return;
+    }
+
+    this.isSyncing = true;
+    try {
+      console.log("[Sync] Checking for missing recordings on server...");
+      const missingLogs = await CallLogService.getMissingRecordingCallLogs();
+
+      if (!missingLogs || missingLogs.length === 0) {
+        console.log("[Sync] No call logs found on server missing recordings.");
+        return;
+      }
+
+      // Filter out logs for which we are already attempting an upload
+      let pendingMissingLogs = missingLogs.filter(log => !this.currentlyUploading.has(log.device_timestamp));
+
+      if (pendingMissingLogs.length === 0) {
+        console.log("[Sync] All missing logs are currently being processed or no new ones to process.");
+        return;
+      }
+
+      console.log(`[Sync] Found ${pendingMissingLogs.length} server call logs missing recordings.`);
+
+      const dir = new Directory(savedFolderUri);
+      const files = await dir.list();
+
+      for (const item of files) {
+        if (item instanceof File && (item.name.endsWith('.m4a') || item.name.endsWith('.mp3') || item.name.endsWith('.amr') || item.name.endsWith('.wav'))) {
+          const info = await item.info();
+
+          if (pendingMissingLogs.length > 0) {
+            let bestMatchTimestamp = null;
+            let minDiff = Infinity;
+            let matchedLogIndex = -1;
+
+            for (let i = 0; i < pendingMissingLogs.length; i++) {
+              const log = pendingMissingLogs[i];
+              const startTimestamp = parseInt(log.device_timestamp);
+              if (isNaN(startTimestamp)) continue;
+
+              // Expo SDK 54 File.info() modificationTime is in SECONDS — normalise to ms
+              const fileModMs = info.modificationTime < 1e11
+                  ? info.modificationTime * 1000
+                  : info.modificationTime;
+
+              const diff = fileModMs - startTimestamp;
+
+              // Match if file was modified after call start AND within a 4-hour window
+              if (diff > 0 && diff < 14400000) {
+                if (diff < minDiff) {
+                  minDiff = diff;
+                  bestMatchTimestamp = log.device_timestamp;
+                  matchedLogIndex = i;
+                }
+              }
+            }
+
+            if (bestMatchTimestamp) {
+              console.log(`[Sync] Matching local file ${item.name} to missing CRM call ${bestMatchTimestamp}`);
+              this.currentlyUploading.add(bestMatchTimestamp);
+
+              try {
+                await this.uploadToCRM(item, bestMatchTimestamp);
+              } finally {
+                // After upload attempt, remove from both lists
+                this.currentlyUploading.delete(bestMatchTimestamp);
+                if (matchedLogIndex > -1) {
+                  pendingMissingLogs.splice(matchedLogIndex, 1);
+                }
+              }
+            }
+          }
+        }
+      }
+      console.log("[Sync] Finished checking for missing recordings.");
+    } catch (error) {
+      console.error("Error syncing missing recordings:", error);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  /**
    * Uploads the given file handle to the CRM API.
    * @param {File} fileHandle - The Expo File System File object.
    * @param {string} deviceTimestamp - The device's timestamp of the call log.
@@ -155,10 +269,10 @@ class RecordingSyncService {
             },
         });
 
-        if (response.success) {
+        if (response.data.success) {
             console.log(`Successfully uploaded: ${fileHandle.name}`);
         } else {
-            console.error(`Upload failed for ${fileHandle.name}: ${response.message || 'Unknown error'}`);
+            console.error(`Upload failed for ${fileHandle.name}: ${response.data.message || 'Unknown error'}`);
         }
 
     } catch (error) {

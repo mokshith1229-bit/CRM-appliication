@@ -54,14 +54,13 @@ export const sendEmail = async (email = '') => {
     const url = `mailto:${email}`;
 
     try {
-        const supported = await Linking.canOpenURL(url);
-        if (supported) {
-            await Linking.openURL(url);
-        } else {
-            Alert.alert('Error', 'Email is not supported on this device');
-        }
+        // Direct opening is often more reliable on Android due to package visibility rules
+        await Linking.openURL(url);
     } catch (error) {
-        console.error('Error sending email:', error);
-        Alert.alert('Error', 'Failed to open email client');
+        console.warn('Error opening email client:', error);
+        Alert.alert(
+            'Email App Not Found', 
+            'We couldn\'t find a default email app. Please ensure you have one installed (like Gmail or Outlook).'
+        );
     }
 };

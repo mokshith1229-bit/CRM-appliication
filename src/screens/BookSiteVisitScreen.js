@@ -20,7 +20,8 @@ import { fetchProjects } from '../store/slices/projectSlice';
 import StatusPicker from '../components/StatusPicker';
 import SearchDropdown from '../components/SearchDropdown';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SHADOWS, SPACING, TYPOGRAPHY } from '../constants/theme';
 
 const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
     const { initialPhone, initialName } = route.params || {};
@@ -187,7 +188,6 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
             occupation: occupation.trim(),
             company_name: companyName.trim(),
             lead_source: leadSource,
-            lead_source: leadSource,
             // Only include status if creating new or if updating and status changed
             ...((!isUpdateMode || leadStatus !== (route.params?.lead?.status || 'New')) && { status: leadStatus }),
             requirement: requirement.trim(),
@@ -220,36 +220,57 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
+            <LinearGradient
+                colors={[COLORS.royalBlue, COLORS.violet]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.headerGradient}
+            >
+                <SafeAreaView edges={['top']} style={styles.header}>
+                    <TouchableOpacity 
+                        onPress={handleCancel} 
+                        style={styles.backButton}
+                        activeOpacity={0.7}
+                    >
+                        <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle} numberOfLines={1}>
+                        Book Site Visit
+                    </Text>
+                    <View style={{ width: 40 }} />
+                </SafeAreaView>
+            </LinearGradient>
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardView}
+                style={{ flex: 1 }}
             >
                 <ScrollView
-                    style={styles.scrollView}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                 >
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-                            <MaterialIcons name="arrow-back" size={24} color={COLORS.text} />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Book Site Visit</Text>
-                        <View style={{ width: 44 }} />
-                    </View>
+                    {/* SECTION 1 - LEAD INFORMATION */}
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="person-outline" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Lead Information</Text>
+                        </View>
 
-                    <View style={styles.form}>
-                        {/* Name */}
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Name</Text>
-                            <View style={{ position: 'relative', zIndex: 3 }}>
-                                <TextInput
-                                    style={styles.input}
-                                    value={name}
-                                    onChangeText={handleNameChange}
-                                    placeholder="Enter name"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                />
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Full Name</Text>
+                            <View style={{ position: 'relative', zIndex: 10 }}>
+                                <View style={styles.inputWrapper}>
+                                    <MaterialIcons name="person" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={name}
+                                        onChangeText={handleNameChange}
+                                        placeholder="Enter name"
+                                        placeholderTextColor="#9CA3AF"
+                                    />
+                                </View>
                                 <SearchDropdown
                                     results={nameSearchResults}
                                     isSearching={isSearching && activeSearchField === 'name'}
@@ -259,18 +280,20 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
                             </View>
                         </View>
 
-                        {/* Phone */}
-                        <View style={styles.fieldContainer}>
+                        <View style={styles.inputContainer}>
                             <Text style={styles.label}>Mobile Number *</Text>
-                            <View style={{ position: 'relative', zIndex: 2 }}>
-                                <TextInput
-                                    style={styles.input}
-                                    value={phone}
-                                    onChangeText={handlePhoneChange}
-                                    placeholder="Enter mobile number"
-                                    keyboardType="phone-pad"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                />
+                            <View style={{ position: 'relative', zIndex: 5 }}>
+                                <View style={styles.inputWrapper}>
+                                    <MaterialIcons name="phone" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={phone}
+                                        onChangeText={handlePhoneChange}
+                                        placeholder="Enter mobile number"
+                                        keyboardType="phone-pad"
+                                        placeholderTextColor="#9CA3AF"
+                                    />
+                                </View>
                                 <SearchDropdown
                                     results={phoneSearchResults}
                                     isSearching={isSearching && activeSearchField === 'phone'}
@@ -280,118 +303,179 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
                             </View>
                         </View>
 
-                        {/* project Picker */}
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Project</Text>
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Email Address (Optional)</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="email" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    placeholder="Enter email"
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    placeholderTextColor="#9CA3AF"
+                                />
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* SECTION 2 - SOURCE & STATUS */}
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="settings" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Source & Status</Text>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Lead Source *</Text>
                             <TouchableOpacity
-                                style={styles.selectButton}
-                                onPress={() => setShowProjectPicker(true)}
-                            >
-                                <Text style={styles.selectButtonText}>
-                                    {projectOptions.find(o => o.value === projectId)?.label || 'Select Project'}
-                                </Text>
-                                <MaterialIcons name="keyboard-arrow-down" size={24} color={COLORS.textSecondary} />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Done By Picker */}
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Site Visit Done By</Text>
-                            <TouchableOpacity
-                                style={styles.selectButton}
-                                onPress={() => setShowDoneByPicker(true)}
-                            >
-                                <Text style={styles.selectButtonText}>
-                                    {memberOptions.find(o => o.value === siteVisitDoneBy)?.label || 'Select Team Member'}
-                                </Text>
-                                <MaterialIcons name="keyboard-arrow-down" size={24} color={COLORS.textSecondary} />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Lead Status */}
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Lead Status</Text>
-                            <TouchableOpacity
-                                style={styles.selectButton}
-                                onPress={() => setShowStatusPicker(true)}
-                            >
-                                <Text style={styles.selectButtonText}>
-                                    {statusOptions.find((o) => o.value === leadStatus)?.label || 'Select Status'}
-                                </Text>
-                                <MaterialIcons name="keyboard-arrow-down" size={24} color={COLORS.textSecondary} />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Review/Requirement */}
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Site Visit Review / Requirement</Text>
-                            <TextInput
-                                style={[styles.input, styles.textArea]}
-                                value={siteVisitReview || requirement}
-                                onChangeText={(text) => {
-                                    setSiteVisitReview(text);
-                                    setRequirement(text);
-                                }}
-                                placeholder="Enter review notes or requirements"
-                                multiline
-                                numberOfLines={4}
-                                textAlignVertical="top"
-                                placeholderTextColor={COLORS.textSecondary}
-                            />
-                        </View>
-
-                        {/* Additional Info */}
-                        <Text style={styles.sectionTitle}>Additional Information</Text>
-                        
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Email</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="Enter email"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                placeholderTextColor={COLORS.textSecondary}
-                            />
-                        </View>
-
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Source</Text>
-                            <TouchableOpacity
-                                style={styles.selectButton}
+                                style={styles.selector}
                                 onPress={() => setShowSourcePicker(true)}
                             >
-                                <Text style={styles.selectButtonText}>
-                                    {sourceOptions.find(o => o.value === leadSource)?.label || 'Select Source'}
-                                </Text>
-                                <MaterialIcons name="keyboard-arrow-down" size={24} color={COLORS.textSecondary} />
+                                <View style={styles.selectorContent}>
+                                    <MaterialIcons name="share" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                    <Text style={[styles.selectorText, !leadSource && { color: '#9CA3AF' }]}>
+                                        {sourceOptions.find(o => o.value === leadSource)?.label || 'Select Source'}
+                                    </Text>
+                                </View>
+                                <MaterialIcons name="keyboard-arrow-down" size={24} color="#9CA3AF" />
                             </TouchableOpacity>
                         </View>
 
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Lead Status *</Text>
+                            <TouchableOpacity
+                                style={styles.selector}
+                                onPress={() => setShowStatusPicker(true)}
+                            >
+                                <View style={styles.selectorContent}>
+                                    <MaterialIcons name="flag" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                    <Text style={[styles.selectorText, !leadStatus && { color: '#9CA3AF' }]}>
+                                        {statusOptions.find((o) => o.value === leadStatus)?.label || 'Select Status'}
+                                    </Text>
+                                </View>
+                                <MaterialIcons name="keyboard-arrow-down" size={24} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
+
+                    {/* SECTION 3 - REQUIREMENTS */}
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="assignment" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Requirement Details</Text>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Requirement</Text>
+                            <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+                                <TextInput
+                                    style={styles.textArea}
+                                    value={requirement}
+                                    onChangeText={setRequirement}
+                                    placeholder="Enter customer requirements"
+                                    multiline
+                                    numberOfLines={3}
+                                    textAlignVertical="top"
+                                    placeholderTextColor="#9CA3AF"
+                                />
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* SECTION 4 - VISIT INFO */}
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="event-available" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Visit Information</Text>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Project *</Text>
+                            <TouchableOpacity
+                                style={styles.selector}
+                                onPress={() => setShowProjectPicker(true)}
+                            >
+                                <View style={styles.selectorContent}>
+                                    <MaterialIcons name="business" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                    <Text style={[styles.selectorText, !projectId && { color: '#9CA3AF' }]}>
+                                        {projectOptions.find(o => o.value === projectId)?.label || 'Select Project'}
+                                    </Text>
+                                </View>
+                                <MaterialIcons name="keyboard-arrow-down" size={24} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Site Visit Done By *</Text>
+                            <TouchableOpacity
+                                style={styles.selector}
+                                onPress={() => setShowDoneByPicker(true)}
+                            >
+                                <View style={styles.selectorContent}>
+                                    <MaterialIcons name="badge" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                    <Text style={[styles.selectorText, !siteVisitDoneBy && { color: '#9CA3AF' }]}>
+                                        {memberOptions.find(o => o.value === siteVisitDoneBy)?.label || 'Select Team Member'}
+                                    </Text>
+                                </View>
+                                <MaterialIcons name="keyboard-arrow-down" size={24} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Site Visit Review</Text>
+                            <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+                                <TextInput
+                                    style={styles.textArea}
+                                    value={siteVisitReview}
+                                    onChangeText={setSiteVisitReview}
+                                    placeholder="Enter review notes from the visit"
+                                    multiline
+                                    numberOfLines={4}
+                                    textAlignVertical="top"
+                                    placeholderTextColor="#9CA3AF"
+                                />
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={{ height: 100 }} />
                 </ScrollView>
 
                 {/* Footer Buttons */}
                 <View style={styles.footer}>
                     <TouchableOpacity
-                        style={[styles.button, styles.secondaryButton, { flex: 1, marginRight: SPACING.sm }]}
+                        style={[styles.footerButton, styles.cancelButton]}
                         onPress={handleCancel}
                     >
-                        <Text style={styles.secondaryButtonText}>Cancel</Text>
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.button, styles.primaryButton, { flex: 1 }]}
+                        style={styles.saveAction}
                         onPress={handleSave}
-                        disabled={createLoading}
+                        disabled={!name.trim() || !phone.trim() || !leadStatus || !siteVisitDoneBy  || createLoading}
                     >
-                        {createLoading ? (
-                            <ActivityIndicator color="#FFFFFF" />
-                        ) : (
-                            <Text style={styles.primaryButtonText}>
-                                {isUpdateMode ? 'Update' : 'Save'}
-                            </Text>
-                        )}
+                        <LinearGradient
+                            colors={(!name.trim() || !phone.trim() || !leadStatus || !siteVisitDoneBy  || createLoading)
+                                ? ['#CBD5E0', '#A0AEC0']
+                                : [COLORS.royalBlue, COLORS.violet]
+                            }
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.saveButtonGradient}
+                        >
+                            {createLoading ? (
+                                <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <Text style={styles.saveButtonText}>
+                                        {isUpdateMode ? 'Update' : 'Save'}
+                                    </Text>
+                                    <MaterialIcons name="check-circle" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                                </>
+                            )}
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
 
@@ -429,86 +513,196 @@ const BookSiteVisitScreen = ({ navigation, route, onOpenDrawer }) => {
                     title="Done By"
                 />
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+        backgroundColor: COLORS.lightVioletBg || '#F5F3FF',
     },
-    keyboardView: { flex: 1 },
-    scrollView: { flex: 1 },
-    scrollContent: { paddingBottom: 100 },
+    headerGradient: {
+        paddingBottom: 4,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        ...SHADOWS.medium,
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-        backgroundColor: COLORS.cardBackground,
+        paddingHorizontal: 16,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 8 : 8,
+        paddingBottom: 8,
     },
-    headerButton: { width: 44, alignItems: 'center', padding: 8 },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
     headerTitle: {
-        ...TYPOGRAPHY.title,
-        fontSize: 20,
+        fontFamily: 'SF Pro Display',
+        fontSize: 22,
         fontWeight: '700',
+        color: '#FFFFFF',
         flex: 1,
         textAlign: 'center',
-        color: COLORS.text,
     },
-    form: { padding: 16 },
-    fieldContainer: { marginBottom: SPACING.md },
-    label: {
-        ...TYPOGRAPHY.subtitle,
-        marginBottom: SPACING.xs,
-        fontWeight: '600',
-        color: COLORS.text,
+    scrollContent: {
+        padding: 16,
+        paddingTop: 10,
     },
-    input: {
+    card: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 20,
+        ...SHADOWS.medium,
         borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 8,
-        padding: SPACING.md,
-        fontSize: 16,
-        backgroundColor: COLORS.cardBackground,
-        color: COLORS.text,
+        borderColor: '#F3E8FF',
     },
-    textArea: { minHeight: 100, textAlignVertical: 'top' },
-    selectButton: {
+    cardHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 8,
-        padding: SPACING.md,
-        backgroundColor: COLORS.cardBackground,
+        marginBottom: 20,
     },
-    selectButtonText: { fontSize: 16, color: COLORS.text },
-    sectionTitle: {
-        ...TYPOGRAPHY.subtitle,
+    cardTitle: {
+        fontFamily: 'SF Pro Display',
         fontSize: 18,
         fontWeight: '700',
-        marginTop: 10,
-        marginBottom: 15,
-        color: COLORS.textSecondary,
+        color: COLORS.deepPurple || '#5014B4',
+        marginLeft: 10,
+    },
+    inputContainer: {
+        marginBottom: 18,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#4B5563',
+        marginBottom: 8,
+        marginLeft: 4,
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+    },
+    inputIcon: {
+        marginRight: 10,
+    },
+    input: {
+        flex: 1,
+        paddingVertical: 12,
+        fontSize: 16,
+        color: '#111827',
+        fontFamily: 'SF Pro Display',
+    },
+    textAreaWrapper: {
+        alignItems: 'flex-start',
+        paddingTop: 4,
+    },
+    textArea: {
+        flex: 1,
+        height: 100,
+        fontSize: 16,
+        color: '#111827',
+        textAlignVertical: 'top',
+        fontFamily: 'SF Pro Display',
+    },
+    rowInputs: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    selector: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    selectorContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    selectorText: {
+        fontSize: 15,
+        color: '#111827',
+        fontWeight: '500',
+        fontFamily: 'SF Pro Display',
+    },
+    footerSize: {
+        height: 100,
     },
     footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         flexDirection: 'row',
-        padding: SPACING.md,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        paddingBottom: Platform.OS === 'ios' ? 24 : 14,
+        backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
-        borderTopColor: COLORS.border,
-        backgroundColor: COLORS.cardBackground,
+        borderTopColor: '#F3F4F6',
+        ...SHADOWS.large,
     },
-    button: { paddingVertical: SPACING.md, borderRadius: 8, alignItems: 'center' },
-    primaryButton: { backgroundColor: COLORS.primary },
-    primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-    secondaryButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: COLORS.border },
-    secondaryButtonText: { color: COLORS.text, fontSize: 16, fontWeight: '600' },
+    footerButton: {
+        height: 54,
+        borderRadius: 27,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    cancelButton: {
+        flex: 1,
+        backgroundColor: '#F3F4F6',
+        marginRight: 12,
+    },
+    cancelButtonText: {
+        color: '#6B7280',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    saveAction: {
+        flex: 2,
+    },
+    saveButtonGradient: {
+        flex: 1,
+        height: 54,
+        borderRadius: 27,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...SHADOWS.small,
+    },
+    saveButtonText: {
+        color: '#FFFFFF',
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    sectionTitle: {
+        fontFamily: 'SF Pro Display',
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#6B7280',
+        marginTop: 10,
+        marginBottom: 15,
+        marginLeft: 4,
+    },
 });
 
 export default BookSiteVisitScreen;

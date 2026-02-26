@@ -30,6 +30,7 @@ const formatTime = (ms) => {
 };
 
 const AudioPlayer = ({ recording }) => {
+    console.log('recording', recording);
     const soundRef = useRef(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isLoading, setIsLoading] = useState(false);

@@ -284,34 +284,53 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
-                    <MaterialIcons name="arrow-back" size={28} color="#111827" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle} numberOfLines={1}>
-                    {isUpdateMode ? 'Update Lead' : 'Create Lead'}
-                </Text>
-            </View>
+        <View style={styles.container}>
+            <LinearGradient
+                colors={[COLORS.royalBlue, COLORS.violet]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.headerGradient}
+            >
+                <SafeAreaView edges={['top']} style={styles.header}>
+                    <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
+                        <MaterialIcons name="arrow-back" size={26} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle} numberOfLines={1}>
+                        {isUpdateMode ? 'Update Lead' : 'Create Lead'}
+                    </Text>
+                    <View style={{ width: 40 }} /> {/* Placeholder to center title */}
+                </SafeAreaView>
+            </LinearGradient>
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView 
+                    contentContainerStyle={styles.scrollContent} 
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
 
                     {/* SECTION 1 - BASIC INFORMATION CARD */}
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Basic Information</Text>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="person-outline" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Basic Information</Text>
+                        </View>
 
                         <View style={[styles.inputContainer, { zIndex: 3 }]}>
                             <Text style={styles.label}>Name *</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter name"
-                                value={name}
-                                onChangeText={handleNameChange}
-                            />
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="person" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter lead name"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={name}
+                                    onChangeText={handleNameChange}
+                                />
+                            </View>
                             <SearchDropdown
                                 results={nameSearchResults}
                                 isSearching={isSearching && activeSearchField === 'name'}
@@ -322,13 +341,17 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
 
                         <View style={[styles.inputContainer, { zIndex: 2 }]}>
                             <Text style={styles.label}>Mobile Number *</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter mobile number"
-                                keyboardType="phone-pad"
-                                value={phone}
-                                onChangeText={handlePhoneChange}
-                            />
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="phone" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter mobile number"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="phone-pad"
+                                    value={phone}
+                                    onChangeText={handlePhoneChange}
+                                />
+                            </View>
                             <SearchDropdown
                                 results={phoneSearchResults}
                                 isSearching={isSearching && activeSearchField === 'phone'}
@@ -338,15 +361,19 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
                         </View>
 
                         <View style={[styles.inputContainer, { zIndex: 1 }]}>
-                            <Text style={styles.label}>Email</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter email"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                value={email}
-                                onChangeText={handleEmailChange}
-                            />
+                            <Text style={styles.label}>Email Address</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="email" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter email address"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    value={email}
+                                    onChangeText={handleEmailChange}
+                                />
+                            </View>
                             <SearchDropdown
                                 results={emailSearchResults}
                                 isSearching={isSearching && activeSearchField === 'email'}
@@ -357,133 +384,168 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Secondary Mobile Number</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter secondary mobile number"
-                                keyboardType="phone-pad"
-                                value={secondaryPhone}
-                                onChangeText={setSecondaryPhone}
-                            />
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="phone-android" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter secondary number (optional)"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="phone-pad"
+                                    value={secondaryPhone}
+                                    onChangeText={setSecondaryPhone}
+                                />
+                            </View>
                         </View>
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>WhatsApp Number</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter WhatsApp number"
-                                keyboardType="phone-pad"
-                                value={whatsappNumber}
-                                onChangeText={setWhatsappNumber}
-                            />
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="chat" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter WhatsApp number"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="phone-pad"
+                                    value={whatsappNumber}
+                                    onChangeText={setWhatsappNumber}
+                                />
+                            </View>
                         </View>
 
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Occupation</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter occupation"
-                                value={occupation}
-                                onChangeText={setOccupation}
-                            />
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Company Name</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter company name"
-                                value={companyName}
-                                onChangeText={setCompanyName}
-                            />
-                        </View>
-
-                    </View>
-
-                    {/* SECTION 2 - LEAD STATUS CARD */}
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Lead Status</Text>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Current Status</Text>
-                            <TouchableOpacity
-                                style={styles.disabledInput}
-                                onPress={() => setShowStatusPicker(true)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.disabledText}>
-                                    {statusOptions.find((o) => o.value === leadStatus)?.label || 'Select Status'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
-                            </TouchableOpacity>
+                        <View style={styles.rowInputs}>
+                            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                                <Text style={styles.label}>Occupation</Text>
+                                <View style={styles.inputWrapper}>
+                                    <MaterialIcons name="work-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Occupation"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={occupation}
+                                        onChangeText={setOccupation}
+                                    />
+                                </View>
+                            </View>
+                            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+                                <Text style={styles.label}>Company</Text>
+                                <View style={styles.inputWrapper}>
+                                    <MaterialIcons name="business" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Company"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={companyName}
+                                        onChangeText={setCompanyName}
+                                    />
+                                </View>
+                            </View>
                         </View>
                     </View>
 
-                    {/* SECTION 3 - LEAD SOURCE CARD */}
+                    {/* SECTION 2 - CONFIGURATION CARD */}
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Lead Source</Text>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Source</Text>
-                            <TouchableOpacity
-                                style={styles.disabledInput}
-                                onPress={() => setShowSourcePicker(true)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.disabledText}>
-                                    {sourceOptions.find((o) => o.value === leadSource)?.label || 'Select Source'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
-                            </TouchableOpacity>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="settings-suggest" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Source & Status</Text>
+                        </View>
+
+                        <View style={styles.rowInputs}>
+                            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                                <Text style={styles.label}>Lead Source</Text>
+                                <TouchableOpacity
+                                    style={styles.selector}
+                                    onPress={() => setShowSourcePicker(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.selectorText, !leadSource && { color: '#9CA3AF' }]} numberOfLines={1}>
+                                        {sourceOptions.find((o) => o.value === leadSource)?.label || 'Select Source'}
+                                    </Text>
+                                    <MaterialIcons name="unfold-more" size={20} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+                            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+                                <Text style={styles.label}>Current Status *</Text>
+                                <TouchableOpacity
+                                    style={styles.selector}
+                                    onPress={() => setShowStatusPicker(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.selectorText, !leadStatus && { color: '#9CA3AF' }]} numberOfLines={1}>
+                                        {statusOptions.find((o) => o.value === leadStatus)?.label || 'Select Status'}
+                                    </Text>
+                                    <MaterialIcons name="unfold-more" size={20} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
 
-                    {/* SECTION 4 - REQUIREMENT CARD */}
+                    {/* SECTION 3 - REQUIREMENT Details CARD */}
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Requirement Details</Text>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Requirement</Text>
-                            <TextInput
-                                style={[styles.input, styles.multilineInput]}
-                                placeholder="Looking for 3BHK villa in gated community"
-                                placeholderTextColor="#D1D5DB"
-                                multiline
-                                numberOfLines={4}
-                                value={requirement}
-                                onChangeText={setRequirement}
-                            />
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="assignment" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Requirement Details</Text>
                         </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>Detailed Requirement</Text>
+                            <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+                                <TextInput
+                                    style={styles.textArea}
+                                    placeholder="Tell us what the lead is looking for..."
+                                    placeholderTextColor="#9CA3AF"
+                                    multiline
+                                    numberOfLines={4}
+                                    value={requirement}
+                                    onChangeText={setRequirement}
+                                />
+                            </View>
+                        </View>
+
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Budget (Optional)</Text>
                             <TouchableOpacity
-                                style={styles.pickerSelector}
+                                style={styles.selector}
                                 onPress={() => setShowBudgetPicker(true)}
                                 activeOpacity={0.7}
                             >
-                                <Text style={[styles.pickerSelectorText, !budget && { color: '#9CA3AF' }]}>
-                                    {budget || 'Select Budget'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
+                                <View style={styles.selectorContent}>
+                                    <MaterialIcons name="payments" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                    <Text style={[styles.selectorText, !budget && { color: '#9CA3AF' }]}>
+                                        {budget || 'Select Budget Range'}
+                                    </Text>
+                                </View>
+                                <MaterialIcons name="expand-more" size={24} color="#9CA3AF" />
                             </TouchableOpacity>
                         </View>
+
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Preferred Location (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="E.g. Whitefield, Bengaluru"
-                                placeholderTextColor="#9CA3AF"
-                                value={location}
-                                onChangeText={setLocation}
-                            />
+                            <Text style={styles.label}>Preferred Location</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="location-on" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter preferred location"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={location}
+                                    onChangeText={setLocation}
+                                />
+                            </View>
                         </View>
+
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Timeline (Optional)</Text>
+                            <Text style={styles.label}>Purchase Timeline</Text>
                             <TouchableOpacity
-                                style={styles.pickerSelector}
+                                style={styles.selector}
                                 onPress={() => setShowTimelinePicker(true)}
                                 activeOpacity={0.7}
                             >
-                                <Text style={[styles.pickerSelectorText, !timeline && { color: '#9CA3AF' }]}>
-                                    {timeline || 'Select Timeline'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
+                                <View style={styles.selectorContent}>
+                                    <MaterialIcons name="event-available" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                    <Text style={[styles.selectorText, !timeline && { color: '#9CA3AF' }]}>
+                                        {timeline || 'Select Expected Timeline'}
+                                    </Text>
+                                </View>
+                                <MaterialIcons name="expand-more" size={24} color="#9CA3AF" />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -494,30 +556,34 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
                 {/* Action Buttons */}
                 <View style={styles.footer}>
                     <TouchableOpacity
-                        style={[styles.button, styles.secondaryButton, { flex: 1, marginRight: SPACING.sm }]}
+                        style={[styles.footerButton, styles.cancelButton]}
                         onPress={handleCancel}
-                        activeOpacity={0.8}
+                        activeOpacity={0.7}
                     >
-                        <Text style={styles.secondaryButtonText}>Cancel</Text>
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
                     </TouchableOpacity>
+                    
                     <TouchableOpacity
-                        style={{ flex: 1 }}
+                        style={styles.saveAction}
                         onPress={handleSaveLead}
-                        disabled={createLoading}
+                        disabled={createLoading || !name || !phone || !leadStatus}
                         activeOpacity={0.8}
                     >
                         <LinearGradient
-                            colors={createLoading ? ['#A0AEC0', '#718096'] : [COLORS.gradientStart, COLORS.gradientEnd]}
+                            colors={(createLoading || !name || !phone || !leadStatus) ? ['#A0AEC0', '#718096'] : [COLORS.royalBlue, COLORS.violet]}
                             start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={[styles.button, styles.primaryButton]}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.saveButtonGradient}
                         >
                             {createLoading ? (
-                                <ActivityIndicator color="#FFFFFF" />
+                                <ActivityIndicator color="#FFFFFF" size="small" />
                             ) : (
-                                <Text style={styles.primaryButtonText}>
-                                    {isUpdateMode ? 'Update Lead' : 'Save Lead'}
-                                </Text>
+                                <>
+                                    <Text style={styles.saveButtonText}>
+                                        {isUpdateMode ? 'Update Lead' : 'Save Lead'}
+                                    </Text>
+                                    <MaterialIcons name="check-circle" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                                </>
                             )}
                         </LinearGradient>
                     </TouchableOpacity>
@@ -569,260 +635,184 @@ const CreateLeadScreen = ({ navigation, route, onOpenDrawer }) => {
                 onSelect={setTimeline}
                 title="Select Timeline"
             />
-        </SafeAreaView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: COLORS.lightVioletBg || '#F5F3FF',
+    },
+    headerGradient: {
+        paddingBottom: 4,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        ...SHADOWS.medium,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 12 : 12,
-        paddingBottom: 16,
-        backgroundColor: 'transparent',
+        paddingHorizontal: 16,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 8 : 8,
+        paddingBottom: 8,
     },
     backButton: {
-        marginRight: 16,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
     },
     headerTitle: {
         fontFamily: 'SF Pro Display',
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: '700',
-        color: '#111827',
+        color: '#FFFFFF',
         flex: 1,
+        textAlign: 'center',
     },
     scrollContent: {
         padding: 16,
+        paddingTop: 10,
     },
     card: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
+        borderRadius: 20,
         padding: 20,
-        marginBottom: 16,
-        shadowColor: '#8a79d6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
+        marginBottom: 20,
+        ...SHADOWS.medium,
         borderWidth: 1,
-        borderColor: '#F3F4F6',
+        borderColor: '#F3E8FF',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
     },
     cardTitle: {
         fontFamily: 'SF Pro Display',
         fontSize: 18,
-        fontWeight: '600',
-        color: '#111827',
-        marginBottom: 16,
-    },
-    cardHeaderRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    form: {
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 20,
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F3F0FF',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-    },
-    addButtonText: {
-        color: COLORS.primaryPurple,
-        fontWeight: '600',
-        marginLeft: 4,
-        fontSize: 14,
-    },
-    fieldContainer: {
-        marginBottom: 20,
+        fontWeight: '700',
+        color: COLORS.deepPurple || '#5014B4',
+        marginLeft: 10,
     },
     inputContainer: {
-        marginBottom: 16,
-        position: 'relative',
+        marginBottom: 18,
     },
     label: {
-        marginLeft: 4,
         fontSize: 14,
-        fontWeight: '500',
+        fontWeight: '600',
         color: '#4B5563',
         marginBottom: 8,
+        marginLeft: 4,
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+    },
+    inputIcon: {
+        marginRight: 10,
     },
     input: {
-        backgroundColor: '#F9FAFB',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
+        flex: 1,
         paddingVertical: 12,
-        fontSize: 16,
-        color: '#111827',
-    },
-    multilineInput: {
-        height: 120,
-        paddingTop: 12,
-        textAlignVertical: 'top',
-    },
-    inputError: {
-        borderColor: '#EF4444',
-        backgroundColor: '#FEF2F2',
-    },
-    errorText: {
-        color: '#EF4444',
-        fontSize: 12,
-        marginTop: 4,
-    },
-    disabledInput: {
-        backgroundColor: '#F9FAFB',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        padding: 16,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    disabledText: {
-        fontSize: 16,
-        color: '#6B7280',
-    },
-    selectButtonText: {
-        fontSize: 15,
-        color: '#1F2937',
-    },
-    pickerSelector: {
-        backgroundColor: '#F9FAFB',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    pickerSelectorText: {
         fontSize: 16,
         color: '#111827',
         fontFamily: 'SF Pro Display',
     },
-    selectArrow: {
-        fontSize: 12,
-        color: '#6B7280',
+    textAreaWrapper: {
+        alignItems: 'flex-start',
+        paddingTop: 4,
     },
-    customFieldContainer: {
-        marginBottom: SPACING.md,
-        padding: SPACING.md,
-        backgroundColor: '#F9F9F9',
-        borderRadius: 8,
+    textArea: {
+        flex: 1,
+        height: 100,
+        fontSize: 16,
+        color: '#111827',
+        textAlignVertical: 'top',
+        fontFamily: 'SF Pro Display',
     },
-    customFieldRow: {
+    rowInputs: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    selector: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        justifyContent: 'space-between',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
     },
-    customInputKey: {
+    selectorContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
         flex: 1,
-        marginRight: 8,
     },
-    customInputValue: {
-        flex: 2,
-        marginRight: 8,
+    selectorText: {
+        fontSize: 15,
+        color: '#111827',
+        fontWeight: '500',
+        fontFamily: 'SF Pro Display',
     },
-    removeButton: {
-        padding: 4,
-    },
-    bottomBar: {
+    footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        paddingBottom: Platform.OS === 'ios' ? 24 : 14,
         backgroundColor: '#FFFFFF',
-        padding: 16,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
         borderTopWidth: 1,
         borderTopColor: '#F3F4F6',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 10,
-        flexDirection: 'row',
+        ...SHADOWS.large,
     },
-    cancelButton: {
-        backgroundColor: '#F3F4F6',
-        height: 56,
-        borderRadius: 28,
+    footerButton: {
+        height: 54,
+        borderRadius: 27,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    cancelButton: {
         flex: 1,
+        backgroundColor: '#F3F4F6',
         marginRight: 12,
     },
     cancelButtonText: {
-        color: '#4B5563',
-        fontSize: 18,
+        color: '#6B7280',
+        fontSize: 16,
         fontWeight: '600',
     },
-    footer: {
+    saveAction: {
+        flex: 2,
+    },
+    saveButtonGradient: {
+        flex: 1,
+        height: 54,
+        borderRadius: 27,
         flexDirection: 'row',
-        padding: 20,
-        backgroundColor: '#FFFFFF',
-        borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
-        ...SHADOWS.medium,
-    },
-    button: {
-        paddingVertical: 16,
-        borderRadius: 14,
-        fontFamily: 'SF Pro Display',
-    },
-    saveButton: {
-        backgroundColor: COLORS.primaryPurple || '#6C4DFF',
-        height: 56,
-        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    primaryButton: {
-        flex: 2,
-        shadowColor: COLORS.primaryPurple || '#6C4DFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+        ...SHADOWS.small,
     },
     saveButtonText: {
         color: '#FFFFFF',
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '700',
-        letterSpacing: 0.5,
     },
-    primaryButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '700',
-        letterSpacing: 0.5,
-    },
-    secondaryButton: {
-        backgroundColor: '#F3F4F6',
-        borderWidth: 0,
-    },
-    secondaryButtonText: {
-        color: '#4B5563',
-        fontSize: 18,
-        fontWeight: '600',
-        fontFamily: 'SF Pro Display',
-    }
 });
 
 export default CreateLeadScreen;

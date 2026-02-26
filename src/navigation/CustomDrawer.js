@@ -9,7 +9,7 @@ import {
     Animated,
     Platform,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useProfileStore } from '../store/profileStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useDispatch, useSelector } from 'react-redux';
@@ -34,6 +34,14 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
     const clearProfile = useProfileStore((state) => state.clearProfile);
     const clearSubscription = useSubscriptionStore((state) => state.clearSubscription);
     const slideAnim = React.useRef(new Animated.Value(-320)).current;
+    
+    // Get unread WhatsApp count
+    const unreadWhatsAppCount = useSelector(state => state.whatsapp.unreadCount || 0);
+
+    const formatUnreadCount = (count) => {
+        if (count > 9) return '9+';
+        return count.toString();
+    };
 
     const groupedSources = React.useMemo(() => {
         const groups = {};
@@ -133,6 +141,16 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
 
     const menuItems = [
         {
+            id: 'hot-chats',
+            title: 'Messages',
+            icon: 'whatsapp',
+            iconFamily: 'MaterialCommunityIcons',
+            onPress: () => {
+                onClose();
+                navigation.navigate('HotChats');
+            },
+        },
+        {
             id: 'create-lead',
             title: 'Create Lead',
             icon: 'person-add',
@@ -150,15 +168,15 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                 navigation.navigate('CreateNewEnquiry');
             },
         },
-        {
-            id: 'book-site-visit',
-            title: 'Site Visit',
-            icon: 'home-work',
-            onPress: () => {
-                onClose();
-                navigation.navigate('BookSiteVisit');
-            },
-        },
+        // {
+        //     id: 'book-site-visit',
+        //     title: 'Site Visit',
+        //     icon: 'home-work',
+        //     onPress: () => {
+        //         onClose();
+        //         navigation.navigate('BookSiteVisit');
+        //     },
+        // },
         {
             id: 'high-demand-projects',
             title: 'Projects',
@@ -251,8 +269,17 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                         style={styles.menuItem}
                                         onPress={item.onPress}
                                     >
-                                        <MaterialIcons name={item.icon} size={24} color={COLORS.text} style={styles.menuIcon} />
+                                        {item.iconFamily === 'MaterialCommunityIcons' ? (
+                                            <MaterialCommunityIcons name={item.icon} size={24} color={COLORS.text} style={styles.menuIcon} />
+                                        ) : (
+                                            <MaterialIcons name={item.icon} size={24} color={COLORS.text} style={styles.menuIcon} />
+                                        )}
                                         <Text style={styles.menuText}>{item.title}</Text>
+                                        {item.id === 'hot-chats' && unreadWhatsAppCount > 0 && (
+                                            <View style={styles.menuBadge}>
+                                                <Text style={styles.menuBadgeText}>{formatUnreadCount(unreadWhatsAppCount)}</Text>
+                                            </View>
+                                        )}
                                     </TouchableOpacity>
                                 ))}
 
@@ -584,6 +611,21 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600', // Medium
         color: '#111827',
+    },
+    menuBadge: {
+        backgroundColor: '#25D366', // WhatsApp green
+        borderRadius: 12,
+        minWidth: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 'auto',
+        paddingHorizontal: 6,
+    },
+    menuBadgeText: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: 'bold',
     },
     campaignText: {
         fontFamily: 'SF Pro Display',

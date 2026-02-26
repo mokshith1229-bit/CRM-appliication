@@ -94,17 +94,15 @@ const QuickContactScreen = ({ route, navigation }) => {
         }
     }, [dispatch, initialContact]);
     const handleWhatsApp = () => {
-        const url = `whatsapp://send?phone=${contact.phone}`;
-        Linking.canOpenURL(url).then(supported => {
-            if (supported) {
-                Linking.openURL(url);
-            } else {
-                Alert.alert("Error", "WhatsApp is not installed");
-            }
+        if (!contact) return;
+        navigation.navigate('ChatDetail', { 
+            chatId: contact.phone || contact.id || contact._id,
+            chatName: contact.name || contact.phone
         });
     };
 
     const handleMessage = () => {
+        if (!contact?.phone) return;
         const url = `sms:${contact.phone}`;
         Linking.openURL(url);
     };

@@ -45,12 +45,10 @@ const SubscriptionExpiredScreen = ({ navigation }) => {
                 </View>
                 <Text style={styles.title}>Subscription Expired</Text>
                 <Text style={styles.message}>
-                    Your organization's subscription has expired. Please contact your administrator to renew the plan and restore access.
+                    Access to Vivtej TeleCRM is restricted because your organization's 
+                    account is currently inactive. Please reach out to your system 
+                    administrator to update your account status.
                 </Text>
-
-                <TouchableOpacity style={styles.button} onPress={handleContactSupport}>
-                    <Text style={styles.buttonText}>Contact Support</Text>
-                </TouchableOpacity>
 
                 <TouchableOpacity style={styles.secondaryButton} onPress={handleBackToLogin}>
                     <Text style={styles.secondaryButtonText}>Back to Login</Text>

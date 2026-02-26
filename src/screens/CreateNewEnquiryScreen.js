@@ -9,10 +9,11 @@ import {
     KeyboardAvoidingView,
     Platform,
     Alert,
+    StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { COLORS, SHADOWS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { useDispatch, useSelector } from 'react-redux';
 import { setActiveFilter, createEnquiry, fetchTenantConfig } from '../store/slices/leadSlice';
 import StatusPicker from '../components/StatusPicker';
@@ -153,173 +154,286 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <MaterialIcons name="arrow-back" size={28} color="#111827" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle} numberOfLines={1}>New Enquiry</Text>
-            </View>
+        <View style={styles.container}>
+            <LinearGradient
+                colors={[COLORS.royalBlue, COLORS.violet]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.headerGradient}
+            >
+                <SafeAreaView edges={['top']} style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <MaterialIcons name="arrow-back" size={26} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle} numberOfLines={1}>New Enquiry</Text>
+                    <View style={{ width: 40 }} />
+                </SafeAreaView>
+            </LinearGradient>
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent}>
+                <ScrollView 
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
 
                     {/* SECTION 1 - BASIC INFORMATION CARD */}
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Basic Information</Text>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="person-outline" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Basic Information</Text>
+                        </View>
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Full Name *</Text>
-                            <TextInput
-                                style={[styles.input, errors.name && styles.inputError]}
-                                placeholder="Enter full name"
-                                value={name}
-                                onChangeText={(text) => {
-                                    setName(text);
-                                    if (errors.name) setErrors({ ...errors, name: null });
-                                }}
-                            />
+                            <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
+                                <MaterialIcons name="person" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter full name"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={name}
+                                    onChangeText={(text) => {
+                                        setName(text);
+                                        if (errors.name) setErrors({ ...errors, name: null });
+                                    }}
+                                />
+                            </View>
                             {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
                         </View>
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Mobile Number *</Text>
-                            <TextInput
-                                style={[styles.input, errors.phone && styles.inputError]}
-                                placeholder="Enter mobile number"
-                                keyboardType="phone-pad"
-                                value={phone}
-                                onChangeText={(text) => {
-                                    setPhone(text);
-                                    if (errors.phone) setErrors({ ...errors, phone: null });
-                                }}
-                            />
+                            <View style={[styles.inputWrapper, errors.phone && styles.inputError]}>
+                                <MaterialIcons name="phone" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter mobile number"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="phone-pad"
+                                    value={phone}
+                                    onChangeText={(text) => {
+                                        setPhone(text);
+                                        if (errors.phone) setErrors({ ...errors, phone: null });
+                                    }}
+                                />
+                            </View>
                             {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
                         </View>
 
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Email (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter email address"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                value={email}
-                                onChangeText={setEmail}
-                            />
+                            <Text style={styles.label}>Email Address (Optional)</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="email" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter email address"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                />
+                            </View>
                         </View>
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Occupation (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="E.g. Software Engineer"
-                                value={occupation}
-                                onChangeText={setOccupation}
-                            />
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="work-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="E.g. Software Engineer"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={occupation}
+                                    onChangeText={setOccupation}
+                                />
+                            </View>
                         </View>
                     </View>
 
-                    {/* SECTION 2 - REQUIREMENT CARD */}
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Requirement Details</Text>
+                    
 
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Requirement</Text>
-                            <TextInput
-                                style={[styles.input, styles.multilineInput]}
-                                placeholder="Looking for 3BHK villa in gated community"
-                                multiline
-                                numberOfLines={3}
-                                textAlignVertical="top"
-                                value={requirement}
-                                onChangeText={setRequirement}
-                            />
+                    {/* SECTION 2 - SOURCE & STATUS CARD */}
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="settings" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Source</Text>
+                        </View>
+
+                        <View style={styles.rowInputs}>
+                            {/* <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                                <Text style={styles.label}>Lead Status *</Text>
+                                <TouchableOpacity
+                                    style={[styles.selector, errors.status && styles.inputError]}
+                                    onPress={() => setShowStatusPicker(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.selectorContent}>
+                                        <MaterialIcons name="flag" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                        <Text style={[styles.selectorText, !leadStatus && { color: '#9CA3AF' }]} numberOfLines={1}>
+                                            {leadStatus || 'Select Status'}
+                                        </Text>
+                                    </View>
+                                    <MaterialIcons name="expand-more" size={24} color="#9CA3AF" />
+                                </TouchableOpacity>
+                                {errors.status && <Text style={styles.errorText}>{errors.status}</Text>}
+                            </View> */}
+
+                            <View style={[styles.inputContainer, { flex: 1 }]}>
+                                <Text style={styles.label}>Lead Source *</Text>
+                                <TouchableOpacity
+                                    style={[styles.selector, errors.source && styles.inputError]}
+                                    onPress={() => setShowSourcePicker(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.selectorContent}>
+                                        <MaterialIcons name="share" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                        <Text style={[styles.selectorText, !leadSource && { color: '#9CA3AF' }]} numberOfLines={1}>
+                                            {sourceOptions.find(o => o.value === leadSource)?.label || 'Select Source'}
+                                        </Text>
+                                    </View>
+                                    <MaterialIcons name="expand-more" size={24} color="#9CA3AF" />
+                                </TouchableOpacity>
+                                {errors.source && <Text style={styles.errorText}>{errors.source}</Text>}
+                            </View>
+                        </View>
+                    </View>
+{/* SECTION  - REQUIREMENT CARD */}
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <MaterialIcons name="assignment" size={22} color={COLORS.royalBlue} />
+                            <Text style={styles.cardTitle}>Requirement Details</Text>
                         </View>
 
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Budget (Optional)</Text>
-                            <TouchableOpacity
-                                style={styles.pickerSelector}
-                                onPress={() => setShowBudgetPicker(true)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[styles.pickerSelectorText, !budget && { color: '#9CA3AF' }]}>
-                                    {budget || 'Select Budget'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
-                            </TouchableOpacity>
+                            <Text style={styles.label}>Requirement</Text>
+                            <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+                                <MaterialIcons name="description" size={20} color="#9CA3AF" style={[styles.inputIcon, { marginTop: 12 }]} />
+                                <TextInput
+                                    style={styles.textArea}
+                                    placeholder="Looking for 3BHK villa in gated community"
+                                    placeholderTextColor="#9CA3AF"
+                                    multiline
+                                    numberOfLines={3}
+                                    value={requirement}
+                                    onChangeText={setRequirement}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.rowInputs}>
+                            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                                <Text style={styles.label}>Budget (Optional)</Text>
+                                <TouchableOpacity
+                                    style={styles.selector}
+                                    onPress={() => setShowBudgetPicker(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.selectorContent}>
+                                        <MaterialIcons name="payments" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                        <Text style={[styles.selectorText, !budget && { color: '#9CA3AF' }]} numberOfLines={1}>
+                                            {budget || 'Select Budget'}
+                                        </Text>
+                                    </View>
+                                    <MaterialIcons name="expand-more" size={24} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={[styles.inputContainer, { flex: 1 }]}>
+                                <Text style={styles.label}>Timeline (Optional)</Text>
+                                <TouchableOpacity
+                                    style={styles.selector}
+                                    onPress={() => setShowTimelinePicker(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.selectorContent}>
+                                        <MaterialIcons name="event-available" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+                                        <Text style={[styles.selectorText, !timeline && { color: '#9CA3AF' }]} numberOfLines={1}>
+                                            {timeline || 'Select Timeline'}
+                                        </Text>
+                                    </View>
+                                    <MaterialIcons name="expand-more" size={24} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Preferred Location (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="E.g. Whitefield, Bengaluru"
-                                placeholderTextColor="#9CA3AF"
-                                value={location}
-                                onChangeText={setLocation}
-                            />
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Timeline (Optional)</Text>
-                            <TouchableOpacity
-                                style={styles.pickerSelector}
-                                onPress={() => setShowTimelinePicker(true)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[styles.pickerSelectorText, !timeline && { color: '#9CA3AF' }]}>
-                                    {timeline || 'Select Timeline'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
-                            </TouchableOpacity>
+                            <View style={styles.inputWrapper}>
+                                <MaterialIcons name="location-on" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="E.g. Whitefield, Bengaluru"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={location}
+                                    onChangeText={setLocation}
+                                />
+                            </View>
                         </View>
                     </View>
-
-                    {/* SECTION 3 - SOURCE CARD */}
-                    {/* SECTION 4 - SOURCE & STATUS CARD */}
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Source & Status</Text>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Lead Status *</Text>
-                            <TouchableOpacity
-                                style={[styles.pickerButton, errors.status && styles.inputError]}
-                                onPress={() => setShowStatusPicker(true)}
-                            >
-                                <Text style={[styles.pickerButtonText, !leadStatus && { color: '#9CA3AF' }]}>
-                                    {leadStatus || 'Select Status'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
-                            </TouchableOpacity>
-                            {errors.status && <Text style={styles.errorText}>{errors.status}</Text>}
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Lead Source *</Text>
-                            <TouchableOpacity
-                                style={[styles.pickerButton, errors.source && styles.inputError]}
-                                onPress={() => setShowSourcePicker(true)}
-                            >
-                                <Text style={[styles.pickerButtonText, !leadSource && { color: '#9CA3AF' }]}>
-                                    {sourceOptions.find(o => o.value === leadSource)?.label || 'Select Source'}
-                                </Text>
-                                <MaterialIcons name="arrow-drop-down" size={24} color="#9CA3AF" />
-                            </TouchableOpacity>
-                            {errors.source && <Text style={styles.errorText}>{errors.source}</Text>}
-                        </View>
-                    </View>
-
-                    {/* Bottom Padding for floating button */}
                     <View style={{ height: 100 }} />
                 </ScrollView>
+
+                {/* Footer Buttons */}
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[styles.footerButton, styles.cancelButton]}
+                        onPress={() => navigation.goBack()}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                        style={styles.saveAction}
+                        onPress={handleSave}
+                        disabled={!name || !phone}
+                        activeOpacity={0.8}
+                    >
+                        <LinearGradient
+                            colors={(!name || !phone) ? ['#A0AEC0', '#718096'] : [COLORS.royalBlue, COLORS.violet]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.saveButtonGradient}
+                        >
+                            <Text style={styles.saveButtonText}>Save Enquiry</Text>
+                            <MaterialIcons name="check-circle" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
             </KeyboardAvoidingView>
 
-            {/* BUDGET & TIMELINE PICKERS */}
+            {/* STATUS & SOURCE PICKERS */}
+            <StatusPicker
+                visible={showStatusPicker}
+                onClose={() => setShowStatusPicker(false)}
+                title="Select Status"
+                options={statusOptions}
+                selectedValue={leadStatus}
+                onSelect={(value) => {
+                    setLeadStatus(value);
+                    if (errors.status) setErrors({ ...errors, status: null });
+                    setShowStatusPicker(false);
+                }}
+            />
+
+            <StatusPicker
+                visible={showSourcePicker}
+                onClose={() => setShowSourcePicker(false)}
+                title="Select Source"
+                options={sourceOptions}
+                selectedValue={leadSource}
+                onSelect={(value) => {
+                    setLeadSource(value);
+                    if (errors.source) setErrors({ ...errors, source: null });
+                    setShowSourcePicker(false);
+                }}
+            />
+
             <StatusPicker
                 visible={showBudgetPicker}
                 onClose={() => setShowBudgetPicker(false)}
@@ -337,132 +451,98 @@ const CreateNewEnquiryScreen = ({ navigation }) => {
                 onSelect={setTimeline}
                 title="Select Timeline"
             />
-
-            {/* FIXED BOTTOM BUTTON */}
-            <View style={styles.bottomBar}>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                    <Text style={styles.saveButtonText}>Save Enquiry</Text>
-                </TouchableOpacity>
-            </View>
-            {/* Status Picker */}
-            <StatusPicker
-                visible={showStatusPicker}
-                onClose={() => setShowStatusPicker(false)}
-                title="Select Status"
-                options={statusOptions}
-                selectedValue={leadStatus}
-                onSelect={(value) => {
-                    setLeadStatus(value);
-                    if (errors.status) setErrors({ ...errors, status: null });
-                    setShowStatusPicker(false);
-                }}
-            />
-
-            {/* Source Picker */}
-            <StatusPicker
-                visible={showSourcePicker}
-                onClose={() => setShowSourcePicker(false)}
-                title="Select Source"
-                options={sourceOptions}
-                selectedValue={leadSource}
-                onSelect={(value) => {
-                    setLeadSource(value);
-                    if (errors.source) setErrors({ ...errors, source: null });
-                    setShowSourcePicker(false);
-                }}
-            />
-        </SafeAreaView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: COLORS.lightVioletBg || '#F5F3FF',
+    },
+    headerGradient: {
+        paddingBottom: 4,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        ...SHADOWS.medium,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'android' ? 12 : 0,
-        paddingBottom: 16,
-        backgroundColor: 'transparent',
+        paddingHorizontal: 16,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 8 : 8,
+        paddingBottom: 8,
     },
     backButton: {
-        marginRight: 16,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
     },
     headerTitle: {
         fontFamily: 'SF Pro Display',
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: '700',
-        color: '#111827',
+        color: '#FFFFFF',
         flex: 1,
+        textAlign: 'center',
     },
     scrollContent: {
         padding: 16,
+        paddingTop: 10,
     },
     card: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
+        borderRadius: 20,
         padding: 20,
-        marginBottom: 16,
-        shadowColor: '#8a79d6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
+        marginBottom: 20,
+        ...SHADOWS.medium,
         borderWidth: 1,
-        borderColor: '#F3F4F6',
+        borderColor: '#F3E8FF',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
     },
     cardTitle: {
         fontFamily: 'SF Pro Display',
         fontSize: 18,
-        fontWeight: '600',
-        color: '#111827',
-        marginBottom: 16,
-    },
-    cardHeaderRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F3F0FF',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-    },
-    addButtonText: {
-        color: COLORS.primaryPurple,
-        fontWeight: '600',
-        marginLeft: 4,
-        fontSize: 14,
+        fontWeight: '700',
+        color: COLORS.deepPurple || '#5014B4',
+        marginLeft: 10,
     },
     inputContainer: {
-        marginBottom: 16,
+        marginBottom: 18,
     },
     label: {
         fontSize: 14,
-        fontWeight: '500',
+        fontWeight: '600',
         color: '#4B5563',
         marginBottom: 8,
+        marginLeft: 4,
     },
-    input: {
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#F9FAFB',
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: '#E5E7EB',
         borderRadius: 12,
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
+    },
+    inputIcon: {
+        marginRight: 10,
+    },
+    input: {
+        flex: 1,
         paddingVertical: 12,
         fontSize: 16,
         color: '#111827',
-    },
-    multilineInput: {
-        height: 100,
-        paddingTop: 12,
+        fontFamily: 'SF Pro Display',
     },
     inputError: {
         borderColor: '#EF4444',
@@ -473,101 +553,90 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 4,
     },
-    disabledInput: {
-        backgroundColor: '#F3F4F6',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    textAreaWrapper: {
+        alignItems: 'flex-start',
+        paddingTop: 4,
     },
-    disabledText: {
-        fontSize: 16,
-        color: '#6B7280',
-    },
-    pickerSelector: {
-        backgroundColor: '#F9FAFB',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    pickerSelectorText: {
+    textArea: {
+        flex: 1,
+        height: 100,
         fontSize: 16,
         color: '#111827',
+        textAlignVertical: 'top',
         fontFamily: 'SF Pro Display',
     },
-    pickerButton: {
-        backgroundColor: '#F9FAFB',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+    rowInputs: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    selector: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
     },
-    pickerButtonText: {
-        fontSize: 16,
-        color: '#111827',
-    },
-    customFieldRow: {
+    selectorContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
-    },
-    customInputKey: {
         flex: 1,
-        marginRight: 8,
     },
-    customInputValue: {
-        flex: 2,
-        marginRight: 8,
+    selectorText: {
+        fontSize: 15,
+        color: '#111827',
+        fontWeight: '500',
+        fontFamily: 'SF Pro Display',
     },
-    removeButton: {
-        padding: 4,
-    },
-    bottomBar: {
+    footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        paddingBottom: Platform.OS === 'ios' ? 24 : 14,
         backgroundColor: '#FFFFFF',
-        padding: 16,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
         borderTopWidth: 1,
         borderTopColor: '#F3F4F6',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 10,
+        ...SHADOWS.large,
     },
-    saveButton: {
-        backgroundColor: COLORS.primaryPurple,
-        height: 56,
-        borderRadius: 28,
+    footerButton: {
+        height: 54,
+        borderRadius: 27,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: COLORS.primaryPurple,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+    },
+    cancelButton: {
+        flex: 1,
+        backgroundColor: '#F3F4F6',
+        marginRight: 12,
+    },
+    cancelButtonText: {
+        color: '#6B7280',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    saveAction: {
+        flex: 2,
+    },
+    saveButtonGradient: {
+        flex: 1,
+        height: 54,
+        borderRadius: 27,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...SHADOWS.small,
     },
     saveButtonText: {
         color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '600',
-        fontFamily: 'SF Pro Display',
+        fontSize: 17,
+        fontWeight: '700',
     },
 });
 

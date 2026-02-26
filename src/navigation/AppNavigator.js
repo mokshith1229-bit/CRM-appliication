@@ -18,6 +18,8 @@ import IncomingCallScreen from '../screens/IncomingCallScreen';
 import CampaignLeadsScreen from '../screens/CampaignLeadsScreen';
 import FilteredContactsScreen from '../screens/FilteredContactsScreen';
 import CreateNewEnquiryScreen from '../screens/CreateNewEnquiryScreen';
+import HotChatsScreen from '../screens/HotChatsScreen';
+import ChatDetailScreen from '../screens/ChatDetailScreen';
 import BottomTabs from '../components/BottomTabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator } from 'react-native';
@@ -141,6 +143,10 @@ const AppNavigator = () => {
                 return <FilteredContactsScreen {...commonProps} />;
             case 'CreateNewEnquiry':
                 return <CreateNewEnquiryScreen {...commonProps} />;
+            case 'HotChats':
+                return <HotChatsScreen {...commonProps} />;
+            case 'ChatDetail':
+                return <ChatDetailScreen {...commonProps} />;
             case 'Login':
                 return <LoginScreen {...commonProps} />;
             default:

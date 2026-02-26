@@ -17,6 +17,7 @@ import SubscriptionExpiredScreen from './src/screens/SubscriptionExpiredScreen';
 import { setupAxiosInterceptors } from './src/api/axiosClient';
 import CallLogService from './src/services/CallLogService';
 import RecordingSyncService from './src/services/RecordingSyncService';
+import NotificationService from './src/services/NotificationService';
 import { SocketProvider } from './src/context/SocketContext';
 
 // Setup Interceptors
@@ -62,6 +63,18 @@ const AppContent = () => {
                 }
             };
             requestPermissions();
+
+            // Set up notification channel + request notification permission
+            // so background sync notifications work from the first call
+            const setupNotifications = async () => {
+                try {
+                    await NotificationService.setupNotificationChannel();
+                    await NotificationService.requestPermission();
+                } catch (err) {
+                    console.warn('[App] Notification setup failed:', err);
+                }
+            };
+            setupNotifications();
         }
         dispatch(checkAppConfig());
     }, [dispatch, isAuthenticated]);

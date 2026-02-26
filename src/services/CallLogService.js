@@ -19,15 +19,21 @@ const requestPermission = async () => {
     if (Platform.OS !== 'android' || isExpoGo) return false;
 
     try {
+        // Check if permission is already granted
+        const hasPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_CALL_LOG);
+        if (hasPermission) return true;
+
+        // Show Prominent Disclosure before requesting
+        const ProminentDisclosure = require('../utils/ProminentDisclosure').default;
+        const userAgreed = await ProminentDisclosure.showCallLogDisclosure();
+        
+        if (!userAgreed) {
+            console.log('[CallLogService] User declined prominent disclosure.');
+            return false;
+        }
+
         const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.READ_CALL_LOG,
-            {
-                title: 'Call Log Permission',
-                message: 'App needs access to your call logs to manage leads better.',
-                buttonNeutral: 'Ask Me Later',
-                buttonNegative: 'Cancel',
-                buttonPositive: 'OK',
-            }
+            PermissionsAndroid.PERMISSIONS.READ_CALL_LOG
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (err) {
@@ -248,6 +254,21 @@ const syncCallLogsForCampaignRecord = async (campaign_id, campaign_record_id, ph
     }
 };
 
+// Fetch call logs from server that are missing a recording (no recording_gcs_path)
+const getMissingRecordingCallLogs = async () => {
+    if (Platform.OS !== 'android' || isExpoGo) return [];
+
+    try {
+        const axiosClient = require('../api/axiosClient').default;
+        const response = await axiosClient.get('/call-recordings/pending');
+        // Server returns array of { _id, device_timestamp, status, ... }
+        return response?.data || response?.result || [];
+    } catch (error) {
+        console.error('[CallLogService] Error fetching missing-recording logs:', error);
+        return [];
+    }
+};
+
 const syncCallLogsToServer = async (callLogs) => {
     if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
     
@@ -267,9 +288,11 @@ const syncCallLogsToServer = async (callLogs) => {
         console.log(`Syncing ${newLogs.length} new call logs to server...`);
 
         const axiosClient = require('../api/axiosClient').default;
+        // axiosClient interceptor already unwraps response.data, so `response` IS the server JSON:
+        // { success: true, data: { updated: N, syncedTimestamps: [...] } }
         const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: newLogs });
         
-        if (response.success) {
+        if (response && response.success) {
             // Find the latest timestamp in the newly synced logs
             const latestTimestamp = Math.max(...newLogs.map(log => parseInt(log.timestamp)));
             if (latestTimestamp > lastSync) {
@@ -277,7 +300,8 @@ const syncCallLogsToServer = async (callLogs) => {
             }
         }
 
-        return response.data;
+        // Return the full server response so CallStateTask can read syncedTimestamps
+        return response;
     } catch (error) {
         console.error('Error syncing call logs to server:', error);
         return { success: false, message: error.message };
@@ -293,6 +317,7 @@ const CallLogService = {
     syncCallLogsForLead,
     syncCallLogsForEnquiry,
     syncCallLogsForCampaignRecord,
+    getMissingRecordingCallLogs,
     getLastSyncTimestamp,
     setLastSyncTimestamp,
 };

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import io from 'socket.io-client';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { API_URL } from '../constants/api'; // Ensure this points to your server URL
+import { receiveMessage } from '../store/slices/whatsappSlice';
 
 const SocketContext = createContext();
 
@@ -12,6 +13,7 @@ export const useSocket = () => {
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const token = useSelector((state) => state.auth?.token); // Adjust based on your Redux state structure
+  const dispatch = useDispatch();
     // If not using redux for auth, we might need to retrieve token from AsyncStorage
 
   useEffect(() => {
@@ -36,9 +38,18 @@ export const SocketProvider = ({ children }) => {
           console.log(`[Socket] Connection Error: ${err.message}`);
       });
 
+      // Handle WhatsApp incoming events globally
+      newSocket.on('whatsapp:message', (payload) => {
+          console.log('[Socket] WhatsApp Message received:', payload);
+          if (payload) {
+              dispatch(receiveMessage(payload));
+          }
+      });
+
       setSocket(newSocket);
 
       return () => {
+        newSocket.off('whatsapp:message');
         newSocket.disconnect();
       };
     } else {
@@ -47,7 +58,7 @@ export const SocketProvider = ({ children }) => {
         setSocket(null);
       }
     }
-  }, [token]);
+  }, [token, dispatch]);
 
   return (
     <SocketContext.Provider value={socket}>

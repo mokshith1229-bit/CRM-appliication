@@ -239,6 +239,7 @@ export const fetchLeadDetails = createAsyncThunk(
     async (leadId, { rejectWithValue }) => {
         try {
             const response = await axiosClient.get(`/leads/${leadId}`);
+            
             if (response.success || response.data) {
                 return response.data || response.result;
             } else {

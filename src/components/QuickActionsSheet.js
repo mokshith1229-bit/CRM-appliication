@@ -11,7 +11,8 @@ import {
     Alert,
     Linking,
     ActivityIndicator,
-    FlatList
+    FlatList,
+    
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,7 +28,7 @@ import * as Notifications from 'expo-notifications';
 import TransferLeadModal from './TransferLeadModal';
 import StatusPicker from './StatusPicker';
 import CallLogService from '../services/CallLogService';
-
+import { Picker } from '@react-native-picker/picker';
 const BUDGET_OPTIONS = [
     { label: '5 Lakhs to 50 Lakhs', value: '5 Lakhs to 50 Lakhs' },
     { label: '50 Lakhs to 1 Cr', value: '50 Lakhs to 1 Cr' },
@@ -65,7 +66,7 @@ const formatDate = (dateString) => {
     }
 };
 
-const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, campaignName }) => {
+const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, campaignName, navigation }) => {
     // console.log('🟢 QuickActionsSheet render - visible:', visible, 'contact:', contact?.name || contact?.phone);
 
     const dispatch = useDispatch();
@@ -107,7 +108,9 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
     const [showSourcePicker, setShowSourcePicker] = useState(false);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
-
+    const [showSiteVisitModal, setShowSiteVisitModal] = useState(false);
+    const [siteVisitNote, setSiteVisitNote] = useState('');
+    const [siteVisitDone, setSiteVisitDone] = useState(false);
     // Status Change Note State
     const [pendingStatus, setPendingStatus] = useState(null);
     const [showStatusNoteModal, setShowStatusNoteModal] = useState(false);
@@ -157,7 +160,8 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
     useEffect(() => {
         if (visible && freshContact) {
-            const dynamicRequirement = formatRequirementsFromFields(freshContact);
+            
+            const dynamicRequirement = formatRequirementsFromFields(freshContact?.requirement ||freshContact?.payload || {});
             setLocalLeadInfo({
                 budget: freshContact.attributes?.budget || freshContact.budget || '',
                 location: freshContact.attributes?.location || freshContact.location || '',
@@ -655,8 +659,37 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         }
     };
 
+const updateSiteVisit = async () => {
+    if (freshContact) {
+        try {
+            const targetLeadId = freshContact.id || freshContact._id;
+            const date = new Date();
+            const isSiteVisitDone = String(siteVisitDone) === 'true';
 
+            // 1. Call the new specific API
+            await axiosClient.put(`/leads/${targetLeadId}/sitevisit`, {
+                site_visit_note: siteVisitNote,
+                site_visit_date: date.toISOString(),
+                site_visit_done: isSiteVisitDone
+            });
 
+            // 2. Update Redux store so UI reflects changes immediately
+            await dispatch(updateLead({
+                id: targetLeadId,
+                data: { 
+                    site_visit_note: siteVisitNote,
+                    site_visit_date: date.toISOString(),
+                    site_visit_done: isSiteVisitDone
+                 }
+            })).unwrap();
+
+            setShowSiteVisitModal(false);
+            setSiteVisitNote('');
+        } catch (error) {
+            Alert.alert("Error", error?.response?.data?.message || "Failed to update site visit");
+        }
+    }
+};
     return (
         <Modal
             visible={visible}
@@ -710,7 +743,18 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                         <ScrollView style={styles.content}>
                             {/* Action Buttons */}
                             <View style={styles.actionsRow}>
-                                <TouchableOpacity style={styles.actionButton} onPress={() => freshContact?.phone && openWhatsApp(freshContact.phone)}>
+                                <TouchableOpacity 
+                                    style={styles.actionButton} 
+                                    onPress={() => {
+                                        if (freshContact) {
+                                            onClose();
+                                            navigation.navigate('ChatDetail', { 
+                                                chatId: freshContact.phone || freshContact._id || freshContact.id,
+                                                chatName: freshContact.name || freshContact.phone
+                                            });
+                                        }
+                                    }}
+                                >
                                     <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
                                         <MaterialCommunityIcons name="whatsapp" size={24} color={COLORS.primaryPurple} />
                                     </View>
@@ -806,7 +850,26 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                                     </View>
                                 </View>
                             </TouchableOpacity>
-
+                            {/* Site Visit Selector */}
+                            {freshContact?._id && (
+                                <TouchableOpacity
+                                    style={styles.leadSection}
+                                    onPress={() => setShowSiteVisitModal(true)}
+                                >
+                                    <View style={styles.leadHeader}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <MaterialCommunityIcons name="source-branch" size={20} color={COLORS.primary} />
+                                            <Text style={styles.sectionTitle}>Site Visit</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text style={[styles.infoValue, { marginRight: 8, color: COLORS.primary }]}>
+                                                {freshContact?.site_visit_done ? "YES" : "NO"}
+                                            </Text>
+                                            <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
                             {/* Lead Requirement Section */}
                             <View style={styles.leadSection}>
                                 <View style={styles.leadHeader}>
@@ -1085,7 +1148,70 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                     </View>
                 </View>
             </Modal>
+   <Modal
+                visible={showSiteVisitModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowSiteVisitModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.dialog}>
+                        <Text style={styles.dialogTitle}>Set Site Visit</Text>
 
+                   <View style={{ width: '100%', marginBottom: 16 }}>
+    <Text style={styles.inputLabel}>Date & Time</Text>
+    <Text>
+        {new Date().toLocaleString('en-GB', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).replace(',', ' -')}
+    </Text>
+</View>
+
+                        <View style={{ width: '100%', marginBottom: 24 }}>
+                            <Text style={styles.inputLabel}>Site Visit Done</Text>
+                         <Picker
+            selectedValue={siteVisitDone}
+            onValueChange={(itemValue) => setSiteVisitDone(itemValue)}
+        >
+            <Picker.Item label="Select Option" value={null} />
+            <Picker.Item label="Yes" value="true" />
+            <Picker.Item label="No" value="false" />
+        </Picker>
+                        </View>
+
+                        <View style={{ width: '100%', marginBottom: 24 }}>
+                            <Text style={styles.inputLabel}>REVIEW NOTES</Text>
+                            <TextInput
+                                style={[styles.textInput, { height: 80 }]}
+                                placeholder="What is the review notes?"
+                                value={siteVisitNote}
+                                onChangeText={setSiteVisitNote}
+                                multiline
+                            />
+                        </View>
+
+                        <View style={styles.dialogActions}>
+                            <TouchableOpacity
+                                style={[styles.actionButtonOutline, { flex: 1 }]}
+                                onPress={() => setShowSiteVisitModal(false)}
+                            >
+                                <Text style={styles.actionButtonOutlineText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionButtonPrimary, { flex: 1 }]}
+                                onPress={updateSiteVisit}
+                            >
+                                <Text style={styles.actionButtonPrimaryText}>Update Site Visit</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
             <TransferLeadModal
                 visible={isTransferModalVisible}
                 onClose={() => setIsTransferModalVisible(false)}

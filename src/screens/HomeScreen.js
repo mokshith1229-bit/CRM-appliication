@@ -790,6 +790,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
                 onCall={handleCallAction}
                 campaignId={selectedContact?.campaignId}
                 campaignName={selectedContact?.campaignName}
+                navigation={navigation}
             />
 
             <StatusOverlay

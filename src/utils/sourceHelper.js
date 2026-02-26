@@ -33,7 +33,7 @@ export const formatRequirementsFromFields = (record) => {
         customData[cleanName] = value;
     };
 
-    const attrs = record.attributes || {};
+    const attrs = record || {};
 
     if (Array.isArray(attrs.field_data)) {
         attrs.field_data.forEach(field => {

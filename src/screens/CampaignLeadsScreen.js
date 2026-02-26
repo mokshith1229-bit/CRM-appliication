@@ -432,6 +432,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 onCall={handleCallAction}
                 campaignId={campaignId}
                 campaignName={campaignName}
+                navigation={navigation}
             />
 
             <StatusOverlay

@@ -39,7 +39,8 @@ const withManifestReceiver = (config) => {
         const service = {
             '$': {
                 'android:name': '.CallStateService',
-                'android:exported': 'false'
+                'android:exported': 'false',
+                'android:foregroundServiceType': 'dataSync'
             }
         };
 

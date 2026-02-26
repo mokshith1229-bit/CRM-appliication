@@ -5,6 +5,7 @@ import configReducer from './slices/configSlice';
 import teamReducer from './slices/teamSlice';
 import projectReducer from './slices/projectSlice';
 import statsReducer from './slices/statsSlice';
+import whatsappReducer from './slices/whatsappSlice';
 
 export const store = configureStore({
     reducer: {
@@ -14,6 +15,7 @@ export const store = configureStore({
         team: teamReducer,
         projects: projectReducer,
         stats: statsReducer,
+        whatsapp: whatsappReducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({
