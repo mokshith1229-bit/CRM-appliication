@@ -7,10 +7,11 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { store } from './src/store/store';
-import { fetchMetadata, checkAppConfig } from './src/store/slices/configSlice';
+import { fetchMetadata, checkAppConfig, checkUpdate } from './src/store/slices/configSlice';
 import AppNavigator from './src/navigation/AppNavigator';
 import { COLORS } from './src/constants/theme';
 import GlobalReminderPopup from './src/components/GlobalReminderPopup';
+import UpdateModal from './src/components/UpdateModal';
 import MaintenanceScreen from './src/screens/MaintenanceScreen';
 import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen';
 import SubscriptionExpiredScreen from './src/screens/SubscriptionExpiredScreen';
@@ -47,11 +48,23 @@ if (Platform.OS === 'android' && isExpoGo) {
 
 const AppContent = () => {
     const dispatch = useDispatch();
-    const { appConfig, subscription, isLoading } = useSelector((state) => state.config || {}); // Access config state
+    const { appConfig, updateConfig, subscription, isLoading } = useSelector((state) => state.config || {}); // Access config state
     const { isAuthenticated } = useSelector((state) => state.auth || {});
     const currentVersion = Constants.expoConfig?.version || '1.0.0';
 
     useEffect(() => {
+        // Set up notification channel + request notification permission
+        // on app start, so system features work from the beginning
+        const setupNotifications = async () => {
+            try {
+                await NotificationService.setupNotificationChannel();
+                await NotificationService.requestPermission();
+            } catch (err) {
+                console.warn('[App] Notification setup failed:', err);
+            }
+        };
+        setupNotifications();
+
         if (isAuthenticated) {
             dispatch(fetchMetadata());
             // Request permissions on startup
@@ -63,20 +76,9 @@ const AppContent = () => {
                 }
             };
             requestPermissions();
-
-            // Set up notification channel + request notification permission
-            // so background sync notifications work from the first call
-            const setupNotifications = async () => {
-                try {
-                    await NotificationService.setupNotificationChannel();
-                    await NotificationService.requestPermission();
-                } catch (err) {
-                    console.warn('[App] Notification setup failed:', err);
-                }
-            };
-            setupNotifications();
         }
         dispatch(checkAppConfig());
+        dispatch(checkUpdate());
     }, [dispatch, isAuthenticated]);
 
     // Global AppState listener for Call Log Sync
@@ -86,9 +88,20 @@ const AppContent = () => {
         const handleAppStateChange = async (nextAppState) => {
             if (nextAppState === 'active') {
                 console.log('[Global] App active - triggering call log sync...');
+                
+                // Show "syncing" notification with progress bar
+                await NotificationService.startSyncProgress(
+                    '📡 TeleCRM — Syncing',
+                    'Syncing data to server…'
+                );
+
                 try {
                     const logs = await CallLogService.getAllRecentLogs(50);
-                    if (!logs || logs.length === 0) return;
+                    if (!logs || logs.length === 0) {
+                        NotificationService.stopSyncProgress();
+                        await NotificationService.dismissSyncNotification(2000);
+                        return;
+                    }
 
                     // Get unique phone numbers from the recent logs
                     const phoneNumbers = [...new Set(logs.map(l => l.phoneNumber).filter(Boolean))];
@@ -165,8 +178,19 @@ const AppContent = () => {
                             await RecordingSyncService.syncNewRecordings(uri, allSyncedTimestamps);
                         }
                     }
+                    
+                    NotificationService.stopSyncProgress();
+                    await NotificationService.showSyncNotification(
+                        'TeleCRM',
+                        totalSynced > 0 ? `✅ ${totalSynced} logs synced` : '✅ All logs up to date',
+                        false
+                    );
+                    await NotificationService.dismissSyncNotification(3000);
+
                 } catch (error) {
                     console.error('[Global] Call log sync failed:', error);
+                    NotificationService.stopSyncProgress();
+                    await NotificationService.dismissSyncNotification();
                 }
             }
         };
@@ -212,7 +236,7 @@ const AppContent = () => {
 
 
     if (isUpdateRequired()) {
-        const url = Platform.OS === 'ios' ? (appConfig.iosStoreUrl || appConfig.storeUrl) : (appConfig.androidStoreUrl || appConfig.storeUrl);
+        const url = appConfig.androidStoreUrl || appConfig.storeUrl;
         return <UpdateRequiredScreen storeUrl={url} />;
     }
 
@@ -241,6 +265,10 @@ const AppContent = () => {
             <SocketProvider>
                 <AppNavigator />
                 <GlobalReminderPopup />
+                <UpdateModal 
+                    visible={!!updateConfig?.newUpdate} 
+                    playstoreurl={updateConfig?.playstoreurl} 
+                />
             </SocketProvider>
         </SafeAreaProvider>
     );

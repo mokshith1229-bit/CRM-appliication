@@ -63,12 +63,26 @@ const decryptData = (encryptedData) => {
     }
 };
 
+export const checkUpdate = createAsyncThunk(
+    'config/checkUpdate',
+    async (_, { rejectWithValue }) => {
+        try {
+            // Using raw axios for unauthenticated request
+            const response = await axiosClient.get('/appconfig');
+            return response.data || response; // { newUpdate: true, playstoreurl: "" }
+        } catch (error) {
+            return rejectWithValue(error.message);
+        }
+    }
+);
+
 const initialState = {
     sources: [],
     statuses: [],
     isLoading: false,
     error: null,
     appConfig: null, // { maintenanceMode, minVersion, message }
+    updateConfig: null, // { newUpdate, playstoreurl }
     subscription: null, // { maxLicenses, expirationDate, planName }
     whatsappSubscription: null,
     isWhatsAppIntegrated: false,
@@ -77,7 +91,13 @@ const initialState = {
 const configSlice = createSlice({
     name: 'config',
     initialState,
-    reducers: {},
+    reducers: {
+        dismissUpdate: (state) => {
+            if (state.updateConfig) {
+                state.updateConfig.newUpdate = false;
+            }
+        }
+    },
     extraReducers: (builder) => {
         builder
             .addCase(fetchMetadata.pending, (state) => {
@@ -115,8 +135,13 @@ const configSlice = createSlice({
             })
             .addCase(checkAppConfig.fulfilled, (state, action) => {
                 state.appConfig = action.payload;
+            })
+            .addCase(checkUpdate.fulfilled, (state, action) => {
+                state.updateConfig = action.payload;
             });
     }
 });
+
+export const { dismissUpdate } = configSlice.actions;
 
 export default configSlice.reducer;

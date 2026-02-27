@@ -95,7 +95,7 @@ const TransferLeadModal = ({ visible, onClose, onTransfer, teamMembers = [] }) =
                     <FlatList
                         data={filteredTeam}
                         renderItem={renderItem}
-                        keyExtractor={item => item.id}
+                        keyExtractor={item => item._id || item.id || Math.random().toString()}
                         contentContainerStyle={styles.listContent}
                         showsVerticalScrollIndicator={false}
                     />

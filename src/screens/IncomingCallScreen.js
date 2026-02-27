@@ -93,7 +93,7 @@ const IncomingCallScreen = ({ navigation, route }) => {
             return;
         }
 
-        const url = `sms:${contact.phone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(message)}`;
+        const url = `sms:${contact.phone}?body=${encodeURIComponent(message)}`;
         try {
             const canOpen = await Linking.canOpenURL(url);
             if (canOpen) {
@@ -109,7 +109,7 @@ const IncomingCallScreen = ({ navigation, route }) => {
         if (!customMsg.trim()) return;
 
         const message = customMsg.trim();
-        const url = `sms:${contact.phone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(message)}`;
+        const url = `sms:${contact.phone}?body=${encodeURIComponent(message)}`;
 
         try {
             const canOpen = await Linking.canOpenURL(url);

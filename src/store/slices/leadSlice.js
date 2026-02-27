@@ -324,44 +324,53 @@ export const ensureLead = createAsyncThunk(
                     name: contact.name || contact.phone,
                     phone: contact.phone,
                     lead_source: contact.lead_source || 'Offline',
-                    status: initialStatus || '', // No default to 'New'
-                    // Add other fields if available
+                    status: initialStatus || contact.status || 'New',
                     email: contact.email,
                     whatsapp_number: contact.whatsapp || contact.phone
                 };
 
-                // VALIDATION: Ensure status and source are provided
-                if (!leadPayload.status) {
-                    return rejectWithValue('Please select lead status before performing this action.');
+                console.log('ensureLead: Attempting conversion...', leadPayload);
+                
+                try {
+                    // Dispatch createLead
+                    const result = await dispatch(createLead(leadPayload)).unwrap();
+                    
+                    // Trigger historical sync
+                    if (result && (result._id || result.id)) {
+                        const newLeadId = result._id || result.id;
+                        CallLogService.syncCallLogsForLead(newLeadId, leadPayload.phone).catch(err =>
+                            console.error('ensureLead: Historical lead sync failed', err)
+                        );
+                    }
+                    return result;
+                } catch (createError) {
+                    // If lead already exists, fetch it and return it instead of failing
+                    const errorMsg = String(createError.response?.data?.message || createError.message || createError).toLowerCase();
+                    if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
+                        console.log('ensureLead: Lead already exists, fetching existing lead details...');
+                        const checkResult = await dispatch(checkLeadByPhone(leadPayload.phone)).unwrap();
+                        
+                        // Extract lead from various possible response structures
+                        const existingLead = checkResult?.lead || checkResult?.data?.lead || (checkResult?.exists ? checkResult.lead : null);
+                        
+                        if (existingLead) {
+                            return existingLead;
+                        }
+
+                        // Fallback: If checkResult itself looks like a lead (has _id or id)
+                        if (checkResult?._id || checkResult?.id) {
+                            return checkResult;
+                        }
+                    }
+                    throw createError; // Re-throw if it wasn't a "already exists" error
                 }
-
-                console.log('ensureLead: Creating lead...', leadPayload);
-                // Dispatch createLead
-                const result = await dispatch(createLead(leadPayload)).unwrap();
-
-                // CRITICAL: After conversion, trigger a full historical sync for this number
-                // linked to the newly created lead so all old logs are properly attributed.
-                if (result && (result._id || result.id)) {
-                    const newLeadId = result._id || result.id;
-                    // Fire and forget — do not block the UI transition
-                    CallLogService.syncCallLogsForLead(newLeadId, leadPayload.phone).catch(err =>
-                        console.error('ensureLead: Historical lead sync failed', err)
-                    );
-                }
-
-                return result; // This is the new lead with _id
             }
 
             // Already a lead
             return contact;
         } catch (error) {
-            // 1. Extract the most specific message possible
-            const errorMessage = error.response?.data?.message  // The custom backend message
-                || error.response?.data           // Fallback to data object
-                || error.message                  // Fallback to "Request failed..."
-                || error || 'An unknown error occurred';
-
-            return rejectWithValue(errorMessage || 'Failed to ensure lead existence');
+            const errorMessage = error.response?.data?.message || error.message || error || 'Failed to ensure lead existence';
+            return rejectWithValue(errorMessage);
         }
     }
 );

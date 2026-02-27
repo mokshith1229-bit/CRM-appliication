@@ -44,8 +44,15 @@ export const fetchChats = createAsyncThunk(
         try {
             const response = await axiosClient.get('/whatsapp/chats', { params: { tenantId, page, limit } });
             
+            // response is already unwrapped by axiosClient interceptor
+            const data = response.data || response.result || response;
+            const conversations = data.conversations || (Array.isArray(data) ? data : []);
+
             return {
-                ...response.data.data, // { conversations: [], total, page, totalPages }
+                conversations,
+                total: data.total || conversations.length,
+                page: data.page || page,
+                totalPages: data.totalPages || 1,
                 isPagination: page > 1
             };
         } catch (error) {
@@ -61,7 +68,8 @@ export const fetchConversationMessages = createAsyncThunk(
             const response = await axiosClient.get(`/whatsapp/chats/${conversationId}/messages`, {
                 params: { limit, offset }
             });
-            return response.data.data;
+            // Extract the actual payload. Some backends wrap in 'data', others return directly.
+            return response.data; 
         } catch (error) {
               handleWhatsAppError(error);
             return rejectWithValue(error.response?.data?.message || 'Failed to fetch messages');
@@ -71,10 +79,14 @@ export const fetchConversationMessages = createAsyncThunk(
 
 export const sendConversationMessage = createAsyncThunk(
     'whatsapp/sendConversationMessage',
-    async ({ conversationId, message }, { rejectWithValue }) => {
+    async ({ conversationId, message, mediaId, type = 'text', fileName }, { rejectWithValue }) => {
         try {
-            const response = await axiosClient.post(`/whatsapp/chats/${conversationId}/messages`, { message });
-            return response.data.data;
+            const payload = { message, type };
+            if (mediaId) payload.mediaId = mediaId;
+            if (fileName) payload.description = fileName;
+
+            const response = await axiosClient.post(`/whatsapp/chats/${conversationId}/messages`, payload);
+            return response.data; // Optimized to return the full created message object
         } catch (error) {
             handleWhatsAppError(error);
             return rejectWithValue(error.response?.data?.message || 'Failed to send message');
@@ -99,15 +111,30 @@ export const createConversation = createAsyncThunk(
 
 export const uploadMedia = createAsyncThunk(
     'whatsapp/uploadMedia',
-    async (file, { rejectWithValue }) => {
+    async (fileInput, { rejectWithValue }) => {
         try {
             const formData = new FormData();
-            formData.append('file', file);
+            
+            if (typeof fileInput === 'string') {
+                // It's a URI (e.g. from camera or audio)
+                const filename = fileInput.split('/').pop();
+                const match = /\.(\w+)$/.exec(filename);
+                const type = match ? `image/${match[1]}` : `image`; // Default to image if unknown
+                
+                formData.append('file', {
+                    uri: fileInput,
+                    name: filename,
+                    type: type,
+                });
+            } else {
+                // It's a file object (e.g. from document picker)
+                formData.append('file', fileInput);
+            }
             
             const response = await axiosClient.post('/whatsapp/media', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            return response.data.data; // { id: '...' }
+            return response.data?.data || response.data || response; // { id: 'media_id' }
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Failed to upload media');
         }
@@ -203,54 +230,101 @@ const whatsappSlice = createSlice({
     },
     reducers: {
         receiveMessage: (state, action) => {
-            const message = action.payload; 
-            // the backend socket payload should be structured to include contactId, text/content, timestamp
-            const contactId = message.contactId || message.phone || message.from; 
+            const payload = action.payload;
+            if (!payload) return;
 
-            if (!contactId) return;
+            // Handle both flat and nested { conversation, message } structures
+            const message = payload.message || payload;
+            const conversation = payload.conversation;
+            
+            // Determine the user's phone involved in this message
+            const direction = message.direction || 'inbound';
+            const userPhone = direction === 'inbound' ? message.from : message.to;
+            
+            // Determine the Mongo/Conversation ID if available
+            const messageConvId = message.conversationId || (conversation ? (conversation._id || conversation.id) : null);
 
-            // Append to messages dictionary if it's already loaded
-            if (state.messages[contactId]) {
-                state.messages[contactId].push(message);
-            } else {
-                state.messages[contactId] = [message];
+            // Find the chat in our existing list using any available identifier
+            const chatIndex = state.chats.findIndex(chat => 
+                (chat._id || chat.id) === messageConvId || 
+                 chat.phone === userPhone || 
+                 chat.phone === message.contactPhone ||
+                 (messageConvId && (chat._id === messageConvId || chat.id === messageConvId))
+            );
+
+            // Use Chat ID as the primary key for state.messages, fall back to phone
+            let key = messageConvId || userPhone;
+            if (chatIndex >= 0) {
+                key = state.chats[chatIndex]._id || state.chats[chatIndex].id || key;
             }
 
-            // Update chats list context (last message, time, unread count)
-            const chatIndex = state.chats.findIndex(chat => chat.id === contactId || chat.phone === contactId);
+            // Initialize message list for this key if it doesn't exist
+            if (!state.messages[key]) {
+                state.messages[key] = [];
+            }
+
+            // Append message if it's not a duplicate
+            const msgId = message._id || message.id || message.messageId;
+            const exists = state.messages[key].some(m => (m._id || m.id || m.messageId) === msgId);
+            if (!exists) {
+                // Robustly extract the text body for display consistency
+                const body = message.text || message.message_text || message.message || message.body || message.content?.body || '';
+                const enrichedMessage = { ...message, text: body }; // Normalize text field
+                state.messages[key].push(enrichedMessage);
+            }
+
+            // Update the chat item in the list
             if (chatIndex >= 0) {
-                state.chats[chatIndex].lastMessage = message.text || message.message_text || (message.type === 'media' ? 'Media' : 'Message');
-                state.chats[chatIndex].time = message.timestamp || message.createdAt || new Date().toISOString();
+                const updatedConv = conversation || {};
+                const currentChat = state.chats[chatIndex];
                 
-                // Only increment unread if the message is from the user (inbound)
-                if (message.direction === 'inbound') {
-                    state.chats[chatIndex].unread = (state.chats[chatIndex].unread || 0) + 1;
-                    state.unreadCount += 1;
+                state.chats[chatIndex] = {
+                    ...currentChat,
+                    ...updatedConv,
+                    lastMessage: message.text || message.message_text || message.content?.body || (message.type === 'media' ? 'Media' : 'Message'),
+                    lastMessageTime: message.timestamp || message.createdAt || new Date().toISOString(),
+                };
+                
+                // Unread Count logic
+                if (direction === 'inbound') {
+                    if (updatedConv.unreadCount !== undefined) {
+                        state.chats[chatIndex].unreadCount = updatedConv.unreadCount;
+                    } else {
+                        state.chats[chatIndex].unreadCount = (currentChat.unreadCount || 0) + 1;
+                        state.unreadCount += 1;
+                    }
                 }
-            } else {
-                // If it's a new chat, unshift it to the top
-                state.chats.unshift({
-                    id: contactId,
-                    phone: contactId,
-                    name: message.senderName || message.contactName || contactId,
-                    lastMessage: message.text || message.message_text || 'Message',
-                    time: message.timestamp || message.createdAt || new Date().toISOString(),
-                    unread: message.direction === 'inbound' ? 1 : 0,
-                    isHot: false
-                });
+            } else if (conversation || direction === 'inbound') {
+                // If it's a new chat, add it to the top
+                const newChat = conversation ? {
+                    ...conversation,
+                    lastMessage: message.text || message.message_text || message.content?.body || 'Message',
+                    lastMessageTime: message.timestamp || message.createdAt || new Date().toISOString(),
+                } : {
+                    _id: messageConvId,
+                    phone: userPhone,
+                    name: message.contactName || userPhone,
+                    lastMessage: message.text || message.message_text || message.content?.body || 'Message',
+                    lastMessageTime: message.timestamp || message.createdAt || new Date().toISOString(),
+                    unreadCount: 1
+                };
                 
-                if (message.direction === 'inbound') {
-                    state.unreadCount += 1;
+                state.chats.unshift(newChat);
+                if (direction === 'inbound') {
+                    state.unreadCount += (newChat.unreadCount || 1);
                 }
             }
         },
         clearUnread: (state, action) => {
-            const contactId = action.payload;
-            const chatIndex = state.chats.findIndex(chat => chat.id === contactId || chat.phone === contactId);
+            const targetId = action.payload;
+            const chatIndex = state.chats.findIndex(chat => 
+                (chat._id || chat.id) === targetId || chat.phone === targetId
+            );
             if (chatIndex >= 0) {
-                const unreadAmount = state.chats[chatIndex].unread || 0;
+                const unreadAmount = state.chats[chatIndex].unreadCount || state.chats[chatIndex].unread || 0;
                 state.unreadCount = Math.max(0, state.unreadCount - unreadAmount);
                 state.chats[chatIndex].unread = 0;
+                state.chats[chatIndex].unreadCount = 0;
             }
         },
     },
@@ -276,8 +350,22 @@ const whatsappSlice = createSlice({
             // Fetch Conversation Messages
             .addCase(fetchConversationMessages.fulfilled, (state, action) => {
                 const conversationId = action.meta.arg.conversationId;
-                const messages = action.payload.messages || action.payload || [];
-                state.messages[conversationId] = messages;
+                const data = action.payload;
+                if (!data) return;
+
+                // Handle both { messages: [] }, { data: [] }, { result: [] } and raw [] response
+                let messagesList = [];
+                if (Array.isArray(data)) {
+                    messagesList = data;
+                } else if (data.messages && Array.isArray(data.messages)) {
+                    messagesList = data.messages;
+                } else if (data.data && Array.isArray(data.data)) {
+                    messagesList = data.data;
+                } else if (data.result && Array.isArray(data.result)) {
+                    messagesList = data.result;
+                }
+
+                state.messages[conversationId] = messagesList;
             })
             // Fetch Groups
             .addCase(fetchGroups.pending, (state) => {
@@ -304,6 +392,39 @@ const whatsappSlice = createSlice({
             // Fetch Automations
             .addCase(fetchAutomations.fulfilled, (state, action) => {
                 state.automations = action.payload.automations || action.payload || [];
+            })
+            // Send Conversation Message - Optimistic and final update
+            .addCase(sendConversationMessage.pending, (state, action) => {
+                const { conversationId, message, type, fileName } = action.meta.arg;
+                if (!state.messages[conversationId]) state.messages[conversationId] = [];
+                
+                // Add an optimistic "sending" message
+                state.messages[conversationId].push({
+                    _id: `temp-${Date.now()}`,
+                    direction: 'outbound',
+                    text: message || (type === 'media' ? `Sending ${fileName || 'file'}...` : ''),
+                    status: 'sending',
+                    type: type || 'text',
+                    createdAt: new Date().toISOString()
+                });
+            })
+            .addCase(sendConversationMessage.fulfilled, (state, action) => {
+                const { conversationId } = action.meta.arg;
+                const newMessage = action.payload?.data || action.payload;
+                
+                if (state.messages[conversationId]) {
+                    // Remove the temporary message and add the real one
+                    state.messages[conversationId] = state.messages[conversationId].filter(m => m.status !== 'sending');
+                    state.messages[conversationId].push(newMessage);
+                }
+            })
+            .addCase(sendConversationMessage.rejected, (state, action) => {
+                const { conversationId } = action.meta.arg;
+                if (state.messages[conversationId]) {
+                    state.messages[conversationId] = state.messages[conversationId].map(m => 
+                        m.status === 'sending' ? { ...m, status: 'error' } : m
+                    );
+                }
             })
             // Fetch Quick Replies
             .addCase(fetchQuickReplies.fulfilled, (state, action) => {

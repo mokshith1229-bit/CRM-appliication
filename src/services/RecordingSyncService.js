@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import CallLogService from './CallLogService';
 import axiosClient from '../api/axiosClient';
+import NotificationService from './NotificationService';
 
 const RECORDING_FOLDER_URI_KEY = '@recording_folder_uri';
 
@@ -84,6 +85,10 @@ class RecordingSyncService {
 
     this.isSyncing = true;
     try {
+        await NotificationService.startSyncProgress(
+            '📡 TeleCRM — Syncing',
+            'Syncing data to server…'
+        );
         const dir = new Directory(savedFolderUri);
 
         const files = await dir.list(); // throws if permission was revoked — caught below
@@ -167,8 +172,12 @@ class RecordingSyncService {
 
     this.isSyncing = true;
     try {
-      console.log("[Sync] Checking for missing recordings on server...");
-      const missingLogs = await CallLogService.getMissingRecordingCallLogs();
+        await NotificationService.startSyncProgress(
+            '📡 TeleCRM — Syncing',
+            'Syncing data to server…'
+        );
+        console.log("[Sync] Checking for missing recordings on server...");
+        const missingLogs = await CallLogService.getMissingRecordingCallLogs();
 
       if (!missingLogs || missingLogs.length === 0) {
         console.log("[Sync] No call logs found on server missing recordings.");

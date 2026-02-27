@@ -8,7 +8,7 @@ const { width, height } = Dimensions.get('window');
 const UpdateRequiredScreen = ({ storeUrl }) => {
     
     const handleUpdate = () => {
-        const url = storeUrl || (Platform.OS === 'ios' ? 'https://apps.apple.com' : 'https://play.google.com/store');
+        const url = storeUrl || 'https://play.google.com/store/apps/details?id=com.telecrm.crm';
         Linking.openURL(url);
     };
 

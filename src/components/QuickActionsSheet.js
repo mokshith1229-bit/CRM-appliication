@@ -86,15 +86,15 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const { user } = useSelector(state => state.auth);
 
     const teamMembers = allTeamMembers.filter(member => {
-        const isNotAdmin = member.role !== 'admin';
-
         // Resolve IDs to ensure we compare correctly even if one has _id and other has id
         const memberId = member._id || member.id;
         const userId = user ? (user._id || user.id) : null;
 
         const isNotSelf = userId ? (memberId !== userId) : true;
 
-        return isNotAdmin && isNotSelf;
+        // We allow transferring to any team member who isn't the current user.
+        // If specific role filtering is needed later, it can be added here.
+        return isNotSelf;
     });
 
     const [activeTab, setActiveTab] = useState('Details'); // 'Details' | 'History'
@@ -1321,15 +1321,7 @@ const updateSiteVisit = async () => {
                 title="Select Timeline"
             />
 
-            <TransferLeadModal
-                visible={isTransferModalVisible}
-                onClose={() => setIsTransferModalVisible(false)}
-                leadIds={freshContact ? [freshContact.id || freshContact._id] : []}
-                onSuccess={() => {
-                    setIsTransferModalVisible(false);
-                    onClose();
-                }}
-            />
+
         </Modal>
     );
 };

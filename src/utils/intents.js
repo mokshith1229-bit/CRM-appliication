@@ -33,9 +33,8 @@ export const openWhatsApp = async (phoneNumber) => {
     }
 };
 
-export const sendSMS = async (phoneNumber) => {
-    const separator = Platform.OS === 'ios' ? '&' : '?';
-    const url = `sms:${phoneNumber}${separator}body=`;
+export const sendSMS = async (phoneNumber, body = '') => {
+    const url = `sms:${phoneNumber}?body=${encodeURIComponent(body)}`;
 
     try {
         const supported = await Linking.canOpenURL(url);

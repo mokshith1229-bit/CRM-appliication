@@ -10,11 +10,10 @@ module.exports = async (taskData) => {
     
     // We only want to trigger the sync when the phone state becomes IDLE (call ends)
     if (taskData.state === 'IDLE') {
-        // Show "syncing" notification immediately so the user sees feedback
-        await NotificationService.showSyncNotification(
+        // Show "syncing" notification with infinite progress bar
+        await NotificationService.startSyncProgress(
             '📡 TeleCRM — Syncing',
-            'Uploading call log in background…',
-            true // sticky/ongoing
+            'Syncing data to server…'
         );
 
         try {
@@ -63,6 +62,7 @@ module.exports = async (taskData) => {
             }
 
             // ✅ Success notification — replaces the "syncing" one
+            NotificationService.stopSyncProgress();
             const successMsg = totalSynced > 0
                 ? `✅ ${totalSynced} call log${totalSynced > 1 ? 's' : ''} synced to CRM`
                 : '✅ Call log sync complete';
@@ -78,6 +78,7 @@ module.exports = async (taskData) => {
 
         } catch (error) {
             console.error('[Headless JS] Error during recording sync:', error);
+            NotificationService.stopSyncProgress();
 
             // ⚠️ Error notification
             await NotificationService.showSyncNotification(

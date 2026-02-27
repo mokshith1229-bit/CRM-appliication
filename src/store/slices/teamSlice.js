@@ -7,8 +7,12 @@ export const fetchTeamMembers = createAsyncThunk(
     async (_, { rejectWithValue }) => {
         try {
             const response = await axiosClient.get('/users');
-            // Assuming response has users array
-            return response.data || response.result || [];
+            // Support both direct array and nested objects { users: [] }, { data: [] }
+            if (Array.isArray(response)) return response;
+            if (response.users && Array.isArray(response.users)) return response.users;
+            if (response.data && Array.isArray(response.data)) return response.data;
+            if (response.result && Array.isArray(response.result)) return response.result;
+            return [];
         } catch (error) {
             console.error('Failed to fetch team members:', error);
             return rejectWithValue(error.message || 'Failed to fetch team members');

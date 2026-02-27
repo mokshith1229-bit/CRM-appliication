@@ -30,11 +30,20 @@ const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
 
     const renderChatItem = ({ item }) => {
         const id = item._id || item.id;
-        // Handling both our legacy slice schema and likely backend schema
         const name = item.name || item.contactName || item.participantName || item.phone || 'Unknown';
-        const lastMessageText = item.latestMessage?.body || item.latestMessage?.text || item.lastMessage?.text || item.lastMessage || 'Message';
         
-        let displayTime = item.latestMessage?.timestamp || item.updatedAt || item.time || '';
+        // Comprehensive fallback for the message text
+        const lastMessageText = 
+            item.lastMessage?.text || 
+            item.lastMessage?.message || 
+            item.lastMessage?.body ||
+            (typeof item.lastMessage === 'string' ? item.lastMessage : null) ||
+            item.latestMessage?.body || 
+            item.latestMessage?.text || 
+            item.content?.body ||
+            'Message';
+        
+        let displayTime = item.lastMessageTime || item.latestMessage?.timestamp || item.updatedAt || item.time || '';
         if (displayTime) {
            const d = new Date(displayTime);
            displayTime = isNaN(d) ? displayTime : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

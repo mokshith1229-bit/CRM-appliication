@@ -37,6 +37,7 @@ const AudioPlayer = ({ recording }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [durationMs, setDurationMs] = useState(0);
     const [positionMs, setPositionMs] = useState(0);
+    const [waveformWidth, setWaveformWidth] = useState(0);
 
     // Cleanup sound on unmount
     useEffect(() => {
@@ -106,11 +107,11 @@ const AudioPlayer = ({ recording }) => {
     const progress = durationMs > 0 ? positionMs / durationMs : 0;
 
     const handleSeek = useCallback(async (evt) => {
-        if (!soundRef.current || !durationMs) return;
+        if (!soundRef.current || !durationMs || waveformWidth === 0) return;
         const { locationX } = evt.nativeEvent;
-        const tapRatio = Math.max(0, Math.min(1, locationX / (BAR_COUNT * 7)));
+        const tapRatio = Math.max(0, Math.min(1, locationX / waveformWidth));
         await soundRef.current.setPositionAsync(Math.round(tapRatio * durationMs));
-    }, [durationMs]);
+    }, [durationMs, waveformWidth]);
 
     return (
         <View style={styles.container}>
@@ -142,6 +143,7 @@ const AudioPlayer = ({ recording }) => {
                             activeOpacity={0.9}
                             onPress={handleSeek}
                             style={styles.waveform}
+                            onLayout={(e) => setWaveformWidth(e.nativeEvent.layout.width)}
                         >
                             {BARS.map((h, i) => {
                                 const played = (i / BAR_COUNT) <= progress;
@@ -230,10 +232,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         height: 32,
-        gap: 3,
+        flex: 1,
+        justifyContent: 'space-between',
     },
     bar: {
-        width: 3,
+        width: '1.5%',
         borderRadius: 2,
     },
     timeRow: {
