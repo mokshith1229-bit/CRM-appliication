@@ -28,7 +28,7 @@ const requestPermission = async () => {
         const userAgreed = await ProminentDisclosure.showCallLogDisclosure();
         
         if (!userAgreed) {
-            console.log('[CallLogService] User declined prominent disclosure.');
+            // console.log('[CallLogService] User declined prominent disclosure.');
             return false;
         }
 
@@ -71,7 +71,7 @@ const getAllRecentLogs = async (limit = 50) => {
     
     // Safety check if module failed to load
     if (!CallLogs) {
-        console.warn('CallLogs native module is not available.');
+        // console.warn('CallLogs native module is not available.');
         return [];
     }
     
@@ -106,7 +106,7 @@ const syncAllLogsForNumber = async (phoneNumber, context = null) => {
     if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
     
     try {
-        console.log(`Force syncing all logs for number: ${phoneNumber}...`, context ? `Context: ${JSON.stringify(context)}` : 'No context');
+        // console.log(`Force syncing all logs for number: ${phoneNumber}...`, context ? `Context: ${JSON.stringify(context)}` : 'No context');
         
         // Use a much larger limit to catch older history for this specific number
         const allLogs = await getAllRecentLogs(500);
@@ -129,7 +129,7 @@ const syncAllLogsForNumber = async (phoneNumber, context = null) => {
             ? targetedLogs.map(log => ({ ...log, ...context }))
             : targetedLogs;
 
-        console.log(`Syncing ${enrichedLogs.length} historical logs for ${phoneNumber} to server...`);
+        // console.log(`Syncing ${enrichedLogs.length} historical logs for ${phoneNumber} to server...`);
 
         const axiosClient = require('../api/axiosClient').default;
         const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
@@ -146,17 +146,17 @@ const syncCallLogsForLead = async (lead_id, phoneNumber) => {
     if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
     
     try {
-        console.log(`[CallLogService] Syncing logs for lead ${lead_id}, phone: ${phoneNumber}`);
+        // console.log(`[CallLogService] Syncing logs for lead ${lead_id}, phone: ${phoneNumber}`);
         const allLogs = await getAllRecentLogs(100);
-        console.log(`[CallLogService] Total device logs fetched: ${allLogs?.length ?? 0}`);
+        // console.log(`[CallLogService] Total device logs fetched: ${allLogs?.length ?? 0}`);
         if (!allLogs || allLogs.length === 0) return { success: true, updated: 0 };
 
         const normalizedTarget = phoneNumber.replace(/[^0-9]/g, '');
-        console.log(`[CallLogService] normalizedTarget: "${normalizedTarget}"`);
+        // console.log(`[CallLogService] normalizedTarget: "${normalizedTarget}"`);
 
         // Sample the first 5 numbers so we can see the format differences
-        console.log('[CallLogService] Sample log phoneNumbers (raw):',
-            allLogs.slice(0, 5).map(l => l.phoneNumber));
+        // console.log('[CallLogService] Sample log phoneNumbers (raw):',
+        //     allLogs.slice(0, 5).map(l => l.phoneNumber));
 
         const targetedLogs = allLogs.filter(log => {
             const logPhone = log.phoneNumber?.replace(/[^0-9]/g, '') ?? '';
@@ -164,7 +164,7 @@ const syncCallLogsForLead = async (lead_id, phoneNumber) => {
             return match;
         });
 
-        console.log(`[CallLogService] Matched logs for this number: ${targetedLogs.length}`);
+        // console.log(`[CallLogService] Matched logs for this number: ${targetedLogs.length}`);
         if (targetedLogs.length === 0) return { success: true, updated: 0 };
 
         const enrichedLogs = targetedLogs.map(log => ({
@@ -174,10 +174,10 @@ const syncCallLogsForLead = async (lead_id, phoneNumber) => {
             lead_id,
         }));
 
-        console.log(`[CallLogService] Sending ${enrichedLogs.length} lead-linked logs to server...`);
+        // console.log(`[CallLogService] Sending ${enrichedLogs.length} lead-linked logs to server...`);
         const axiosClient = require('../api/axiosClient').default;
         const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
-        console.log('[CallLogService] Sync response:', JSON.stringify(response.data ?? response));
+        // console.log('[CallLogService] Sync response:', JSON.stringify(response.data ?? response));
         return response.data;
     } catch (error) {
         console.error('[CallLogService] Error syncing lead call logs:', error);
@@ -190,7 +190,7 @@ const syncCallLogsForEnquiry = async (enquiry_id, phoneNumber) => {
     if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
     
     try {
-        console.log(`[CallLogService] Syncing logs for enquiry ${enquiry_id}, phone: ${phoneNumber}`);
+        // console.log(`[CallLogService] Syncing logs for enquiry ${enquiry_id}, phone: ${phoneNumber}`);
         const allLogs = await getAllRecentLogs(100);
         if (!allLogs || allLogs.length === 0) return { success: true, updated: 0 };
 
@@ -209,7 +209,7 @@ const syncCallLogsForEnquiry = async (enquiry_id, phoneNumber) => {
             enquiry_id,
         }));
 
-        console.log(`[CallLogService] Sending ${enrichedLogs.length} enquiry-linked logs to server...`);
+        // console.log(`[CallLogService] Sending ${enrichedLogs.length} enquiry-linked logs to server...`);
         const axiosClient = require('../api/axiosClient').default;
         const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
         return response.data;
@@ -224,7 +224,7 @@ const syncCallLogsForCampaignRecord = async (campaign_id, campaign_record_id, ph
     if (Platform.OS !== 'android' || isExpoGo) return { success: false, message: 'Not supported' };
     
     try {
-        console.log(`[CallLogService] Syncing logs for campaign record ${campaign_record_id}, phone: ${phoneNumber}`);
+        // console.log(`[CallLogService] Syncing logs for campaign record ${campaign_record_id}, phone: ${phoneNumber}`);
         const allLogs = await getAllRecentLogs(100);
         if (!allLogs || allLogs.length === 0) return { success: true, updated: 0 };
 
@@ -244,7 +244,7 @@ const syncCallLogsForCampaignRecord = async (campaign_id, campaign_record_id, ph
             campaign_record_id,
         }));
 
-        console.log(`[CallLogService] Sending ${enrichedLogs.length} campaign-record-linked logs to server...`);
+        // console.log(`[CallLogService] Sending ${enrichedLogs.length} campaign-record-linked logs to server...`);
         const axiosClient = require('../api/axiosClient').default;
         const response = await axiosClient.post('/leads/sync-call-logs', { callLogs: enrichedLogs });
         return response.data;
@@ -285,7 +285,7 @@ const syncCallLogsToServer = async (callLogs) => {
             return { success: true, message: 'No new logs to sync', data: { updated: 0 } };
         }
 
-        console.log(`Syncing ${newLogs.length} new call logs to server...`);
+        // console.log(`Syncing ${newLogs.length} new call logs to server...`);
 
         const axiosClient = require('../api/axiosClient').default;
         // axiosClient interceptor already unwraps response.data, so `response` IS the server JSON:

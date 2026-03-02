@@ -17,12 +17,19 @@ const fetchAppConfig = async () => {
       const encryptedData = response.data.data.encryptedData;
       
       if (!encryptedData) {
-        console.warn('AppConfigService: No encrypted data received');
+        // console.warn('AppConfigService: No encrypted data received');
         return null;
       }
 
-      const key = new NodeRSA(APP_CONFIG_PUBLIC_KEY);
+      // console.log('AppConfigService: Encrypted Data Length:', encryptedData?.length);
+      // console.log('AppConfigService: Using Public Key:', APP_CONFIG_PUBLIC_KEY.substring(0, 50) + '...');
+      
+      const key = new NodeRSA(APP_CONFIG_PUBLIC_KEY, 'public', {
+          encryptionScheme: 'pkcs1'
+      });
+      // console.log('AppConfigService: NodeRSA key loaded');
       const decryptedString = key.decryptPublic(encryptedData, 'utf8');
+      // console.log('AppConfigService: Decryption successful');
       
       try {
           const config = JSON.parse(decryptedString);

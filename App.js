@@ -224,7 +224,7 @@ const AppContent = () => {
 
         const v1 = appConfig.minVersion.split('.').map(Number);
         const v2 = currentVersion.split('.').map(Number);
-
+        
         for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
             const num1 = v1[i] || 0;
             const num2 = v2[i] || 0;

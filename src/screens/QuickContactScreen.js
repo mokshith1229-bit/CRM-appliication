@@ -5,7 +5,7 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-
+    BackHandler,
     Platform,
     Linking,
     Alert,
@@ -25,13 +25,15 @@ import { fetchTeamMembers } from '../store/slices/teamSlice';
 import CallLogService from '../services/CallLogService';
 import AudioPlayer from '../components/AudioPlayer';
 import { openWhatsApp } from '../utils/intents';
+import QuickContactSkeleton from '../components/QuickContactSkeleton';
 
 const QuickContactScreen = ({ route, navigation }) => {
     const insets = useSafeAreaInsets();
-    const { contact: initialContact, campaignId, campaignName } = route.params;
+    const { contact: initialContact, campaignId, campaignName, conversationId } = route.params;
     const dispatch = useDispatch();
     const leads = useSelector(state => state.leads.leads);
     const currentLeadDetails = useSelector(state => state.leads.currentLeadDetails);
+    const detailsLoading = useSelector(state => state.leads.detailsLoading);
     const allTeamMembers = useSelector(state => state.team.members);
     const { statuses, isWhatsAppIntegrated } = useSelector(state => state.config);
 
@@ -63,7 +65,41 @@ const QuickContactScreen = ({ route, navigation }) => {
     // Collapsible states
     const [expandStatus, setExpandStatus] = useState(false);
     const [expandTransfers, setExpandTransfers] = useState(false);
+    const [expandWhatsAppMedia, setExpandWhatsAppMedia] = useState(false);
     const [localDeviceLogs, setLocalDeviceLogs] = useState([]);
+
+    const whatsappMessages = useSelector(state => state.whatsapp.messages || {});
+    const chatMessages = whatsappMessages[contact.id || contact._id] || [];
+    
+    const mediaMessages = React.useMemo(() => {
+        // Source 1: From lead details (pre-fetched/historical by backend)
+        const fromLead = contact.whatsapp_media || [];
+        
+        // Source 2: From active chat messages in state
+        const fromChat = chatMessages.filter(m => 
+            m.mediaUrl || 
+            m.content?.mediaUrl || 
+            m.content?.url || 
+            m.url ||
+            ['image', 'document', 'audio', 'video', 'ptt'].includes(m.type)
+        );
+
+        // Combine and unique by messageId/ID
+        const combined = [...fromLead];
+        fromChat.forEach(m => {
+            const id = m.messageId || m._id || m.id;
+            if (!combined.some(exist => (exist.messageId || exist._id || exist.id) === id)) {
+                combined.push(m);
+            }
+        });
+
+        // Sort by timestamp desc
+        return combined.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+            const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+            return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+        });
+    }, [contact.whatsapp_media, chatMessages]);
 
 
     useEffect(() => {
@@ -89,17 +125,25 @@ const QuickContactScreen = ({ route, navigation }) => {
             dispatch(fetchLeadDetails(initialContact.id || initialContact._id));
         }
 
+        const backAction = () => {
+            navigation.goBack();
+            return true;
+        };
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
         return () => {
             dispatch(clearLeadDetails());
             setLocalDeviceLogs([]);
+            backHandler.remove();
         }
-    }, [dispatch, initialContact]);
+    }, [dispatch, initialContact, navigation]);
     const handleWhatsApp = () => {
         if (!contact) return;
         if (isWhatsAppIntegrated) {
             navigation.navigate('ChatDetail', { 
                 chatId: contact.phone || contact.id || contact._id,
-                chatName: contact.name || contact.phone
+                chatName: contact.name || contact.phone,
+                conversationId: conversationId || contact.conversationId
             });
         } else {
             openWhatsApp(contact.phone);
@@ -213,6 +257,11 @@ const QuickContactScreen = ({ route, navigation }) => {
             hour12: true
         });
     };
+
+    if (detailsLoading) {
+        return <QuickContactSkeleton />;
+    }
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -402,7 +451,68 @@ const QuickContactScreen = ({ route, navigation }) => {
                         </View>
                     )}
                 </View>
+ {/* WhatsApp Media & Docs Collapsible */}
+                {isWhatsAppIntegrated && (
+                    <View style={styles.card}>
+                        <TouchableOpacity
+                            style={styles.collapsibleHeader}
+                            onPress={() => setExpandWhatsAppMedia(!expandWhatsAppMedia)}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <MaterialCommunityIcons name="folder-multiple-image" size={22} color="#075E54" />
+                                <Text style={[styles.cardText, { marginLeft: 10, fontWeight: '500' }]}>WhatsApp Media & Docs</Text>
+                            </View>
+                            <MaterialIcons name={expandWhatsAppMedia ? "expand-less" : "expand-more"} size={24} color="#666" />
+                        </TouchableOpacity>
 
+                        {expandWhatsAppMedia && (
+                            <View style={styles.historyList}>
+                                {mediaMessages.length > 0 ? (
+                                    mediaMessages.map((item, index) => {
+                                        // Support multiple URL fields
+                                        const mediaUrl = item.url || item.mediaUrl || item.content?.mediaUrl || item.content?.url;
+                                        
+                                        // Robust type checking
+                                        const type = item.type?.toLowerCase();
+                                        const isImage = type === 'image' || mediaUrl?.match(/\.(jpg|jpeg|png|gif|webp)/i);
+                                        const isAudio = type === 'audio' || type === 'ptt' || mediaUrl?.match(/\.(mp3|wav|ogg|m4a|aac)/i);
+                                        const isVideo = type === 'video' || mediaUrl?.match(/\.(mp4|mov|avi)/i);
+                                        
+                                        // Robust file title resolution
+                                        const fileTitle = item.caption || item.fileName || item.filename || item.description || 
+                                                       item.content?.filename || 
+                                                       (isImage ? 'WhatsApp Image' : isAudio ? 'Audio Message' : isVideo ? 'Video Message' : 'Document');
+
+                                        return (
+                                            <TouchableOpacity 
+                                                key={item.messageId || item._id || item.id || index} 
+                                                style={styles.mediaListItem}
+                                                onPress={() => {
+                                                    if (mediaUrl) Linking.openURL(mediaUrl);
+                                                }}
+                                            >
+                                                <View style={styles.mediaIconWrapper}>
+                                                    <MaterialIcons 
+                                                        name={isImage ? "image" : isAudio ? "audiotrack" : isVideo ? "videocam" : "insert-drive-file"} 
+                                                        size={24} 
+                                                        color={isImage ? "#FF9500" : isAudio ? "#AF52DE" : isVideo ? "#FF3B30" : "#5856D6"} 
+                                                    />
+                                                </View>
+                                                <View style={styles.mediaInfo}>
+                                                    <Text style={styles.mediaTitle} numberOfLines={1}>{fileTitle}</Text>
+                                                    <Text style={styles.mediaSub}>{formatLogDate(item.timestamp || item.createdAt)}</Text>
+                                                </View>
+                                                <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" />
+                                            </TouchableOpacity>
+                                        );
+                                    })
+                                ) : (
+                                    <Text style={styles.emptyText}>No media or documents found</Text>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                )}
                 {/* Call Logs */}
                 <View style={styles.card}>
                     <View style={styles.collapsibleHeader}>
@@ -478,6 +588,8 @@ const QuickContactScreen = ({ route, navigation }) => {
                         )}
                     </View>
                 </View>
+
+               
 
                 {/* Access Messages Hint */}
                 {showHint && (
@@ -768,6 +880,35 @@ const styles = StyleSheet.create({
         paddingTop: 5,
         borderTopWidth: 1,
         borderTopColor: '#EEE'
+    },
+    mediaListItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#F0F0F0',
+    },
+    mediaIconWrapper: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        backgroundColor: '#F2F2F7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    mediaInfo: {
+        flex: 1,
+    },
+    mediaTitle: {
+        fontSize: 14,
+        color: '#1C1C1E',
+        fontWeight: '500',
+    },
+    mediaSub: {
+        fontSize: 12,
+        color: '#8E8E93',
+        marginTop: 2,
     }
 });
 

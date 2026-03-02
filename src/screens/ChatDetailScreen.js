@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, Dimensions, StatusBar, BackHandler, Keyboard, Alert, Image, Modal, ScrollView, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, StatusBar, BackHandler, Keyboard, Alert, Image, Modal, ScrollView, Linking, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,7 +11,9 @@ import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import ChatAudioPlayer from '../components/ChatAudioPlayer';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchConversationMessages, sendConversationMessage, uploadMedia, receiveMessage, createConversation, clearUnread } from '../store/slices/whatsappSlice';
+import { fetchConversationMessages, sendConversationMessage, uploadMedia, receiveMessage, createConversation, clearUnread, markChatAsRead, searchConversationMessages } from '../store/slices/whatsappSlice';
+import { validateLogOwnership } from '../store/slices/leadSlice';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const ChatDetailScreen = ({ route, navigation }) => {
     // Rely primarily on conversationId for standard API compatibility
@@ -34,6 +36,25 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
     const resolvedId = resolvedChat ? (resolvedChat._id || resolvedChat.id) : null;
     const effectiveId = activeConversationId || resolvedId || conversationId || chatId;
+
+    // Robust resolution between IDs and Phone Numbers
+    const looksLikePhone = (val) => {
+        if (!val) return false;
+        // Clean and test
+        const str = String(val).replace(/\+/g, '').replace(/[\s-]/g, '');
+        return /^\d{7,15}$/.test(str);
+    };
+
+    const resolvedPhone = looksLikePhone(chatId) ? chatId : 
+                          (looksLikePhone(conversationId) ? conversationId : 
+                          (resolvedChat?.phone || ''));
+
+    // Derived display name preferring store data > route params
+    const isGenericName = !chatName || chatName === 'Chat' || chatName === 'Unknown';
+    const displayName = (resolvedChat?.name || resolvedChat?.contactName) || 
+                        (!isGenericName ? chatName : null) || 
+                        resolvedPhone || 
+                        chatName;
     
     // Instead of local mock state, get real messages from redux based on effectiveId
     const allMessages = useSelector(state => state.whatsapp.messages || {});
@@ -44,22 +65,48 @@ const ChatDetailScreen = ({ route, navigation }) => {
     const alternativeId = (effectiveId === resolvedId) ? (resolvedChat?.phone) : (resolvedId);
     const alternativeMessages = (alternativeId && alternativeId !== effectiveId) ? (allMessages[alternativeId] || []) : [];
 
+    // Ownership/Associations from lead slice
+    const [ownershipInfo, setOwnershipInfo] = useState(null);
+    const [isOwnershipLoading, setIsOwnershipLoading] = useState(false);
+
     const messages = React.useMemo(() => {
-        const combined = [...rawMessages];
-        // Merge alternative messages if they aren't already in the list
-        alternativeMessages.forEach(msg => {
-            const msgId = msg._id || msg.id || msg.messageId;
-            if (!combined.some(m => (m._id || m.id || m.messageId) === msgId)) {
-                combined.push(msg);
+        // 1. Primary lookup
+        let combined = [...rawMessages];
+        
+        // 2. Secondary lookup (Alternative ID like phone vs Mongo ID)
+        if (combined.length === 0 && alternativeMessages.length > 0) {
+            combined = [...alternativeMessages];
+        }
+
+        // 3. Fuzzy lookup (handle '+' prefix mismatches or phone vs ID inconsistencies)
+        if (combined.length === 0) {
+            const keys = Object.keys(allMessages);
+            const normEff = String(effectiveId).replace(/\+/g, '');
+            const matchingKey = keys.find(k => k.replace(/\+/g, '') === normEff);
+            if (matchingKey) {
+                combined = [...allMessages[matchingKey]];
             }
-        });
+        }
+
+        // Enrich messages with associated_ids if we have ownership data
+        // Priority from User: Lead > Campaign > Enquiry
+        if (ownershipInfo) {
+            combined = combined.map(msg => ({
+                ...msg,
+                associated_ids: {
+                    lead_id: ownershipInfo.lead_id || null,
+                    enquiry_id: ownershipInfo.enquiry_id || null,
+                    campaign_record_id: ownershipInfo.campaign_record_id || null
+                }
+            }));
+        }
 
         return combined.sort((a, b) => {
             const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
             const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
             return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
         });
-    }, [rawMessages, alternativeMessages]);
+    }, [rawMessages, alternativeMessages, allMessages, effectiveId, ownershipInfo]);
 
     React.useEffect(() => {
         if (!isWhatsAppIntegrated) {
@@ -76,6 +123,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
     const [isEnsuringChat, setIsEnsuringChat] = useState(false);
     const [downloadingUrl, setDownloadingUrl] = useState(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    // Search state
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearchLoading, setIsSearchLoading] = useState(false);
     const initialMsgProcessed = React.useRef(false);
     const flatListRef = React.useRef(null);
 
@@ -108,7 +161,23 @@ const ChatDetailScreen = ({ route, navigation }) => {
                 }
             }
 
-            // Step 2: Fetch messages if we have a valid ID
+            // Step 2: Fetch ownership info if phone is available
+            const phone = resolvedChat?.phone || chatId || conversationId;
+            if (phone && /^\+?\d{7,15}$/.test(phone)) {
+                setIsOwnershipLoading(true);
+                try {
+                    const validation = await dispatch(validateLogOwnership([phone])).unwrap();
+                    if (validation && validation[phone]) {
+                        setOwnershipInfo(validation[phone]);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch ownership for chat header:", e);
+                } finally {
+                    setIsOwnershipLoading(false);
+                }
+            }
+
+            // Step 3: Fetch messages if we have a valid ID
             if (currentId) {
                 dispatch(fetchConversationMessages({ conversationId: currentId }));
                 
@@ -125,12 +194,17 @@ const ChatDetailScreen = ({ route, navigation }) => {
         prepareChat();
     }, [chatId, conversationId, chatName, dispatch]);
 
-    // Clear unread count when chat is viewed or new messages arrive
-    React.useEffect(() => {
+    // Clear unread count when chat is viewed, new messages arrive, or screen focuses
+    const clearUnreadStatus = React.useCallback(() => {
         if (effectiveId) {
             dispatch(clearUnread(effectiveId));
+            dispatch(markChatAsRead(effectiveId));
         }
-    }, [effectiveId, messages.length, dispatch]);
+    }, [effectiveId, dispatch]);
+
+    React.useEffect(() => {
+        clearUnreadStatus();
+    }, [effectiveId, messages.length, clearUnreadStatus]);
 
     React.useEffect(() => {
         const showListener = Keyboard.addListener(
@@ -160,12 +234,86 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
     React.useEffect(() => {
         const backAction = () => {
+            if (isSearching) {
+                handleCloseSearch();
+                return true;
+            }
             navigation.goBack();
             return true;
         };
         const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
         return () => backHandler.remove();
-    }, [navigation]);
+    }, [navigation, isSearching]);
+
+    const handleSearch = async (query) => {
+        setSearchQuery(query);
+        if (query.trim().length > 0 && effectiveId) {
+            setIsSearchLoading(true);
+            try {
+                const result = await dispatch(searchConversationMessages({ conversationId: effectiveId, query })).unwrap();
+                setSearchResults(result || []);
+            } catch (error) {
+                console.error('Search error:', error);
+            } finally {
+                setIsSearchLoading(false);
+            }
+        } else {
+            setSearchResults([]);
+        }
+    };
+
+    const handleCloseSearch = () => {
+        setIsSearching(false);
+        setSearchQuery('');
+        setSearchResults([]);
+    };
+
+    const handleHeaderPress = () => {
+        // Priority List from User: Lead > Campaign > Enquiry
+        let targetId = effectiveId;
+        
+        console.log('[HeaderPress] EffectiveId:', effectiveId);
+        console.log('[HeaderPress] Messages available:', messages.length > 0);
+
+        // 1. Prioritize from high-level ownership lookup
+        // console.log(ownershipInfo);
+        // console.log(messages);
+        
+        if (ownershipInfo) {
+            targetId = ownershipInfo.lead_id || ownershipInfo.campaign_record_id || ownershipInfo.enquiry_id || targetId;
+        } 
+        
+        // 2. Scan specific messages for associations (Fallback)
+        else if (messages.length > 0) {
+            const msgWithIds = messages.find(m => m.associated_ids && (m.associated_ids.lead_id || m.associated_ids.campaign_record_id || m.associated_ids.enquiry_id));
+            if (msgWithIds) {
+                const ids = msgWithIds.associated_ids;
+                targetId = ids.lead_id || ids.campaign_record_id || ids.enquiry_id || targetId;
+            }
+        }
+
+        // 3. Ensure targetId is normalized
+        const finalId = (typeof targetId === 'string') ? targetId : String(targetId || effectiveId);
+        console.log('[HeaderPress] Resolved TargetId:', finalId);
+
+        // Construct contact object for QuickContactScreen
+        const contact = {
+            id: finalId,
+            _id: finalId,
+            name: (resolvedChat?.name || resolvedChat?.contactName) || (!isGenericName ? chatName : 'Unsaved Contact'),
+            phone: resolvedPhone || (looksLikePhone(finalId) ? finalId : ''),
+            photo: resolvedChat?.photo,
+            conversationId: effectiveId
+        };
+        console.log('[HeaderPress] Navigating with:', { contact, conversationId: effectiveId });
+        
+        navigation.navigate('QuickContact', { 
+            contact, 
+            conversationId: effectiveId 
+        });
+    };
+
+
 
     const downloadAndOpenFile = async (url, filename, mimeType) => {
         try {
@@ -421,39 +569,79 @@ const ChatDetailScreen = ({ route, navigation }) => {
     return (
         <SafeAreaView style={styles.container}>
             {/* Header stays outside KeyboardAvoidingView to remain visible during pan/resize */}
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={24} color="#FFF" />
+            {/* Header */}
+            {isSearching ? (
+                <View style={[styles.header, { backgroundColor: '#FFF', elevation: 2 }]}>
+                    <TouchableOpacity onPress={handleCloseSearch} style={styles.backButton}>
+                        <MaterialIcons name="arrow-back" size={24} color="#667781" />
                     </TouchableOpacity>
-                    <View style={styles.avatarMini}>
-                        <Text style={styles.avatarMiniText}>{chatName.charAt(0)}</Text>
+                    <TextInput
+                        style={styles.headerSearchInput}
+                        placeholder="Search messages..."
+                        placeholderTextColor="#8696A0"
+                        value={searchQuery}
+                        onChangeText={handleSearch}
+                        autoFocus
+                    />
+                    {isSearchLoading && (
+                        <ActivityIndicator size="small" color="#128C7E" style={{ marginRight: 15 }} />
+                    )}
+                </View>
+            ) : (
+                <View style={styles.header}>
+                    <View style={styles.headerLeft}>
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                            <MaterialIcons name="arrow-back" size={24} color="#FFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.headerProfileInfo} 
+                            onPress={handleHeaderPress}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.avatarMini}>
+                                <Text style={styles.avatarMiniText}>{displayName.charAt(0)}</Text>
+                            </View>
+                            <View style={styles.headerInfo}>
+                                <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
+                                <Text style={styles.headerStatus}>
+                                    {isEnsuringChat ? 'Connecting...' : 'Tap for contact info'}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
                     </View>
-                    <View style={styles.headerInfo}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>{chatName}</Text>
-                        {isEnsuringChat && <Text style={styles.headerStatus}>Connecting...</Text>}
+                    <View style={styles.headerRight}>
+                        <TouchableOpacity style={styles.headerIcon} onPress={() => setIsSearching(true)}>
+                            <MaterialIcons name="search" size={24} color="#FFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.headerIcon}>
+                            <MaterialIcons name="call" size={24} color="#FFF" />
+                        </TouchableOpacity>
+                        {/* <TouchableOpacity style={styles.headerIcon}>
+                            <MaterialIcons name="more-vert" size={24} color="#FFF" />
+                        </TouchableOpacity> */}
                     </View>
                 </View>
-                <View style={styles.headerRight}>
-                     {/* <TouchableOpacity style={styles.headerIcon}>
-                        <MaterialIcons name="videocam" size={24} color="#FFF" />
-                    </TouchableOpacity> */}
-                    <TouchableOpacity style={styles.headerIcon}>
-                        <MaterialIcons name="call" size={24} color="#FFF" />
-                    </TouchableOpacity>
-                </View>
-            </View>
+            )}
 
             <View style={[styles.keyboardView, { paddingBottom: Platform.OS === 'android' ? 0 : 0 }]}>
                 <View style={{ flex: 1 }}>
                     <FlatList
                         ref={flatListRef}
-                        data={messages}
+                        data={isSearching && searchQuery.length > 0 ? searchResults : messages}
                         keyExtractor={(item) => item.id || item._id || Math.random().toString()}
                         renderItem={renderMessage}
                         contentContainerStyle={styles.messagesList}
-                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                        onContentSizeChange={() => !isSearching && flatListRef.current?.scrollToEnd({ animated: true })}
+                        onLayout={() => !isSearching && flatListRef.current?.scrollToEnd({ animated: true })}
+                        ListEmptyComponent={
+                            isSearching && searchQuery.length > 0 ? (
+                                <View style={styles.emptySearchContainer}>
+                                    <Text style={styles.emptySearchText}>
+                                        {isSearchLoading ? 'Searching...' : 'No messages found'}
+                                    </Text>
+                                </View>
+                            ) : null
+                        }
                     />
                 </View>
                 
@@ -543,7 +731,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#128C7E', // WhatsApp Green
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 8 : 8,
+        paddingTop: 8,
         paddingBottom: 8,
         paddingHorizontal: 4,
     },
@@ -579,10 +767,22 @@ const styles = StyleSheet.create({
         fontSize: 18,
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: 17,
+        fontWeight: '700',
         color: '#FFF',
         flexShrink: 1,
+    },
+    headerProfileInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    headerSearchInput: {
+        flex: 1,
+        fontSize: 18,
+        color: '#3B4A54',
+        marginLeft: 10,
+        height: '100%',
     },
     headerInfo: {
         flex: 1,
@@ -734,6 +934,17 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#333',
         flex: 1,
+    },
+    emptySearchContainer: {
+        flex: 1,
+        padding: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptySearchText: {
+        color: '#8696A0',
+        fontSize: 16,
+        textAlign: 'center',
     }
 });
 

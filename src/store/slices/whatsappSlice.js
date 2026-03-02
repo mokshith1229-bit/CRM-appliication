@@ -141,12 +141,48 @@ export const uploadMedia = createAsyncThunk(
     }
 );
 
+export const markChatAsRead = createAsyncThunk(
+    'whatsapp/markRead',
+    async (conversationId, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.post(`/whatsapp/chats/${conversationId}/read`);
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to mark as read');
+        }
+    }
+);
+
+export const searchGlobalMessages = createAsyncThunk(
+    'whatsapp/searchGlobalMessages',
+    async (query, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.get('/whatsapp/messages/search', { params: { query } });
+            return response.data.data || response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to search messages');
+        }
+    }
+);
+
+export const searchConversationMessages = createAsyncThunk(
+    'whatsapp/searchConversationMessages',
+    async ({ conversationId, query }, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.get(`/whatsapp/chats/${conversationId}/messages/search`, { params: { query } });
+            return response.data.data || response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to search messages');
+        }
+    }
+);
+
 export const searchChats = createAsyncThunk(
     'whatsapp/searchChats',
     async (query, { rejectWithValue }) => {
         try {
             const response = await axiosClient.get('/whatsapp/search', { params: { query } });
-            return response.data.data;
+            return response.data.data || response.data;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Failed to search chats');
         }
@@ -244,13 +280,17 @@ const whatsappSlice = createSlice({
             // Determine the Mongo/Conversation ID if available
             const messageConvId = message.conversationId || (conversation ? (conversation._id || conversation.id) : null);
 
+            const clean = (p) => String(p || '').replace(/\+/g, '').replace(/[\s-]/g, '');
+            const targetUserPhone = clean(userPhone);
+            const targetContactPhone = clean(message.contactPhone);
+
             // Find the chat in our existing list using any available identifier
-            const chatIndex = state.chats.findIndex(chat => 
-                (chat._id || chat.id) === messageConvId || 
-                 chat.phone === userPhone || 
-                 chat.phone === message.contactPhone ||
-                 (messageConvId && (chat._id === messageConvId || chat.id === messageConvId))
-            );
+            const chatIndex = state.chats.findIndex(chat => {
+                const idMatch = messageConvId && ((chat._id || chat.id) === messageConvId);
+                const chatPhone = clean(chat.phone);
+                const phoneMatch = chatPhone && (chatPhone === targetUserPhone || chatPhone === targetContactPhone);
+                return idMatch || phoneMatch;
+            });
 
             // Use Chat ID as the primary key for state.messages, fall back to phone
             let key = messageConvId || userPhone;
@@ -316,10 +356,16 @@ const whatsappSlice = createSlice({
             }
         },
         clearUnread: (state, action) => {
-            const targetId = action.payload;
-            const chatIndex = state.chats.findIndex(chat => 
-                (chat._id || chat.id) === targetId || chat.phone === targetId
-            );
+            const targetId = String(action.payload || '');
+            const targetIdClean = targetId.replace(/\+/g, '').replace(/[\s-]/g, '');
+
+            const chatIndex = state.chats.findIndex(chat => {
+                const idMatch = (chat._id || chat.id) === targetId;
+                const phoneClean = (chat.phone || '').replace(/\+/g, '').replace(/[\s-]/g, '');
+                const phoneMatch = phoneClean && targetIdClean && phoneClean === targetIdClean;
+                return idMatch || phoneMatch;
+            });
+
             if (chatIndex >= 0) {
                 const unreadAmount = state.chats[chatIndex].unreadCount || state.chats[chatIndex].unread || 0;
                 state.unreadCount = Math.max(0, state.unreadCount - unreadAmount);

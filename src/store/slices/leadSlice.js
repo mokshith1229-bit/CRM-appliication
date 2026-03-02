@@ -546,7 +546,8 @@ const leadSlice = createSlice({
             page: 1,
             pages: 1,
             total: 0
-        }
+        },
+        detailsLoading: false
     },
     reducers: {
         setActiveFilter: (state, action) => {
@@ -768,13 +769,17 @@ const leadSlice = createSlice({
             })
             // Fetch Lead Details
             .addCase(fetchLeadDetails.pending, (state) => {
-                // Keep previous details or clear? Better to keep or handle in component
+                state.detailsLoading = true;
+                state.error = null;
             })
             .addCase(fetchLeadDetails.fulfilled, (state, action) => {
+                state.detailsLoading = false;
                 state.currentLeadDetails = action.payload;
             })
-            .addCase(fetchLeadDetails.rejected, (state) => {
+            .addCase(fetchLeadDetails.rejected, (state, action) => {
+                state.detailsLoading = false;
                 state.currentLeadDetails = null;
+                state.error = action.payload;
             })
             // Create Lead
             .addCase(createLead.pending, (state) => {
