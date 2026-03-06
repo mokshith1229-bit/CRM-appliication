@@ -289,6 +289,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
             if (msgWithIds) {
                 const ids = msgWithIds.associated_ids;
                 targetId = ids.lead_id || ids.campaign_record_id || ids.enquiry_id || targetId;
+                console.log(msgWithIds);
+                
             }
         }
 
@@ -408,7 +410,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
                         disabled={downloadingUrl === mediaUrl}
                     >
                         {downloadingUrl === mediaUrl ? (
-                            <ActivityIndicator size="small" color="#128C7E" />
+                            <ActivityIndicator size="small" color={COLORS.primaryPurple} />
                         ) : (
                             <MaterialIcons name="insert-drive-file" size={24} color="#8696A0" />
                         )}
@@ -426,7 +428,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
                         <MaterialIcons 
                             name={item.status === 'sending' ? 'access-time' : (item.status === 'error' ? 'error-outline' : 'done-all')} 
                             size={14} 
-                            color={item.status === 'error' ? '#FF3B30' : '#8696A0'} 
+                            color={item.status === 'error' ? '#FF3B30' : (isAgent ? 'rgba(255,255,255,0.7)' : '#8696A0')} 
                             style={styles.statusIcon}
                         />
                     )}
@@ -584,7 +586,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
                         autoFocus
                     />
                     {isSearchLoading && (
-                        <ActivityIndicator size="small" color="#128C7E" style={{ marginRight: 15 }} />
+                        <ActivityIndicator size="small" color={COLORS.primaryPurple} style={{ marginRight: 15 }} />
                     )}
                 </View>
             ) : (
@@ -598,8 +600,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
                             onPress={handleHeaderPress}
                             activeOpacity={0.7}
                         >
-                            <View style={styles.avatarMini}>
-                                <Text style={styles.avatarMiniText}>{displayName.charAt(0)}</Text>
+                            <View style={[styles.avatarMini, { backgroundColor: '#FFF' }]}>
+                                <Text style={[styles.avatarMiniText, { color: COLORS.primaryPurple }]}>{displayName.charAt(0)}</Text>
                             </View>
                             <View style={styles.headerInfo}>
                                 <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
@@ -721,7 +723,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#E5DDD5', // WhatsApp background color
+        backgroundColor: COLORS.background, 
     },
     keyboardView: {
         flex: 1,
@@ -730,7 +732,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#128C7E', // WhatsApp Green
+        backgroundColor: COLORS.primaryPurple, 
         paddingTop: 8,
         paddingBottom: 8,
         paddingHorizontal: 4,
@@ -762,7 +764,7 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     avatarMiniText: {
-        color: '#128C7E', // WhatsApp Green
+        color: COLORS.primaryPurple, 
         fontWeight: 'bold',
         fontSize: 18,
     },
@@ -806,7 +808,7 @@ const styles = StyleSheet.create({
     },
     agentBubble: {
         alignSelf: 'flex-end',
-        backgroundColor: '#DCF8C6', // WhatsApp sender bubble color
+        backgroundColor: COLORS.primaryPurple, 
         borderBottomRightRadius: 0,
     },
     userBubble: {
@@ -819,14 +821,14 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     agentMessageText: {
-        color: '#333',
+        color: '#FFF',
     },
     userMessageText: {
         color: '#333',
     },
     messageTime: {
         fontSize: 11,
-        color: '#888',
+        color: 'rgba(0,0,0,0.45)',
         alignSelf: 'flex-end',
         marginTop: 4,
     },
@@ -858,7 +860,7 @@ const styles = StyleSheet.create({
         padding: 12,
     },
     sendButton: {
-        backgroundColor: '#128C7E', // WhatsApp Green
+        backgroundColor: COLORS.primaryPurple, 
         width: 48,
         height: 48,
         borderRadius: 24,

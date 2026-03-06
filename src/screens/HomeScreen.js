@@ -357,10 +357,17 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
     }, [searchQuery, activeFilter, dateFilter, dateRange, fetchWithFilters]);
 
     // Register Notifications
-    // Register Notifications
     useEffect(() => {
-        registerForPushNotificationsAsync();
-    }, []);
+        const setupPushTokens = async () => {
+            const token = await registerForPushNotificationsAsync();
+            if (token && user?._id) {
+                // Save token to backend user profile
+                const { updateProfile } = require('../store/slices/authSlice');
+                dispatch(updateProfile({ pushToken: token }));
+            }
+        };
+        setupPushTokens();
+    }, [user?._id]);
 
     // Refresh logs when app comes to foreground (e.g. after a call)
     useEffect(() => {

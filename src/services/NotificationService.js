@@ -12,8 +12,8 @@ const setupNotificationChannel = async () => {
     // Configure what happens when a notification arrives while the app is open
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
-            shouldShowAlert: false,  // don't interrupt the UI for sync updates
-            shouldPlaySound: false,
+            shouldShowAlert: true,
+            shouldPlaySound: true,
             shouldSetBadge: false,
         }),
     });

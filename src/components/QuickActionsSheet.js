@@ -19,7 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { openWhatsApp, sendSMS, sendEmail } from '../utils/intents';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateLead, removeLead, fetchLeadDetails, clearLeadDetails, ensureLead } from '../store/slices/leadSlice';
+import { updateLead, removeLead, fetchLeadDetails, clearLeadDetails, ensureLead, updateCallLog } from '../store/slices/leadSlice';
 import { fetchTeamMembers } from '../store/slices/teamSlice';
 import axiosClient from '../api/axiosClient';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -137,6 +137,8 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
 
     const [showBudgetPicker, setShowBudgetPicker] = useState(false);
     const [showTimelinePicker, setShowTimelinePicker] = useState(false);
+    const [editingCallLogId, setEditingCallLogId] = useState(null);
+    const [editingCallLogNote, setEditingCallLogNote] = useState('');
 
     // Fetch team members and detailed lead info when sheet becomes visible
     useEffect(() => {
@@ -374,6 +376,11 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         }
     };
 
+    const handleStartEditingNote = (log) => {
+        setEditingCallLogId(log.id); // Flattened item uses .id
+        setEditingCallLogNote(log.note || '');
+    };
+
     const handleStatusSelect = (statusValue) => {
         setPendingStatus(statusValue);
         setStatusNote('');
@@ -465,15 +472,17 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
             });
         }
 
-        // Call Logs
-        if (freshContact.call_logs) {
-            freshContact.call_logs.forEach(item => {
+        // Call Logs (Both formats)
+        const serverCallLogs = freshContact.call_logs || freshContact.callLogs || [];
+        if (serverCallLogs.length > 0) {
+            serverCallLogs.forEach(item => {
                 items.push({
                     type: 'call',
+                    id: item.calllogid || item._id || item.id, // Prefer explicit calllogid for PUT requests
                     date: new Date(item.date || item.timestamp), // Handle both formats
                     title: `${item.type || 'Call'} - ${item.status}`,
                     subtitle: `Duration: ${item.duration}`,
-                    note: item.notes,
+                    note: item.notes || item.note,
                     icon: 'phone',
                     color: item.status === 'Missed' ? '#F44336' : '#4CAF50',
                     duration: item.duration,
@@ -497,6 +506,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         }
 
         // Device Local Logs (specifically for contacts with _source === 'log')
+        
         if (freshContact._source === 'log' && localDeviceLogs && localDeviceLogs.length > 0) {
             localDeviceLogs.forEach(item => {
                 // Check if this log is already accounted for (unlikely for unsaved, but good practice)
@@ -524,6 +534,24 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     }, [freshContact, localDeviceLogs]);
 
 
+    const handleSaveCallLogNote = async () => {
+        if (!editingCallLogId) return;
+        try {
+            await dispatch(updateCallLog({ id: editingCallLogId, notes: editingCallLogNote })).unwrap();
+            
+            // Re-fetch lead details to update UI with latest from server
+            if (freshContact?._id || freshContact?.id) {
+                dispatch(fetchLeadDetails(freshContact._id || freshContact.id));
+            }
+            
+            setEditingCallLogId(null);
+            setEditingCallLogNote('');
+            // Alert.alert('Success', 'Note updated successfully');
+        } catch (error) {
+            Alert.alert('Error', error?.message || 'Failed to update note');
+        }
+    };
+
     // Rendering Helper for History
     const renderHistoryItem = ({ item }) => {
         // Robust user name resolution
@@ -532,6 +560,7 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         const isTransfer = item.type === 'transfer';
         const isStatus = item.type === 'status';
         const isCall = item.type === 'call';
+        const isEditing = String(editingCallLogId) === String(item.id);
 
         // Custom formatting based on type
         let subText = '';
@@ -562,11 +591,51 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
                     )}
 
                     {/* Transfer Reason or Call Note */}
-                    {item.note && (
-                        <View style={styles.historyNoteContainer}>
-                            {isTransfer && <Text style={{ fontSize: 12, fontWeight: '600', color: '#555' }}>Reason:</Text>}
-                            <Text style={styles.historyNoteText}>{item.note}</Text>
-                        </View>
+                    {isCall && !item.isDeviceSource ? (
+                        <TouchableOpacity 
+                            style={styles.callNoteContainer}
+                            onPress={() => {
+                                if (!isEditing) handleStartEditingNote(item);
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.notesHeader}>
+                                <Text style={styles.notesLabel}>Notes:</Text>
+                                <TouchableOpacity 
+                                    onPress={() => {
+                                        if (isEditing) {
+                                            handleSaveCallLogNote();
+                                        } else {
+                                            handleStartEditingNote(item);
+                                        }
+                                    }}
+                                    style={styles.editNoteBtn}
+                                >
+                                    <Text style={styles.editNoteBtnText}>
+                                        {isEditing ? 'Save' : (item.note ? 'Edit' : 'Add Note')}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {isEditing ? (
+                                <TextInput
+                                    style={styles.notesInput}
+                                    value={editingCallLogNote}
+                                    onChangeText={setEditingCallLogNote}
+                                    placeholder="Add a note..."
+                                    multiline
+                                    autoFocus
+                                />
+                            ) : (
+                                <Text style={styles.historyNoteText}>{item.note || 'Tap to add notes...'}</Text>
+                            )}
+                        </TouchableOpacity>
+                    ) : (
+                        item.note && (
+                            <View style={styles.historyNoteContainer}>
+                                {isTransfer && <Text style={{ fontSize: 12, fontWeight: '600', color: '#555' }}>Reason:</Text>}
+                                <Text style={styles.historyNoteText}>{item.note}</Text>
+                            </View>
+                        )
                     )}
 
                     {/* Audio Player for Calls - Hide if 0 duration or no recording URL */}
@@ -963,7 +1032,7 @@ const updateSiteVisit = async () => {
                                             <View style={styles.infoRow}>
                                                 <Text style={styles.infoLabel}>Project:</Text>
                                                 <Text style={styles.infoValue}>
-                                                    {typeof freshContact.project_id === 'object' ? freshContact.project_id.name : freshContact.project_id}
+                                                  {typeof freshContact.project_id === 'object' ? freshContact.project_id.name : freshContact.project_id}
                                                 </Text>
                                             </View>
                                         )}
@@ -1947,6 +2016,60 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 16,
         fontWeight: '600',
+    },
+    // Call Log Note Styles
+    callNoteContainer: {
+        marginTop: 8,
+        backgroundColor: '#FAFBFC',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    notesHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    notesLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#6B7280',
+        textTransform: 'uppercase',
+    },
+    editNoteBtn: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 6,
+        backgroundColor: COLORS.primary + '15',
+    },
+    editNoteBtnText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    historyNoteText: {
+        fontSize: 14,
+        color: '#374151',
+        lineHeight: 20,
+    },
+    notesInput: {
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: COLORS.primary,
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14,
+        color: '#111827',
+        minHeight: 80,
+        textAlignVertical: 'top',
+    },
+    historyNoteContainer: {
+        marginTop: 4,
+        padding: 8,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 8,
     },
 });
 

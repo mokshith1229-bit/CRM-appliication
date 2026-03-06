@@ -19,7 +19,7 @@ import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from '../constants/theme';
 import TransferLeadModal from '../components/TransferLeadModal';
 import StatusPicker from '../components/StatusPicker';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateLead, fetchLeadDetails, clearLeadDetails, checkLeadByPhone, createLead } from '../store/slices/leadSlice';
+import { updateLead, fetchLeadDetails, clearLeadDetails, checkLeadByPhone, createLead, updateCallLog } from '../store/slices/leadSlice';
 import defaultAvatar from '../assets/default_avatar.jpg';
 import { fetchTeamMembers } from '../store/slices/teamSlice';
 import CallLogService from '../services/CallLogService';
@@ -34,6 +34,7 @@ const QuickContactScreen = ({ route, navigation }) => {
     const leads = useSelector(state => state.leads.leads);
     const currentLeadDetails = useSelector(state => state.leads.currentLeadDetails);
     const detailsLoading = useSelector(state => state.leads.detailsLoading);
+    const leadError = useSelector(state => state.leads.error);
     const allTeamMembers = useSelector(state => state.team.members);
     const { statuses, isWhatsAppIntegrated } = useSelector(state => state.config);
 
@@ -192,26 +193,28 @@ const QuickContactScreen = ({ route, navigation }) => {
     };
 
     const handleStartEditingNote = (log) => {
-        setEditingNoteId(log.id);
-        setEditingNoteValue(log.notes || '');
+        const id = log.calllogid || log._id || log.id;
+        setEditingNoteId(id);
+        setEditingNoteValue(log.notes || log.note || '');
     };
 
     const handleSaveNote = async () => {
         if (editingNoteId && contact) {
-            const existingLogs = contact.callLogs || contact.call_logs || [];
-            const updatedLogs = existingLogs.map(log =>
-                log.id === editingNoteId ? { ...log, notes: editingNoteValue } : log
-            );
-
             try {
-                await dispatch(updateLead({
-                    id: contact.id || contact._id,
-                    data: { call_logs: updatedLogs }
+                await dispatch(updateCallLog({
+                    id: editingNoteId,
+                    notes: editingNoteValue
                 })).unwrap();
+                
+                // Re-fetch lead details to update UI with latest from server
+                if (contact?._id || contact?.id) {
+                    dispatch(fetchLeadDetails(contact._id || contact.id));
+                }
+
                 setEditingNoteId(null);
                 setEditingNoteValue('');
             } catch (error) {
-                Alert.alert("Error", "Failed to update note");
+                Alert.alert("Error", error?.message || "Failed to update note");
             }
         }
     };
@@ -260,6 +263,34 @@ const QuickContactScreen = ({ route, navigation }) => {
 
     if (detailsLoading) {
         return <QuickContactSkeleton />;
+    }
+
+    if (leadError && (leadError.status === 404 || (typeof leadError === 'string' && leadError.includes('not assigned')))) {
+        return (
+             <View style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+                <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+                        <MaterialIcons name="arrow-back" size={24} color="#444" />
+                    </TouchableOpacity>
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 }}>
+                    <MaterialCommunityIcons name="account-off-outline" size={80} color={COLORS.primaryPurple} style={{ opacity: 0.5 }} />
+                    <Text style={{ marginTop: 24, fontSize: 18, fontWeight: '600', color: '#1C1C1E', textAlign: 'center' }}>
+                        Access Restricted
+                    </Text>
+                    <Text style={{ marginTop: 12, fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20 }}>
+                        {typeof leadError === 'string' ? leadError : leadError.message}
+                    </Text>
+                    <TouchableOpacity 
+                        style={{ marginTop: 32, backgroundColor: COLORS.primaryPurple, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12, ...SHADOWS.small }}
+                        onPress={() => navigation.goBack()}
+                    >
+                        <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>Go Back</Text>
+                    </TouchableOpacity>
+                </View>
+             </View>
+        );
     }
 
     return (
@@ -523,8 +554,8 @@ const QuickContactScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.historyList}>
                         {((contact?._source === 'log' ? localDeviceLogs : (contact.call_logs || contact.callLogs)) || []).length > 0 ? (
-                            (contact?._source === 'log' ? localDeviceLogs : (contact.call_logs || contact.callLogs)).slice().reverse().map((log, idx) => (
-                                <View key={log.id || idx} style={[styles.logItemContainer, idx > 0 && styles.logBorder]}>
+                                (contact?._source === 'log' ? localDeviceLogs : (contact.call_logs || contact.callLogs)).slice().reverse().map((log, idx) => (
+                                <View key={log.calllogid || log._id || log.id || idx} style={[styles.logItemContainer, idx > 0 && styles.logBorder]}>
                                     <View style={styles.logMainRow}>
                                         <MaterialIcons
                                             name={log.type === 'Outbound' ? 'call-made' : (log.status === 'Missed' ? 'call-missed' : 'call-received')}
@@ -550,7 +581,8 @@ const QuickContactScreen = ({ route, navigation }) => {
                                         </View>
                                     )}
 
-                                    {contact?._source !== 'log' && (
+                                    {/* Show notes for any log that has a server-side ID */}
+                                    {(log.calllogid || log._id) && (
                                         <TouchableOpacity
                                             style={styles.notesSection}
                                             onPress={() => handleStartEditingNote(log)}
@@ -558,13 +590,25 @@ const QuickContactScreen = ({ route, navigation }) => {
                                         >
                                             <View style={styles.notesHeader}>
                                                 <Text style={styles.notesLabel}>Notes:</Text>
-                                                {editingNoteId === log.id && (
-                                                    <TouchableOpacity onPress={handleSaveNote}>
-                                                        <Text style={styles.saveBtnText}>Save</Text>
-                                                    </TouchableOpacity>
-                                                )}
+                                                <TouchableOpacity 
+                                                    onPress={() => {
+                                                        const logId = log.calllogid || log._id || log.id;
+                                                        if (String(editingNoteId) === String(logId)) {
+                                                            handleSaveNote();
+                                                        } else {
+                                                            handleStartEditingNote(log);
+                                                        }
+                                                    }}
+                                                    style={styles.editNoteBtn}
+                                                >
+                                                    <Text style={styles.saveBtnText}>
+                                                        {String(editingNoteId) === String(log.calllogid || log._id || log.id) 
+                                                            ? 'Save' 
+                                                            : (log.notes || log.note ? 'Edit' : 'Add Note')}
+                                                    </Text>
+                                                </TouchableOpacity>
                                             </View>
-                                            {editingNoteId === log.id ? (
+                                            {String(editingNoteId) === String(log.calllogid || log._id || log.id) ? (
                                                 <TextInput
                                                     style={styles.notesInput}
                                                     value={editingNoteValue}
@@ -799,6 +843,12 @@ const styles = StyleSheet.create({
     emptyText: {
         color: '#8E8E93',
         fontSize: 14,
+    },
+    editNoteBtn: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 6,
+        backgroundColor: COLORS.primary + '15',
     },
     hintBox: {
         backgroundColor: '#FFFFFF',

@@ -23,6 +23,7 @@ import ChatDetailScreen from '../screens/ChatDetailScreen';
 import BottomTabs from '../components/BottomTabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 import { useDispatch, useSelector } from 'react-redux';
 import { checkAuth } from '../store/slices/authSlice';
@@ -43,6 +44,62 @@ const AppNavigator = () => {
     useEffect(() => {
         dispatch(checkAuth());
     }, [dispatch]);
+
+    const navigation = {
+        navigate: (screenName, params = {}) => {
+            if (currentScreen === screenName) {
+                setCurrentParams(params);
+                return;
+            }
+            setScreenStack((prev) => [...prev, screenName]);
+            setCurrentScreen(screenName);
+            setCurrentParams(params);
+        },
+        replace: (screenName, params = {}) => {
+            setScreenStack([screenName]); // Reset stack on replace (for login/logout)
+            setCurrentScreen(screenName);
+            setCurrentParams(params);
+        },
+        goBack: () => {
+            if (screenStack.length > 1) {
+                const newStack = [...screenStack];
+                newStack.pop(); // Remove current screen
+                const previousScreen = newStack[newStack.length - 1];
+                setScreenStack(newStack);
+                setCurrentScreen(previousScreen);
+            }
+        },
+        setParams: (newParams) => {
+            setCurrentParams(prev => ({ ...prev, ...newParams }));
+        },
+    };
+
+    // 3. Notification Response Listener
+    useEffect(() => {
+        const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+            const data = response.notification.request.content.data;
+            console.log('[Notification] Tapped:', data);
+
+            if (data.type === 'call_reminder' || data.type === 'new_lead') {
+                const contactId = data.leadId || data.id;
+                if (contactId) {
+                    navigation.navigate('QuickContact', { 
+                        contact: { id: contactId } 
+                    });
+                }
+            } else if (data.type === 'new_message' || data.type === 'whatsapp_message') {
+                if (data.chatId || data.phone) {
+                    navigation.navigate('ChatDetail', { 
+                        chatId: data.chatId || data.phone,
+                        chatName: data.chatName || data.phone,
+                        conversationId: data.conversationId
+                    });
+                }
+            }
+        });
+
+        return () => subscription.remove();
+    }, [isNavReady]); // Only listen when nav is ready
 
     // 2. React to Auth State Changes
     useEffect(() => {
@@ -74,34 +131,7 @@ const AppNavigator = () => {
         );
     }
 
-    const navigation = {
-        navigate: (screenName, params = {}) => {
-            if (currentScreen === screenName) {
-                setCurrentParams(params);
-                return;
-            }
-            setScreenStack((prev) => [...prev, screenName]);
-            setCurrentScreen(screenName);
-            setCurrentParams(params);
-        },
-        replace: (screenName, params = {}) => {
-            setScreenStack([screenName]); // Reset stack on replace (for login/logout)
-            setCurrentScreen(screenName);
-            setCurrentParams(params);
-        },
-        goBack: () => {
-            if (screenStack.length > 1) {
-                const newStack = [...screenStack];
-                newStack.pop(); // Remove current screen
-                const previousScreen = newStack[newStack.length - 1];
-                setScreenStack(newStack);
-                setCurrentScreen(previousScreen);
-            }
-        },
-        setParams: (newParams) => {
-            setCurrentParams(prev => ({ ...prev, ...newParams }));
-        },
-    };
+    // Loading handled above
 
     // Loading handled above
 

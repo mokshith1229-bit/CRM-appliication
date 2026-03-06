@@ -203,10 +203,10 @@ export const addGroupMembers = createAsyncThunk('whatsapp/addGroupMembers', asyn
     catch (err) { return rejectWithValue(err.response?.data?.message || 'Failed to add members'); }
 });
 
-export const fetchContacts = createAsyncThunk('whatsapp/fetchContacts', async ({ page = 1, limit = 20 } = {}, { rejectWithValue }) => {
+export const fetchContacts = createAsyncThunk('whatsapp/fetchContacts', async ({ page = 1, limit = 20, search = '', wabaId, integrationId } = {}, { rejectWithValue }) => {
     try { 
-        const res = await axiosClient.get('/whatsapp/contacts', { params: { page, limit } }); 
-        return res.data.data; // Expecting { contacts: [], total, page, totalPages }
+        const res = await axiosClient.get('/whatsapp/contacts', { params: { page, limit, search, wabaId, integrationId } }); 
+        return res.data.contacts; // Expecting { contacts: [], total, page, totalPages }
     }
     catch (err) { return rejectWithValue(err.response?.data?.message || 'Failed to fetch contacts'); }
 });

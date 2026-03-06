@@ -1,21 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, StatusBar, BackHandler, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, StatusBar, BackHandler, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchChats, searchGlobalMessages } from '../store/slices/whatsappSlice';
+import { fetchChats, searchGlobalMessages, fetchContacts, createConversation } from '../store/slices/whatsappSlice';
 
 const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
     const dispatch = useDispatch();
-    const { chats, isLoading } = useSelector((state) => state.whatsapp);
+    const { chats, isLoading,contacts } = useSelector((state) => state.whatsapp);
     const { isWhatsAppIntegrated } = useSelector((state) => state.config);
-
     const [isSearching, setIsSearching] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearchLoading, setIsSearchLoading] = useState(false);
+
+    // Contacts Modal State
+    const [isContactsModalVisible, setIsContactsModalVisible] = useState(false);
+    const [contactsSearchQuery, setContactsSearchQuery] = useState('');
+    const [contactsResults, setContactsResults] = useState([]);
+    const [isContactsLoading, setIsContactsLoading] = useState(false);
+    const [contactsSearchTimeout, setContactsSearchTimeout] = useState(null);
 
     useEffect(() => {
         if (!isWhatsAppIntegrated) {
@@ -60,6 +66,83 @@ const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
         setIsSearching(false);
         setSearchQuery('');
         setSearchResults([]);
+    };
+
+    const handleOpenContacts = async () => {
+        setIsContactsModalVisible(true);
+        loadContacts('');
+    };
+
+    const loadContacts = async (query = '') => {
+        setIsContactsLoading(true);
+        try {
+            const data = await dispatch(fetchContacts({ page: 1, limit: 100, search: query })).unwrap();
+            console.log(data, "data from fetchContacts");
+            // Handle both cases: data being the array or the wrapper object
+            const contactsList = Array.isArray(data) ? data : (data?.contacts || []);
+            setContactsResults(contactsList);
+        } catch (error) {
+            console.error('Fetch contacts error', error);
+        } finally {
+            setIsContactsLoading(false);
+        }
+    };
+
+    const handleContactsSearch = (text) => {
+        setContactsSearchQuery(text);
+        
+        if (contactsSearchTimeout) {
+            clearTimeout(contactsSearchTimeout);
+        }
+        const timeout = setTimeout(() => {
+            loadContacts(text);
+        }, 500);
+        setContactsSearchTimeout(timeout);
+    };
+
+    const handleSelectContact = async (contact) => {
+        setIsContactsModalVisible(false);
+        try {
+            const result = await dispatch(createConversation({ 
+                phone: contact.phone, 
+                name: contact.wa_name || contact.name 
+            })).unwrap();
+
+            if (result && (result.data || result._id)) {
+                const conv = result.data || result;
+                navigation.navigate('ChatDetail', { 
+                    conversationId: conv._id, 
+                    chatId: conv._id, 
+                    chatName: conv.contactName 
+                });
+            } else {
+                 dispatch(fetchChats());
+            }
+        } catch (error) {
+            console.error('Error selecting contact to chat', error);
+        }
+    };
+
+    const renderContactItem = ({ item }) => {
+        const name = item.wa_name || item.name || item.phone || 'Unknown';
+        return (
+            <TouchableOpacity 
+                style={styles.chatItem}
+                onPress={() => handleSelectContact(item)}
+            >
+                <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={styles.chatContent}>
+                    <View style={styles.chatHeader}>
+                        <Text style={styles.chatName} numberOfLines={1}>{name}</Text>
+                    </View>
+                    <View style={styles.chatFooter}>
+                        <Text style={styles.lastMessage} numberOfLines={1}>{item.phone}</Text>
+                    </View>
+                </View>
+            </TouchableOpacity>
+        );
     };
 
     const renderChatItem = ({ item }) => {
@@ -125,7 +208,7 @@ const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            <StatusBar backgroundColor={isSearching ? "#FFF" : "#008069"} barStyle={isSearching ? "dark-content" : "light-content"} />
+            <StatusBar backgroundColor={isSearching ? "#FFF" : COLORS.primaryPurple} barStyle={isSearching ? "dark-content" : "light-content"} />
             
             {isSearching ? (
                 <View style={styles.searchHeader}>
@@ -143,8 +226,11 @@ const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
             ) : (
                 <View style={styles.headerContainer}>
                     <View style={styles.header}>
+                        <TouchableOpacity style={styles.backButtonHeader} onPress={() => navigation.navigate('Home')}>
+                            <MaterialIcons name="arrow-back" size={24} color="#FFF" />
+                        </TouchableOpacity>
                         <View style={styles.titleContainer}>
-                            <Text style={styles.headerTitle}>WhatsApp</Text>
+                            <Text style={styles.headerTitle}>WhatsaApp Inbox</Text>
                         </View>
                         <View style={styles.headerIcons}>
                             <TouchableOpacity style={styles.iconButton} onPress={() => setIsSearching(true)}>
@@ -171,7 +257,7 @@ const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
                 ListEmptyComponent={
                    <View style={styles.emptyContainer}>
                         {isSearchLoading ? (
-                            <ActivityIndicator size="large" color="#008069" />
+                            <ActivityIndicator size="large" color={COLORS.primaryPurple} />
                         ) : (
                             <Text style={styles.emptyText}>
                                 {isSearching ? "No results found." : (isLoading ? "Loading chats..." : "No recent conversations found.")}
@@ -182,10 +268,56 @@ const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
             />
             
             {!isSearching && (
-                <TouchableOpacity style={styles.floatingButton}>
-                    <MaterialIcons name="chat" size={24} color="#FFF" />
+                <TouchableOpacity style={styles.floatingButton} onPress={handleOpenContacts}>
+                    <MaterialIcons name="message" size={24} color="#FFF" />
                 </TouchableOpacity>
             )}
+
+            {/* Contacts Modal */}
+            <Modal
+                visible={isContactsModalVisible}
+                animationType="slide"
+                onRequestClose={() => setIsContactsModalVisible(false)}
+            >
+                <SafeAreaView style={styles.container} edges={['top']}>
+                    <StatusBar backgroundColor={COLORS.primaryPurple} barStyle="light-content" />
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={() => setIsContactsModalVisible(false)} style={styles.backButton}>
+                            <MaterialIcons name="arrow-back" size={24} color="#FFF" />
+                        </TouchableOpacity>
+                        <View style={styles.modalTitleContainer}>
+                            <Text style={styles.modalTitle}>Select Contact</Text>
+                            <Text style={styles.modalSubtitle}>{contactsResults.length} contacts</Text>
+                        </View>
+                    </View>
+                    
+                    <View style={styles.contactsSearchContainer}>
+                        <MaterialIcons name="search" size={20} color="#888" style={styles.searchIconInline} />
+                        <TextInput
+                            style={styles.contactsSearchInput}
+                            placeholder="Search contacts..."
+                            value={contactsSearchQuery}
+                            onChangeText={handleContactsSearch}
+                        />
+                    </View>
+
+                    <FlatList
+                        data={contactsResults}
+                        keyExtractor={(item) => item._id || item.phone || Math.random().toString()}
+                        renderItem={renderContactItem}
+                        contentContainerStyle={styles.listContainer}
+                        ListEmptyComponent={
+                           <View style={styles.emptyContainer}>
+                                {isContactsLoading ? (
+                                    <ActivityIndicator size="large" color={COLORS.primaryPurple} />
+                                ) : (
+                                    <Text style={styles.emptyText}>No contacts found.</Text>
+                                )}
+                           </View>
+                        }
+                    />
+                </SafeAreaView>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -193,26 +325,31 @@ const HotChatsScreen = ({ navigation, onOpenDrawer }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: COLORS.background,
     },
     headerContainer: {
-        backgroundColor: '#008069',
+        backgroundColor: COLORS.primaryPurple,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        height: 60,
-        paddingHorizontal: 16,
+        // height: 60,
+        paddingHorizontal: 8,
         justifyContent: 'space-between',
+        paddingTop: 8,
     },
     titleContainer: {
         flex: 1,
         justifyContent: 'center',
     },
     headerTitle: {
-        fontSize: 22,
-        fontWeight: '500',
+        fontSize: 20,
+        fontWeight: '600',
         color: '#FFF',
+    },
+    backButtonHeader: {
+        marginRight: 12,
+        padding: 4,
     },
     headerIcons: {
         flexDirection: 'row',
@@ -242,7 +379,7 @@ const styles = StyleSheet.create({
     },
     tabContainer: {
         flexDirection: 'row',
-        backgroundColor: '#008069',
+        backgroundColor: COLORS.primaryPurple,
     },
     tab: {
         flex: 1,
@@ -310,8 +447,8 @@ const styles = StyleSheet.create({
         color: '#667781',
     },
     chatTimeUnread: {
-        color: '#25D366',
-        fontWeight: '500',
+        color: COLORS.primaryPurple,
+        fontWeight: '600',
     },
     chatFooter: {
         flexDirection: 'row',
@@ -325,7 +462,7 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     unreadBadge: {
-        backgroundColor: '#25D366',
+        backgroundColor: COLORS.primaryPurple,
         borderRadius: 12,
         minWidth: 22,
         height: 22,
@@ -345,7 +482,7 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: '#008069',
+        backgroundColor: COLORS.primaryPurple,
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 4,
@@ -364,6 +501,43 @@ const styles = StyleSheet.create({
         color: '#666',
         fontSize: 16,
         textAlign: 'center'
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primaryPurple,
+        height: 60,
+        paddingHorizontal: 8,
+    },
+    modalTitleContainer: {
+        flex: 1,
+        marginLeft: 8,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '500',
+        color: '#FFF',
+    },
+    modalSubtitle: {
+        fontSize: 12,
+        color: '#E0E0E0',
+    },
+    contactsSearchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F0F2F5',
+        margin: 12,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        height: 40,
+    },
+    searchIconInline: {
+        marginRight: 8,
+    },
+    contactsSearchInput: {
+        flex: 1,
+        fontSize: 16,
+        color: '#000',
     }
 });
 

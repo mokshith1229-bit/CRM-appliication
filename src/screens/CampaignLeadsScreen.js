@@ -30,7 +30,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import CallLogService from '../services/CallLogService';
 
 const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
-    const { campaignId, campaignName } = route.params;
+    const { campaignId, campaignName } = route.params || {};
     const [selectedContactId, setSelectedContactId] = useState(null);
     const [showQuickActions, setShowQuickActions] = useState(false);
     const [showStatusOverlay, setShowStatusOverlay] = useState(false);
@@ -62,14 +62,14 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     // Implementation below.
 
     // Derived selected lead
-    const selectedContact = selectedContactId ? leads.find(l => l.id === selectedContactId) : null;
+    const selectedContact = selectedContactId ? (leads || []).find(l => l && (l.id === selectedContactId || l._id === selectedContactId)) : null;
 
     // Check for reminders logic parity
     useEffect(() => {
         const checkReminders = () => {
             const now = new Date();
-            const dueLead = leads.find(l =>
-                l.callSchedule && new Date(l.callSchedule) <= now
+            const dueLead = (leads || []).find(l =>
+                l?.callSchedule && new Date(l.callSchedule) <= now
             );
 
             if (dueLead && !reminderContact) {
@@ -87,7 +87,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
     useEffect(() => {
         if (route.params?.openContactDetail) {
             const leadId = route.params.openContactDetail;
-            const lead = leads.find(l => l.id === leadId);
+            const lead = (leads || []).find(l => l && (l.id === leadId || l._id === leadId));
             if (lead) {
                 setSelectedContactId(lead.id);
                 setShowDetailScreen(true);
@@ -127,9 +127,11 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
 
     // Display leads merged with local logs
     const displayedLeads = React.useMemo(() => {
-        return leads.map(lead => {
+        return (leads || []).map(lead => {
+            if (!lead) return null;
             const mapped = { 
                 ...lead,
+                id: lead.id || lead._id,
                 campaignName: lead.campaign_name || lead.attributes?.campaignName || campaignName,
                 campaignId: lead.campaign_id || campaignId
             };
@@ -167,8 +169,8 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 }
             }
             return mapped;
-        });
-    }, [leads, localCallLogs]);
+        }).filter(Boolean);
+    }, [leads, localCallLogs, campaignId, campaignName]);
 
     // Unified Fetch Logic
     const fetchWithFilters = (pageOrReset = 1) => {
@@ -376,7 +378,7 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 <FlatList
                 data={displayedLeads}
                 renderItem={renderContactCard}
-                keyExtractor={(item) => item._id || item.id}
+                keyExtractor={(item) => String(item?._id || item?.id || Math.random())}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={() => (
                     <View style={styles.emptyState}>

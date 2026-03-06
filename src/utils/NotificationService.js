@@ -34,12 +34,20 @@ export async function registerForPushNotificationsAsync() {
             alert('Failed to get push token for push notification!');
             return;
         }
-        // token = (await Notifications.getExpoPushTokenAsync()).data;
+        try {
+            const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+            token = (await Notifications.getExpoPushTokenAsync({
+                projectId,
+            })).data;
+            console.log('[NotificationService] Expo Push Token:', token);
+        } catch (e) {
+            console.warn('[NotificationService] Failed to get push token:', e);
+        }
     } else {
         alert('Must use physical device for Push Notifications');
     }
 
-    return true;
+    return token;
 }
 
 export async function schedulePushNotification(title, body, date, extraData = {}) {

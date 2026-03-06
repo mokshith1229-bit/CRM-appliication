@@ -131,6 +131,23 @@ export const updateLeadStatus = createAsyncThunk(
         }
     }
 );
+// Thunk to update call log notes
+export const updateCallLog = createAsyncThunk(
+    'leads/updateCallLog',
+    async ({ id, notes }, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.put(`/leads/calllog/${id}`, { notes });
+            if (response.success || response.data) {
+                return { id, notes, data: response.data || response.result };
+            } else {
+                return rejectWithValue(response.message || 'Failed to update call log');
+            }
+        } catch (error) {
+            return rejectWithValue(error.message || 'Failed to update call log');
+        }
+    }
+);
+
 
 // Thunk to update generic lead details
 export const updateLead = createAsyncThunk(
@@ -246,6 +263,12 @@ export const fetchLeadDetails = createAsyncThunk(
                 return rejectWithValue(response.message);
             }
         } catch (error) {
+            if (error.response && error.response.status === 404) {
+                return rejectWithValue({ 
+                    status: 404, 
+                    message: "The contact is not assigned to you or it doesn't exist in the database." 
+                });
+            }
             return rejectWithValue(error.message || 'Failed to fetch lead details');
         }
     }
@@ -775,6 +798,47 @@ const leadSlice = createSlice({
             .addCase(fetchLeadDetails.fulfilled, (state, action) => {
                 state.detailsLoading = false;
                 state.currentLeadDetails = action.payload;
+            })
+            .addCase(updateCallLog.fulfilled, (state, action) => {
+                const { id, notes } = action.payload;
+                
+                // 1. Update in currentLeadDetails if it exists
+                if (state.currentLeadDetails) {
+                    const logsKey = state.currentLeadDetails.call_logs ? 'call_logs' : 'callLogs';
+                    if (state.currentLeadDetails[logsKey]) {
+                        state.currentLeadDetails[logsKey] = state.currentLeadDetails[logsKey].map(log =>
+                            (String(log.id) === String(id) || String(log._id) === String(id)) ? { ...log, notes } : log
+                        );
+                    }
+                }
+
+                // 2. Update in leads list
+                state.leads = state.leads.map(lead => {
+                    const logsKey = lead.call_logs ? 'call_logs' : 'callLogs';
+                    if (lead[logsKey]) {
+                        return {
+                            ...lead,
+                            [logsKey]: lead[logsKey].map(log =>
+                                (String(log.id) === String(id) || String(log._id) === String(id)) ? { ...log, notes } : log
+                            )
+                        };
+                    }
+                    return lead;
+                });
+
+                // 3. Update in campaignLeads
+                state.campaignLeads = state.campaignLeads.map(lead => {
+                    const logsKey = lead.call_logs ? 'call_logs' : 'callLogs';
+                    if (lead[logsKey]) {
+                        return {
+                            ...lead,
+                            [logsKey]: lead[logsKey].map(log =>
+                                (String(log.id) === String(id) || String(log._id) === String(id)) ? { ...log, notes } : log
+                            )
+                        };
+                    }
+                    return lead;
+                });
             })
             .addCase(fetchLeadDetails.rejected, (state, action) => {
                 state.detailsLoading = false;
