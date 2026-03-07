@@ -18,6 +18,7 @@ import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-ic
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { openWhatsApp, sendSMS, sendEmail } from '../utils/intents';
+import { showSnackbar } from './Snackbar';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateLead, removeLead, fetchLeadDetails, clearLeadDetails, ensureLead, updateCallLog } from '../store/slices/leadSlice';
 import { fetchTeamMembers } from '../store/slices/teamSlice';
@@ -140,6 +141,17 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     const [editingCallLogId, setEditingCallLogId] = useState(null);
     const [editingCallLogNote, setEditingCallLogNote] = useState('');
 
+    const isInactive = freshContact?.campaign_status === 'Paused' || freshContact?.campaign_status === 'Completed';
+    const isPaused = freshContact?.campaign_status === 'Paused';
+    const isCompleted = freshContact?.campaign_status === 'Completed';
+
+    const showRestrictionAlert = () => {
+        const msg = isPaused 
+            ? "Cannot call: Campaign is currently paused." 
+            : "Cannot call: Campaign is completed.";
+        showSnackbar(msg, "error");
+    };
+
     // Fetch team members and detailed lead info when sheet becomes visible
     useEffect(() => {
         if (visible) {
@@ -175,6 +187,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     }, [visible, freshContact]);
 
     const handleAddNote = async () => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         if (newNote.trim() && freshContact) {
             try {
                 // VALIDATION: If log contact, must have status and source
@@ -215,6 +231,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
         }
     };
     const handleSaveLead = async () => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         if (freshContact) {
             try {
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
@@ -244,6 +264,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     };
 
     const handleTransfer = async (teamMember, reason) => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         if (freshContact) {
             try {
                 // VALIDATION: If log contact, must have status and source
@@ -288,6 +312,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     };
 
     const scheduleReminder = async (date, reason) => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         if (!freshContact) return;
 
         try {
@@ -350,6 +378,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     };
 
     const handleUpdateSource = async (newSource) => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         if (freshContact) {
             try {
                 const targetLead = await dispatch(ensureLead(freshContact)).unwrap();
@@ -377,11 +409,19 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     };
 
     const handleStartEditingNote = (log) => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         setEditingCallLogId(log.id); // Flattened item uses .id
         setEditingCallLogNote(log.note || '');
     };
 
     const handleStatusSelect = (statusValue) => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         setPendingStatus(statusValue);
         setStatusNote('');
         setShowStatusNoteModal(true);
@@ -729,6 +769,10 @@ const QuickActionsSheet = ({ visible, contact, onClose, onCall, campaignId, camp
     };
 
 const updateSiteVisit = async () => {
+    if (isInactive) {
+        showRestrictionAlert();
+        return;
+    }
     if (freshContact) {
         try {
             const targetLeadId = freshContact.id || freshContact._id;
@@ -808,6 +852,26 @@ const updateSiteVisit = async () => {
                         </View>
                     </View>
 
+                    {/* Campaign Status Banner */}
+                    {isInactive && (
+                        <View style={[
+                            styles.statusBanner,
+                            { backgroundColor: isPaused ? '#FEF3C7' : '#F3F4F6' }
+                        ]}>
+                            <MaterialCommunityIcons 
+                                name={isPaused ? "pause-circle" : "check-circle"} 
+                                size={16} 
+                                color={isPaused ? "#D97706" : "#4B5563"} 
+                            />
+                            <Text style={[
+                                styles.statusBannerText,
+                                { color: isPaused ? "#D97706" : "#4B5563" }
+                            ]}>
+                                {isPaused ? "Campaign is currently paused" : "Campaign is completed"} (Read-Only)
+                            </Text>
+                        </View>
+                    )}
+
                     {activeTab === 'Details' ? (
                         <ScrollView style={styles.content}>
                             {/* Action Buttons */}
@@ -848,18 +912,38 @@ const updateSiteVisit = async () => {
                                     <Text style={styles.actionLabel}>Mail</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity style={styles.actionButton} onPress={() => setIsTransferModalVisible(true)}>
-                                    <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
-                                        <MaterialCommunityIcons name="account-multiple" size={24} color={COLORS.primaryPurple} />
+                                <TouchableOpacity 
+                                    style={styles.actionButton} 
+                                    onPress={() => isInactive ? showRestrictionAlert() : setIsTransferModalVisible(true)}
+                                >
+                                    <View style={[
+                                        styles.iconContainer, 
+                                        { backgroundColor: isInactive ? '#F3F4F6' : COLORS.lightPurpleTint }
+                                    ]}>
+                                        <MaterialCommunityIcons 
+                                            name="account-multiple" 
+                                            size={24} 
+                                            color={isInactive ? '#9CA3AF' : COLORS.primaryPurple} 
+                                        />
                                     </View>
-                                    <Text style={styles.actionLabel}>Transfer</Text>
+                                    <Text style={[styles.actionLabel, isInactive && { color: '#9CA3AF' }]}>Transfer</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity style={styles.actionButton} onPress={handleRemindPress}>
-                                    <View style={[styles.iconContainer, { backgroundColor: COLORS.lightPurpleTint }]}>
-                                        <MaterialCommunityIcons name="bell-outline" size={24} color={COLORS.primaryPurple} />
+                                <TouchableOpacity 
+                                    style={styles.actionButton} 
+                                    onPress={() => isInactive ? showRestrictionAlert() : handleRemindPress()}
+                                >
+                                    <View style={[
+                                        styles.iconContainer, 
+                                        { backgroundColor: isInactive ? '#F3F4F6' : COLORS.lightPurpleTint }
+                                    ]}>
+                                        <MaterialCommunityIcons 
+                                            name="bell-outline" 
+                                            size={24} 
+                                            color={isInactive ? '#9CA3AF' : COLORS.primaryPurple} 
+                                        />
                                     </View>
-                                    <Text style={styles.actionLabel}>Remind</Text>
+                                    <Text style={[styles.actionLabel, isInactive && { color: '#9CA3AF' }]}>Remind</Text>
                                 </TouchableOpacity>
                             </View>
 
@@ -1596,6 +1680,19 @@ const styles = StyleSheet.create({
     content: {
         flex: 1, // Fill available space
         paddingHorizontal: 20,
+    },
+    statusBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 20,
+        backgroundColor: '#FEF3C7',
+        gap: 8,
+    },
+    statusBannerText: {
+        fontSize: 13,
+        fontWeight: '600',
+        fontFamily: 'SF Pro Display',
     },
     contactInfo: {
         paddingVertical: 10, // Reduced top padding

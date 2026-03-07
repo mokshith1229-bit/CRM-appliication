@@ -34,7 +34,6 @@ import NotesModal from '../components/NotesModal';
 import ContactDetailScreen from './ContactDetailScreen';
 import ReminderModal from '../components/ReminderModal';
 import DateRangeModal from '../components/DateRangeModal';
-import { registerForPushNotificationsAsync } from '../utils/NotificationService';
 
 import { MaterialIcons } from '@expo/vector-icons'; // Added for icons
 
@@ -355,19 +354,6 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         }, 500);
         return () => clearTimeout(timer);
     }, [searchQuery, activeFilter, dateFilter, dateRange, fetchWithFilters]);
-
-    // Register Notifications
-    useEffect(() => {
-        const setupPushTokens = async () => {
-            const token = await registerForPushNotificationsAsync();
-            if (token && user?._id) {
-                // Save token to backend user profile
-                const { updateProfile } = require('../store/slices/authSlice');
-                dispatch(updateProfile({ pushToken: token }));
-            }
-        };
-        setupPushTokens();
-    }, [user?._id]);
 
     // Refresh logs when app comes to foreground (e.g. after a call)
     useEffect(() => {

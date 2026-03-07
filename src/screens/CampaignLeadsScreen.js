@@ -30,7 +30,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import CallLogService from '../services/CallLogService';
 
 const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
-    const { campaignId, campaignName } = route.params || {};
+    const { campaignId, campaignName, campaignStatus } = route.params || {};
     const [selectedContactId, setSelectedContactId] = useState(null);
     const [showQuickActions, setShowQuickActions] = useState(false);
     const [showStatusOverlay, setShowStatusOverlay] = useState(false);
@@ -133,7 +133,8 @@ const CampaignLeadsScreen = ({ navigation, route, onOpenDrawer }) => {
                 ...lead,
                 id: lead.id || lead._id,
                 campaignName: lead.campaign_name || lead.attributes?.campaignName || campaignName,
-                campaignId: lead.campaign_id || campaignId
+                campaignId: lead.campaign_id || campaignId,
+                campaign_status: lead.campaign_status || campaignStatus
             };
             const normalizedPhone = lead.phone?.replace(/[^0-9]/g, '');
 

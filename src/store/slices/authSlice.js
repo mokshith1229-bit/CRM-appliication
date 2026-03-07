@@ -96,6 +96,19 @@ export const changePassword = createAsyncThunk(
     }
 );
 
+// Thunk for Sync Push Token
+export const syncPushToken = createAsyncThunk(
+    'auth/syncPushToken',
+    async (pushToken, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.post('/auth/push-token', { pushToken });
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to sync push token');
+        }
+    }
+);
+
 const authSlice = createSlice({
     name: 'auth',
     initialState: {
@@ -104,10 +117,20 @@ const authSlice = createSlice({
         isAuthenticated: false,
         isLoading: true, // Start loading to check storage
         error: null,
+        isDeactivated: false,
     },
     reducers: {
         clearError: (state) => {
             state.error = null;
+        },
+        setDeactivated: (state) => {
+            state.isDeactivated = true;
+            state.user = null;
+            state.token = null;
+            state.isAuthenticated = false;
+        },
+        resetDeactivated: (state) => {
+            state.isDeactivated = false;
         }
     },
     extraReducers: (builder) => {
@@ -119,9 +142,17 @@ const authSlice = createSlice({
             })
             .addCase(login.fulfilled, (state, action) => {
                 state.isLoading = false;
-                state.isAuthenticated = true;
-                state.token = action.payload.accessToken;
-                state.user = action.payload.user;
+                if (action.payload.user?.status === 'Inactive') {
+                    state.isDeactivated = true;
+                    state.isAuthenticated = false;
+                    state.user = null;
+                    state.token = null;
+                } else {
+                    state.isAuthenticated = true;
+                    state.token = action.payload.accessToken;
+                    state.user = action.payload.user;
+                    state.isDeactivated = false;
+                }
             })
             .addCase(login.rejected, (state, action) => {
                 state.isLoading = false;
@@ -143,9 +174,17 @@ const authSlice = createSlice({
             .addCase(checkAuth.fulfilled, (state, action) => {
                 state.isLoading = false;
                 if (action.payload) {
-                    state.isAuthenticated = true;
-                    state.token = action.payload.token;
-                    state.user = action.payload.user;
+                    if (action.payload.user?.status === 'Inactive') {
+                        state.isAuthenticated = false;
+                        state.isDeactivated = true;
+                        state.user = null;
+                        state.token = null;
+                    } else {
+                        state.isAuthenticated = true;
+                        state.token = action.payload.token;
+                        state.user = action.payload.user;
+                        state.isDeactivated = false;
+                    }
                 } else {
                     state.isAuthenticated = false;
                 }
@@ -186,5 +225,5 @@ const authSlice = createSlice({
     },
 });
 
-export const { clearError } = authSlice.actions;
+export const { clearError, setDeactivated, resetDeactivated } = authSlice.actions;
 export default authSlice.reducer;

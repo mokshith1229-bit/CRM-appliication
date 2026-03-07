@@ -11,6 +11,7 @@ import HighDemandProjectsScreen from '../screens/HighDemandProjectsScreen';
 import ForwardProjectScreen from '../screens/ForwardProjectScreen';
 
 import LoginScreen from '../screens/LoginScreen';
+import DeactivatedScreen from '../screens/DeactivatedScreen';
 import MyStatisticsScreen from '../screens/MyStatisticsScreen';
 import KeypadScreen from '../screens/KeypadScreen';
 import QuickContactScreen from '../screens/QuickContactScreen';
@@ -26,7 +27,8 @@ import { ActivityIndicator } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 import { useDispatch, useSelector } from 'react-redux';
-import { checkAuth } from '../store/slices/authSlice';
+import { checkAuth, syncPushToken } from '../store/slices/authSlice';
+import { registerForPushNotificationsAsync } from '../utils/NotificationService';
 
 const AppNavigator = () => {
     const [currentScreen, setCurrentScreen] = useState(null);
@@ -35,7 +37,7 @@ const AppNavigator = () => {
 
     // Use Redux state
     const dispatch = useDispatch();
-    const { isAuthenticated, isLoading: isAuthLoading } = useSelector(state => state.auth);
+    const { isAuthenticated, isLoading: isAuthLoading, isDeactivated } = useSelector(state => state.auth);
     const [isNavReady, setIsNavReady] = useState(false); // To prevent flickering
 
     const [currentParams, setCurrentParams] = useState({});
@@ -100,11 +102,34 @@ const AppNavigator = () => {
 
         return () => subscription.remove();
     }, [isNavReady]); // Only listen when nav is ready
+    
+    // 4. Sync Push Token when authenticated
+    useEffect(() => {
+        if (isAuthenticated && !isAuthLoading) {
+            const syncToken = async () => {
+                try {
+                    const token = await registerForPushNotificationsAsync();
+                    if (token) {
+                        dispatch(syncPushToken(token));
+                    }
+                } catch (error) {
+                    console.warn('[AppNavigator] Push token sync failed:', error);
+                }
+            };
+            syncToken();
+        }
+    }, [isAuthenticated, isAuthLoading]);
 
     // 2. React to Auth State Changes
     useEffect(() => {
         if (!isAuthLoading) {
-            if (isAuthenticated) {
+            if (isDeactivated) {
+                if (currentScreen !== 'Deactivated') {
+                    setCurrentScreen('Deactivated');
+                    setScreenStack(['Deactivated']);
+                    setIsNavReady(true);
+                }
+            } else if (isAuthenticated) {
                 // Only navigate if not already there to avoid reset loops if possible, 
                 // but for this custom navigator, setting state is fine.
                 if (currentScreen !== 'Home' && !isNavReady) {
@@ -120,7 +145,7 @@ const AppNavigator = () => {
                 }
             }
         }
-    }, [isAuthLoading, isAuthenticated]);
+    }, [isAuthLoading, isAuthenticated, isDeactivated]);
 
     // Show loading while checking auth
     if (isAuthLoading || !isNavReady) {
@@ -179,6 +204,8 @@ const AppNavigator = () => {
                 return <ChatDetailScreen {...commonProps} />;
             case 'Login':
                 return <LoginScreen {...commonProps} />;
+            case 'Deactivated':
+                return <DeactivatedScreen {...commonProps} />;
             default:
                 return <HomeScreen {...commonProps} />;
         }

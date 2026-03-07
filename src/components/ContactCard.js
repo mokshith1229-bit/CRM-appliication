@@ -4,6 +4,7 @@ import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-ic
 import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { showSnackbar } from './Snackbar';
 import { makeCall } from '../utils/intents';
 import defaultAvatar from '../assets/default_avatar.jpg';
 import customCallIcon from '../assets/custom_call_icon.jpg';
@@ -182,11 +183,37 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                 {/* Contact info */}
                 <View style={styles.info}>
                     <View style={styles.nameRow}>
-                        <Text style={styles.name}>{contact.name || contact.phone}</Text>
-                        <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg }]}>
-                            <Text style={[styles.statusBadgeText, { color: statusBadge.color }]}>
-                                {statusBadge.label}
-                            </Text>
+                        <Text style={[
+                            styles.name,
+                            contact.campaign_status === 'Completed' && styles.grayedName
+                        ]}>
+                            {contact.name || contact.phone}
+                        </Text>
+                        
+                        {/* Status Badges */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                             <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg }]}>
+                                <Text style={[styles.statusBadgeText, { color: statusBadge.color }]}>
+                                    {statusBadge.label}
+                                </Text>
+                            </View>
+
+                            {/* Campaign Status Badge */}
+                            {contact.campaign_status === 'Paused' && (
+                                <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7' }]}>
+                                    <Text style={[styles.statusBadgeText, { color: '#D97706' }]}>
+                                        PAUSED
+                                    </Text>
+                                </View>
+                            )}
+
+                            {contact.campaign_status === 'Completed' && (
+                                <View style={[styles.statusBadge, { backgroundColor: '#F3F4F6' }]}>
+                                    <Text style={[styles.statusBadgeText, { color: '#4B5563' }]}>
+                                        DONE
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     </View>
 
@@ -283,19 +310,51 @@ const ContactCard = ({ contact, onPress, onLongPress, onAvatarPress, onCallPress
                 </View>
             </View>
 
+            {/* Campaign Status Info for Paused/Completed (Mobile) */}
+            {(contact.campaign_status === 'Paused' || contact.campaign_status === 'Completed') && (
+                <View style={styles.cardOverlay}>
+                    {/* Optional: could add an icon here if requested, but badge + disabling button is usually enough */}
+                </View>
+            )}
+
             {/* Primary Action Button - 48px size, 24px radius, gradient */}
             <TouchableOpacity
-                style={styles.callButtonContainer}
-                onPress={handleCallPress}
+                style={[
+                    styles.callButtonContainer,
+                    (contact.campaign_status === 'Paused' || contact.campaign_status === 'Completed') && styles.disabledCallButton
+                ]}
+                onPress={
+                    (contact.campaign_status === 'Paused' || contact.campaign_status === 'Completed')
+                        ? () => {
+                            const msg = contact.campaign_status === 'Paused' 
+                                ? "Cannot call: Campaign is currently paused." 
+                                : "Cannot call: Campaign is completed.";
+                            showSnackbar(msg, "error");
+                        }
+                        : handleCallPress
+                }
                 activeOpacity={0.8}
+                disabled={false} // We handle with onPress to show alert
             >
                 <LinearGradient
-                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                    colors={
+                        (contact.campaign_status === 'Paused' || contact.campaign_status === 'Completed')
+                            ? ['#E5E7EB', '#D1D5DB']
+                            : [COLORS.gradientStart, COLORS.gradientEnd]
+                    }
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.callButtonGradient}
                 >
-                    <MaterialIcons name="phone" size={20} color="#FFFFFF" />
+                    <MaterialIcons 
+                        name={contact.campaign_status === 'Completed' ? "check-circle" : "phone"} 
+                        size={20} 
+                        color={
+                            (contact.campaign_status === 'Paused' || contact.campaign_status === 'Completed')
+                                ? '#9CA3AF'
+                                : "#FFFFFF"
+                        } 
+                    />
                 </LinearGradient>
             </TouchableOpacity>
         </TouchableOpacity>
@@ -361,6 +420,10 @@ const styles = StyleSheet.create({
         fontWeight: '600', // Semibold
         color: '#1F2937',
         marginRight: 8,
+    },
+    grayedName: {
+        color: '#9CA3AF',
+        textDecorationLine: 'none',
     },
     statusBadge: {
         paddingHorizontal: 10,
@@ -434,6 +497,10 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    disabledCallButton: {
+        shadowOpacity: 0.1,
+        elevation: 1,
     },
     assignedByText: {
         fontFamily: 'SF Pro Display',

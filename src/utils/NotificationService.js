@@ -36,10 +36,24 @@ export async function registerForPushNotificationsAsync() {
         }
         try {
             const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+            
+            // 1. Get Expo Push Token (for Expo notifications service)
             token = (await Notifications.getExpoPushTokenAsync({
                 projectId,
             })).data;
             console.log('[NotificationService] Expo Push Token:', token);
+
+            // 2. Get Native Device Token (FCM for Android, APNs for iOS)
+            // This is often what custom backends (like the one mentioned) want.
+            const deviceToken = (await Notifications.getDevicePushTokenAsync()).data;
+            console.log('[NotificationService] Native Device Token:', deviceToken);
+            
+            // Return an object containing both or just the one requested
+            // For this specific task, we'll return the native token as 'token' if it's FCM
+            // or just provide both in a structured way.
+            // Let's return the device token if we want FCM specifically.
+            return deviceToken || token;
+
         } catch (e) {
             console.warn('[NotificationService] Failed to get push token:', e);
         }

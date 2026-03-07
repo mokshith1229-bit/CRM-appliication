@@ -17,6 +17,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateLead, syncCallLogs, createLead } from '../store/slices/leadSlice';
+import { showSnackbar } from '../components/Snackbar';
 import EditableField from '../components/EditableField';
 import CustomFieldModal from '../components/CustomFieldModal';
 import StatusPicker from '../components/StatusPicker';
@@ -37,6 +38,17 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
     // Batch editing state
     const [editedContact, setEditedContact] = useState(null);
     const [isDirty, setIsDirty] = useState(false);
+
+    const isInactive = contact?.campaign_status === 'Paused' || contact?.campaign_status === 'Completed';
+    const isPaused = contact?.campaign_status === 'Paused';
+    const isCompleted = contact?.campaign_status === 'Completed';
+
+    const showRestrictionAlert = () => {
+        const msg = isPaused 
+            ? "Cannot perform action: Campaign is currently paused." 
+            : "Cannot perform action: Campaign is completed.";
+        showSnackbar(msg, "error");
+    };
 
     // Redux Actions
     const dispatch = useDispatch();
@@ -94,6 +106,10 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
     }, [visible, contact?.id, contact?._source]);
 
     const handleSaveAll = async () => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         if (!editedContact) {
             onClose();
             return;
@@ -271,12 +287,34 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                     <Text style={styles.headerTitle}>
                         {isDeviceLog ? 'Save as Lead' : 'Contact Details'}
                     </Text>
-                    <TouchableOpacity onPress={handleSaveAll} style={styles.saveButton}>
-                        <Text style={[styles.saveText, !isDirty && !isDeviceLog && { color: '#8E8E93' }]}>
-                            {isDeviceLog ? 'Save' : (isDirty ? 'Save' : 'Done')}
+                    <TouchableOpacity 
+                        onPress={isInactive ? showRestrictionAlert : handleSaveAll} 
+                        style={styles.saveButton}
+                        disabled={isInactive}
+                    >
+                        <Text style={[
+                            styles.saveText, 
+                            (!isDirty && !isDeviceLog || isInactive) && { color: '#8E8E93' }
+                        ]}>
+                            {isDeviceLog ? 'Save' : (isDirty ? 'Save' : (isInactive ? 'Read-Only' : 'Done'))}
                         </Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* Campaign Status Banner */}
+                {isInactive && (
+                    <View style={[
+                        styles.statusBanner,
+                        { backgroundColor: isPaused ? '#FEF3C7' : '#F3F4F6' }
+                    ]}>
+                        <Text style={[
+                            styles.statusBannerText,
+                            { color: isPaused ? "#D97706" : "#4B5563" }
+                        ]}>
+                            {isPaused ? "Campaign Paused" : "Campaign Completed"} (Read-Only)
+                        </Text>
+                    </View>
+                )}
 
                 <ScrollView style={styles.content}>
                     {/* Profile Section */}
@@ -380,7 +418,10 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                     )}
 
                     <View style={styles.infoCard}>
-                        <TouchableOpacity style={styles.infoRow} onPress={() => setShowStatusPicker(true)}>
+                        <TouchableOpacity 
+                            style={styles.infoRow} 
+                            onPress={() => isInactive ? showRestrictionAlert() : setShowStatusPicker(true)}
+                        >
                             <Text style={styles.infoLabel}>
                                 Lead Status : {editedContact.status ? (editedContact.status.charAt(0).toUpperCase() + editedContact.status.slice(1).replace('_', ' ')) : 'None'}
                             </Text>
@@ -389,7 +430,10 @@ const ContactDetailScreen = ({ visible, contact, onClose, navigation, campaignId
                     </View>
 
                     <View style={styles.infoCard}>
-                        <TouchableOpacity style={styles.infoRow} onPress={() => setShowLeadSourcePicker(true)}>
+                        <TouchableOpacity 
+                            style={styles.infoRow} 
+                            onPress={() => isInactive ? showRestrictionAlert() : setShowLeadSourcePicker(true)}
+                        >
                             <Text style={styles.infoLabel}>
                                 Lead Source : {editedContact.lead_source || editedContact.source ? ((editedContact.lead_source || editedContact.source).charAt(0).toUpperCase() + (editedContact.lead_source || editedContact.source).slice(1).replace('_', ' ')) : 'Not Set'}
                             </Text>
@@ -483,6 +527,17 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F5F5F7',
+    },
+    statusBanner: {
+        backgroundColor: '#FEF3C7',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        alignItems: 'center',
+    },
+    statusBannerText: {
+        fontSize: 12,
+        fontWeight: '700',
+        textTransform: 'uppercase',
     },
     header: {
         flexDirection: 'row',

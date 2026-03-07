@@ -20,7 +20,8 @@ const withManifestReceiver = (config) => {
             'intent-filter': [
                 {
                     action: [
-                        { '$': { 'android:name': 'android.intent.action.PHONE_STATE' } }
+                        { '$': { 'android:name': 'android.intent.action.PHONE_STATE' } },
+                        { '$': { 'android:name': 'com.vivtej.telecrm.SYNC_DAILY' } }
                     ]
                 }
             ]

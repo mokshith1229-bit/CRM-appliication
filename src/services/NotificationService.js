@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-const SYNC_CHANNEL_ID = 'crm_sync_channel';
+const SYNC_CHANNEL_ID = 'crm_sync_channel_v2';
 const SYNC_NOTIF_ID   = 'crm_sync_active';   // reused so we update in-place
 
 /**
@@ -13,7 +13,7 @@ const setupNotificationChannel = async () => {
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
             shouldShowAlert: true,
-            shouldPlaySound: true,
+            shouldPlaySound: false, // Disable sound for in-app handlers
             shouldSetBadge: false,
         }),
     });
@@ -21,7 +21,7 @@ const setupNotificationChannel = async () => {
     if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync(SYNC_CHANNEL_ID, {
             name: 'CRM Sync',
-            importance: Notifications.AndroidImportance.HIGH, 
+            importance: Notifications.AndroidImportance.LOW, // Use LOW to prevent sound/vibration
             description: 'Background call log and recording sync status',
             showBadge: false,
             enableVibrate: false,
@@ -75,12 +75,14 @@ const showSyncNotification = async (title, body, ongoing = true) => {
             content: {
                 title,
                 body,
+                sound: false, // Explicitly tell Expo not to play a sound
+                sticky: ongoing, // Expo uses 'sticky' for ongoing notifications
+                autoDismiss: !ongoing,
                 android: {
                     channelId: SYNC_CHANNEL_ID,
-                    ongoing,              // sticky when true — user can't swipe away
-                    onlyAlertOnce: true, // don't make sound on updates
-                    smallIcon: 'ic_stat_notify_sync', // falls back to app icon if missing
                     color: '#2850DC',
+                    smallIcon: 'ic_stat_notify_sync',
+                    onlyAlertOnce: true,
                     priority: 'max',
                     visibility: 'public',
                 },
@@ -124,7 +126,11 @@ const PROGRESS_FRAMES = [
  * Starts an animated progress bar in the notification.
  */
 const startSyncProgress = async (title = '📡 TeleCRM — Syncing', baseMessage = 'Syncing data to server…') => {
-    if (progressInterval) clearInterval(progressInterval);
+    // Clear any existing interval to prevent multiple progress bars flashing
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
     
     let frame = 0;
     const update = async () => {
@@ -134,7 +140,7 @@ const startSyncProgress = async (title = '📡 TeleCRM — Syncing', baseMessage
     };
 
     await update(); // Show first frame immediately
-    progressInterval = setInterval(update, 500);
+    progressInterval = setInterval(update, 1000); // Slower update to reduce system load
 };
 
 /**

@@ -42,6 +42,7 @@
     <receiver android:name=".CallReceiver" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.PHONE_STATE"/>
+        <action android:name="com.vivtej.telecrm.SYNC_DAILY"/>
       </intent-filter>
     </receiver>
   </application>

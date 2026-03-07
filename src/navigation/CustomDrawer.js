@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CustomDrawer = ({ visible, onClose, navigation }) => {
     const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [campaignStatusFilter, setCampaignStatusFilter] = useState('All');
     const [showTestCallModal, setShowTestCallModal] = useState(false);
     const [shouldRender, setShouldRender] = useState(visible);
     const contacts = useContactStore(state => state.contacts);
@@ -288,7 +289,27 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                 <View style={styles.sectionDivider} />
                                 <Text style={styles.sectionHeader}>CAMPAIGNS</Text>
 
-                                {campaigns.map((campaign) => (
+                                <View style={styles.campaignFilterContainer}>
+                                    {['All', 'Active', 'Paused', 'Completed'].map((status) => (
+                                        <TouchableOpacity
+                                            key={status}
+                                            style={[
+                                                styles.campaignFilterChip,
+                                                campaignStatusFilter === status && styles.campaignFilterChipActive
+                                            ]}
+                                            onPress={() => setCampaignStatusFilter(status)}
+                                        >
+                                            <Text style={[
+                                                styles.campaignFilterChipText,
+                                                campaignStatusFilter === status && styles.campaignFilterChipTextActive
+                                            ]}>{status}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                {campaigns
+                                    .filter(c => campaignStatusFilter === 'All' || c.status === campaignStatusFilter)
+                                    .map((campaign) => (
                                     <TouchableOpacity
                                         key={campaign._id}
                                         style={styles.campaignItem}
@@ -296,15 +317,34 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
                                             onClose();
                                             navigation.navigate('CampaignLeads', {
                                                 campaignId: campaign._id,
-                                                campaignName: campaign.name
+                                                campaignName: campaign.name,
+                                                campaignStatus: campaign.status
                                             });
                                         }}
                                     >
                                         <MaterialIcons name="campaign" size={20} color={COLORS.primaryPurple} style={styles.menuIcon} />
-                                        <Text style={styles.campaignText}>{campaign.name}</Text>
+                                        <Text style={[
+                                            styles.campaignText,
+                                            campaign.status === 'Completed' && { color: '#6B7280' }
+                                        ]}>{campaign.name}</Text>
+                                        
+                                        {campaign.status === 'Paused' && (
+                                            <View style={styles.campaignStatusBadge}>
+                                                <Text style={styles.campaignStatusBadgeText}>PAUSED</Text>
+                                            </View>
+                                        )}
+                                        {campaign.status === 'Completed' && (
+                                            <MaterialIcons name="check-circle" size={16} color="#4B5563" style={{ marginLeft: 6 }} />
+                                        )}
+                                        
                                         <MaterialIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.chevronIcon} />
                                     </TouchableOpacity>
                                 ))}
+                                {campaigns.filter(c => campaignStatusFilter === 'All' || c.status === campaignStatusFilter).length === 0 && (
+                                    <View style={{ padding: 20, alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 13, color: '#9CA3AF' }}>No {campaignStatusFilter !== 'All' ? campaignStatusFilter.toLowerCase() : ''} campaigns found</Text>
+                                    </View>
+                                )}
 
                                 <View style={styles.sectionDivider} />
                                 <Text style={styles.sectionHeader}>FILTERS</Text>
@@ -634,6 +674,46 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '500', // Medium
         color: COLORS.primaryPurple,
+        flex: 1,
+    },
+    campaignStatusBadge: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    campaignStatusBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#D97706',
+    },
+    campaignFilterContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: 20,
+        marginBottom: 8,
+        gap: 6,
+    },
+    campaignFilterChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    campaignFilterChipActive: {
+        backgroundColor: COLORS.primaryPurple,
+        borderColor: COLORS.primaryPurple,
+    },
+    campaignFilterChipText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#6B7280',
+    },
+    campaignFilterChipTextActive: {
+        color: '#FFF',
     },
     footer: {
         paddingBottom: Platform.OS === 'ios' ? 34 : 20,

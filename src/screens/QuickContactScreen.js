@@ -26,6 +26,7 @@ import CallLogService from '../services/CallLogService';
 import AudioPlayer from '../components/AudioPlayer';
 import { openWhatsApp } from '../utils/intents';
 import QuickContactSkeleton from '../components/QuickContactSkeleton';
+import { showSnackbar } from '../components/Snackbar';
 
 const QuickContactScreen = ({ route, navigation }) => {
     const insets = useSafeAreaInsets();
@@ -62,6 +63,17 @@ const QuickContactScreen = ({ route, navigation }) => {
     const [editingNoteId, setEditingNoteId] = useState(null);
     const [editingNoteValue, setEditingNoteValue] = useState('');
     const [showHint, setShowHint] = useState(true);
+
+    const isInactive = contact?.campaign_status === 'Paused' || contact?.campaign_status === 'Completed';
+    const isPaused = contact?.campaign_status === 'Paused';
+    const isCompleted = contact?.campaign_status === 'Completed';
+
+    const showRestrictionAlert = () => {
+        const msg = isPaused 
+            ? "Cannot perform action: Campaign is currently paused." 
+            : "Cannot perform action: Campaign is completed.";
+        showSnackbar(msg, "error");
+    };
 
     // Collapsible states
     const [expandStatus, setExpandStatus] = useState(false);
@@ -166,11 +178,19 @@ const QuickContactScreen = ({ route, navigation }) => {
     };
 
     const handleTransferLead = () => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         setShowTransferModal(true);
     };
 
 
     const handleActualTransfer = async (member, reason) => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         try {
             // Check if member has ID
             if (member._id) {
@@ -193,6 +213,10 @@ const QuickContactScreen = ({ route, navigation }) => {
     };
 
     const handleStartEditingNote = (log) => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         const id = log.calllogid || log._id || log.id;
         setEditingNoteId(id);
         setEditingNoteValue(log.notes || log.note || '');
@@ -236,6 +260,10 @@ const QuickContactScreen = ({ route, navigation }) => {
     };
 
     const triggerAddLeadFlow = () => {
+        if (isInactive) {
+            showRestrictionAlert();
+            return;
+        }
         if (!contact) return;
         
         // Navigate to the full Create Lead form and pass the pre-filled data
@@ -318,6 +346,26 @@ const QuickContactScreen = ({ route, navigation }) => {
                     { paddingBottom: Math.max(insets.bottom, 20) }
                 ]}
             >
+                {/* Campaign Status Banner */}
+                {isInactive && (
+                    <View style={[
+                        styles.statusBanner,
+                        { backgroundColor: isPaused ? '#FEF3C7' : '#F3F4F6' }
+                    ]}>
+                        <MaterialCommunityIcons 
+                            name={isPaused ? "pause-circle" : "check-circle"} 
+                            size={16} 
+                            color={isPaused ? "#D97706" : "#4B5563"} 
+                        />
+                        <Text style={[
+                            styles.statusBannerText,
+                            { color: isPaused ? "#D97706" : "#4B5563" }
+                        ]}>
+                            {isPaused ? "Campaign is currently paused" : "Campaign is completed"} (Read-Only)
+                        </Text>
+                    </View>
+                )}
+
                 {/* Profile Section */}
                 <View style={styles.profileSection}>
                     <View style={styles.avatarContainer}>
@@ -350,10 +398,17 @@ const QuickContactScreen = ({ route, navigation }) => {
                         <Text style={styles.actionLabel}>Mail</Text>
                     </View>
                     <View style={styles.actionItem}>
-                        <TouchableOpacity style={styles.actionCircle} onPress={handleTransferLead}>
-                            <MaterialCommunityIcons name="account-arrow-right-outline" size={26} color="#1C1C1E" />
+                        <TouchableOpacity 
+                            style={[styles.actionCircle, isInactive && { backgroundColor: '#F3F4F6' }]} 
+                            onPress={() => isInactive ? showRestrictionAlert() : handleTransferLead()}
+                        >
+                            <MaterialCommunityIcons 
+                                name="account-arrow-right-outline" 
+                                size={26} 
+                                color={isInactive ? '#9CA3AF' : "#1C1C1E"} 
+                            />
                         </TouchableOpacity>
-                        <Text style={styles.actionLabel}>Transfer</Text>
+                        <Text style={[styles.actionLabel, isInactive && { color: '#9CA3AF' }]}>Transfer</Text>
                     </View>
                 </View>
 
@@ -665,6 +720,21 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
+    },
+    statusBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        backgroundColor: '#FEF3C7',
+        gap: 8,
+        borderRadius: 12,
+        marginBottom: 16,
+    },
+    statusBannerText: {
+        fontSize: 14,
+        fontWeight: '600',
+        fontFamily: 'SF Pro Display',
     },
     header: {
         flexDirection: 'row',

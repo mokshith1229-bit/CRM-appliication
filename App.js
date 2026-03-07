@@ -1,7 +1,8 @@
 import './shim'; // Polyfills for node-rsa
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { StyleSheet, StatusBar, Platform, AppState, AppRegistry } from 'react-native';
+import { StyleSheet, StatusBar, Platform, AppState, AppRegistry, NativeModules } from 'react-native';
+const { CallModule } = NativeModules;
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
@@ -13,12 +14,14 @@ import { COLORS } from './src/constants/theme';
 import GlobalReminderPopup from './src/components/GlobalReminderPopup';
 import UpdateModal from './src/components/UpdateModal';
 import MaintenanceScreen from './src/screens/MaintenanceScreen';
+import Snackbar, { setGlobalSnackbarRef } from './src/components/Snackbar';
 import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen';
 import SubscriptionExpiredScreen from './src/screens/SubscriptionExpiredScreen';
 import { setupAxiosInterceptors } from './src/api/axiosClient';
 import CallLogService from './src/services/CallLogService';
 import RecordingSyncService from './src/services/RecordingSyncService';
 import NotificationService from './src/services/NotificationService';
+import SyncService from './src/services/SyncService';
 import { SocketProvider } from './src/context/SocketContext';
 
 // Setup Interceptors
@@ -71,8 +74,12 @@ const AppContent = () => {
             const requestPermissions = async () => {
                 try {
                     await CallLogService.requestPermission();
+                    if (Platform.OS === 'android' && CallModule) {
+                        console.log('[App] Scheduling daily background sync at 9:00 PM...');
+                        await CallModule.scheduleDailySync();
+                    }
                 } catch (err) {
-                    console.log("Permission request failed", err);
+                    console.log("Permission/Schedule request failed", err);
                 }
             };
             requestPermissions();
@@ -88,109 +95,10 @@ const AppContent = () => {
         const handleAppStateChange = async (nextAppState) => {
             if (nextAppState === 'active') {
                 console.log('[Global] App active - triggering call log sync...');
-                
-                // Show "syncing" notification with progress bar
-                await NotificationService.startSyncProgress(
-                    '📡 TeleCRM — Syncing',
-                    'Syncing data to server…'
-                );
-
                 try {
-                    const logs = await CallLogService.getAllRecentLogs(50);
-                    if (!logs || logs.length === 0) {
-                        NotificationService.stopSyncProgress();
-                        await NotificationService.dismissSyncNotification(2000);
-                        return;
-                    }
-
-                    // Get unique phone numbers from the recent logs
-                    const phoneNumbers = [...new Set(logs.map(l => l.phoneNumber).filter(Boolean))];
-
-                    // Ask backend which entity each number belongs to
-                    const axiosClient = require('./src/api/axiosClient').default;
-                    let entityMap = {};
-                    try {
-                        const res = await axiosClient.post('/leads/check-numbers', { phoneNumbers });
-                        if (res.success) entityMap = res.data;
-                    } catch (e) {
-                        console.warn('[Global] check-numbers failed, falling back to unlinked sync:', e.message);
-                    }
-
-                    // Group logs by entity context
-                    const leadLogsMap = {};    // lead_id -> [logs]
-                    const enquiryLogsMap = {}; // enquiry_id -> [logs]
-                    const campaignLogsMap = {}; // `${campaign_id}::${campaign_record_id}` -> { ids, logs }
-                    const unlinkedLogs = [];
-
-                    for (const log of logs) {
-                        const entity = entityMap[log.phoneNumber];
-                        if (!entity) { unlinkedLogs.push(log); continue; }
-
-                        if (entity.type === 'lead' && entity.ownership === 'mine') {
-                            const id = entity.lead_id;
-                            leadLogsMap[id] = leadLogsMap[id] || { lead_id: id, phone: log.phoneNumber, logs: [] };
-                            leadLogsMap[id].logs.push(log);
-                        } else if (entity.type === 'enquiry' && entity.ownership === 'mine') {
-                            const id = entity.enquiry_id;
-                            enquiryLogsMap[id] = enquiryLogsMap[id] || { enquiry_id: id, phone: log.phoneNumber, logs: [] };
-                            enquiryLogsMap[id].logs.push(log);
-                        } else if (entity.type === 'campaign_record' && entity.ownership === 'mine') {
-                            const key = `${entity.campaign_id}::${entity.campaign_record_id}`;
-                            campaignLogsMap[key] = campaignLogsMap[key] || {
-                                campaign_id: entity.campaign_id,
-                                campaign_record_id: entity.campaign_record_id,
-                                phone: log.phoneNumber, logs: []
-                            };
-                            campaignLogsMap[key].logs.push(log);
-                        }
-                        // skip 'other' ownership — not our logs
-                    }
-
-                    // Fire typed syncs in parallel
-                    const syncPromises = [
-                        ...Object.values(leadLogsMap).map(({ lead_id, phone }) =>
-                            CallLogService.syncCallLogsForLead(lead_id, phone).catch(e =>
-                                console.warn(`[Global] Lead sync failed for ${lead_id}:`, e.message)
-                            )
-                        ),
-                        ...Object.values(enquiryLogsMap).map(({ enquiry_id, phone }) =>
-                            CallLogService.syncCallLogsForEnquiry(enquiry_id, phone).catch(e =>
-                                console.warn(`[Global] Enquiry sync failed for ${enquiry_id}:`, e.message)
-                            )
-                        ),
-                        ...Object.values(campaignLogsMap).map(({ campaign_id, campaign_record_id, phone }) =>
-                            CallLogService.syncCallLogsForCampaignRecord(campaign_id, campaign_record_id, phone).catch(e =>
-                                console.warn(`[Global] Campaign record sync failed for ${campaign_record_id}:`, e.message)
-                            )
-                        ),
-                    ];
-
-                    const results = await Promise.all(syncPromises);
-                    const totalSynced = results.reduce((acc, r) => acc + (r?.updated || 0), 0);
-                    console.log(`[Global] Typed sync complete. ${totalSynced} logs synced across ${syncPromises.length} entities.`);
-
-                    // Handle recording uploads for synced logs
-                    const allSyncedTimestamps = results.flatMap(r => r?.syncedTimestamps || []);
-                    if (allSyncedTimestamps.length > 0) {
-                        const uri = await RecordingSyncService.getSavedFolderUri();
-                        if (uri) {
-                            console.log(`[Global] Triggering recording sync for ${allSyncedTimestamps.length} logs...`);
-                            await RecordingSyncService.syncNewRecordings(uri, allSyncedTimestamps);
-                        }
-                    }
-                    
-                    NotificationService.stopSyncProgress();
-                    await NotificationService.showSyncNotification(
-                        'TeleCRM',
-                        totalSynced > 0 ? `✅ ${totalSynced} logs synced` : '✅ All logs up to date',
-                        false
-                    );
-                    await NotificationService.dismissSyncNotification(3000);
-
+                    await SyncService.performSync('foreground');
                 } catch (error) {
-                    console.error('[Global] Call log sync failed:', error);
-                    NotificationService.stopSyncProgress();
-                    await NotificationService.dismissSyncNotification();
+                    console.error('[Global] Foreground sync failed:', error);
                 }
             }
         };
@@ -269,6 +177,7 @@ const AppContent = () => {
                     visible={!!updateConfig?.newUpdate} 
                     playstoreurl={updateConfig?.playstoreurl} 
                 />
+                <Snackbar ref={(ref) => setGlobalSnackbarRef(ref)} />
             </SocketProvider>
         </SafeAreaProvider>
     );
