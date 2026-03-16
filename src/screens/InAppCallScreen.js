@@ -1,86 +1,101 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, StatusBar as NativeStatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, StatusBar as NativeStatusBar, NativeModules, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateLead, createLead } from '../store/slices/leadSlice';
 
+const { DialerModule } = NativeModules;
+
 const InAppCallScreen = ({ route, navigation }) => {
-    const { contact: initialContact, number, leadSource = 'Manual', campaignId } = route.params || {};
+    const { contact: initialContact, number, leadSource = 'Manual', campaignId, callState = 'DIALING' } = route.params || {};
     const dispatch = useDispatch();
     const leads = useSelector(state => state.leads.leads);
 
-    // Find contact in Redux store to ensure fresh data
     const contact = initialContact ? leads.find(l => l._id === initialContact.id || l.id === initialContact.id) || initialContact : (number ? leads.find(c => c.phone === number) : null);
-    
-    // Fallback if contact structure differs (e.g. from route params vs leads store) - we normalize in HomeScreen but here we access raw or normalized?
-    // leads in store are backend objects (with _id, mobile_number, call_logs).
-    // initialContact passed from Home might be the normalized one (id, phone, callLogs).
-    // We should normalize access or use the backend object if found.
-    // Let's assume contact is the Redux object if found, else initialParam.
     
     const displayPhone = contact?.phone || number || 'Unknown Number';
 
-    const [callStatus, setCallStatus] = useState('Calling...');
+    const [statusText, setStatusText] = useState(callState === 'RINGING' ? 'Incoming Call' : 'Calling...');
     const [duration, setDuration] = useState(0);
     const [isMuted, setIsMuted] = useState(false);
     const [isSpeakerOn, setIsSpeakerOn] = useState(false);
     const [showKeypad, setShowKeypad] = useState(false);
+    const [currentState, setCurrentState] = useState(callState);
 
-    // Timer logic
     useEffect(() => {
         let timer;
-        const connectTimer = setTimeout(() => {
-            setCallStatus('00:00');
+        if (currentState === 'ACTIVE') {
             timer = setInterval(() => {
                 setDuration(d => d + 1);
             }, 1000);
-        }, 2000);
+        }
 
         return () => {
-            clearTimeout(connectTimer);
-            clearInterval(timer);
+            if (timer) clearInterval(timer);
         };
+    }, [currentState]);
+
+    useEffect(() => {
+        if (!DialerModule) return;
+
+        const sub = DeviceEventEmitter.addListener('CallStateUpdated', (event) => {
+            const { state, number: evtNumber } = event;
+            setCurrentState(state);
+
+            if (state === 'DIALING') setStatusText('Calling...');
+            else if (state === 'RINGING') setStatusText('Incoming Call');
+            else if (state === 'ACTIVE') setStatusText('00:00'); // Let duration effect override it later
+            else if (state === 'DISCONNECTED') {
+                 setStatusText('Call Ended');
+                 setTimeout(() => closeScreen(), 1500);
+            }
+        });
+
+        return () => sub.remove();
     }, []);
 
-    // Update status text based on duration
     useEffect(() => {
-        if (duration > 0) {
+        if (currentState === 'ACTIVE' && duration > 0) {
             const mins = Math.floor(duration / 60).toString().padStart(2, '0');
             const secs = (duration % 60).toString().padStart(2, '0');
-            setCallStatus(`${mins}:${secs}`);
+            setStatusText(`${mins}:${secs}`);
         }
-    }, [duration]);
+    }, [duration, currentState]);
+
+    const handleAnswer = async () => {
+        try {
+            if (DialerModule) await DialerModule.answerCall();
+        } catch (e) {
+            console.error('Failed to answer call:', e);
+        }
+    };
+
+    const handleReject = async () => {
+        try {
+            if (DialerModule) await DialerModule.rejectCall();
+            else closeScreen();
+        } catch (e) {
+            console.error('Failed to reject call:', e);
+            closeScreen();
+        }
+    };
 
     const handleEndCall = async () => {
-        const systemResult = duration > 0 ? 'Connected' : 'Disconnected';
-        const callLog = {
-            id: Date.now().toString(),
-            date: new Date().toISOString(),
-            status: 'Call Ended',
-            systemResult: systemResult,
-            duration: `${Math.floor(duration / 60)}m ${duration % 60}sec`,
-            type: 'Outgoing',
-            notes: '',
-            leadSource: leadSource, 
-        };
-
         try {
-            if (contact && (contact.id || contact._id)) {
-                // We no longer manually push `call_logs` as CallLogService and
-                // backend handle all log synchronization seamlessly.
-                // Just log success or let the next Home refresh pull it.
-                console.log('Call ended for existing lead - will sync automatically');
+            if (DialerModule && currentState !== 'DISCONNECTED') {
+                 await DialerModule.disconnectCall();
             } else {
-                 console.log('Call ended for unknown number. Lead will not be automatically created.');
+                 closeScreen();
             }
-        } catch (error) {
-            console.error('Failed to log call:', error);
-            // We might want to alert user, but ending call should arguably just exit
+        } catch (e) {
+            console.error('Failed to end call:', e);
+            closeScreen();
         }
+    };
 
-        // Navigate back to the appropriate screen
+    const closeScreen = () => {
         if (campaignId) {
             navigation.navigate('CampaignLeads', {
                 campaignId,
@@ -118,7 +133,9 @@ const InAppCallScreen = ({ route, navigation }) => {
                         </TouchableOpacity>
                         <View style={styles.dialPad}>
                             {keys.map((k) => (
-                                <TouchableOpacity key={k.id} style={styles.dialKey}>
+                                <TouchableOpacity key={k.id} style={styles.dialKey} onPress={() => {
+                                    if (DialerModule) DialerModule.playDtmfTone(k.id);
+                                }}>
                                     <Text style={styles.dialKeyText}>{k.id}</Text>
                                     {k.label ? <Text style={styles.dialKeyLabel}>{k.label}</Text> : null}
                                 </TouchableOpacity>
@@ -133,7 +150,7 @@ const InAppCallScreen = ({ route, navigation }) => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.topSection}>
-                <Text style={styles.statusText}>{callStatus}</Text>
+                <Text style={styles.statusText}>{statusText}</Text>
                 <Text style={styles.phoneText}>{displayPhone}</Text>
                 <Text style={styles.countryText}>India</Text>
             </View>
@@ -141,48 +158,61 @@ const InAppCallScreen = ({ route, navigation }) => {
             <View style={styles.middleSection} />
 
             <View style={styles.bottomSection}>
-                <View style={styles.controlsRow}>
-                    <TouchableOpacity
-                        style={styles.controlButton}
-                        onPress={() => setShowKeypad(true)}
-                    >
-                        <View style={styles.iconContainer}>
-                            <Ionicons name="keypad" size={28} color="#000" />
-                        </View>
-                        <Text style={styles.controlLabel}>Keypad</Text>
-                    </TouchableOpacity>
+                {currentState === 'RINGING' ? (
+                    <View style={[styles.controlsRow, { justifyContent: 'space-evenly', marginBottom: 20 }]}>
+                        <TouchableOpacity style={[styles.endCallButton, { backgroundColor: '#FF3B30', marginHorizontal: 20 }]} onPress={handleReject}>
+                            <MaterialIcons name="call-end" size={36} color="#FFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.endCallButton, { backgroundColor: '#34C759', marginHorizontal: 20 }]} onPress={handleAnswer}>
+                            <MaterialIcons name="call" size={36} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <>
+                        <View style={styles.controlsRow}>
+                            <TouchableOpacity
+                                style={styles.controlButton}
+                                onPress={() => setShowKeypad(true)}
+                            >
+                                <View style={styles.iconContainer}>
+                                    <Ionicons name="keypad" size={28} color="#000" />
+                                </View>
+                                <Text style={styles.controlLabel}>Keypad</Text>
+                            </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.controlButton}
-                        onPress={() => setIsMuted(!isMuted)}
-                    >
-                        <View style={[styles.iconContainer, isMuted && styles.activeIcon]}>
-                            <Ionicons name={isMuted ? "mic-off" : "mic"} size={28} color="#000" />
-                        </View>
-                        <Text style={styles.controlLabel}>Mute</Text>
-                    </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.controlButton}
+                                onPress={() => setIsMuted(!isMuted)}
+                            >
+                                <View style={[styles.iconContainer, isMuted && styles.activeIcon]}>
+                                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={28} color="#000" />
+                                </View>
+                                <Text style={styles.controlLabel}>Mute</Text>
+                            </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.controlButton}
-                        onPress={() => setIsSpeakerOn(!isSpeakerOn)}
-                    >
-                        <View style={[styles.iconContainer, isSpeakerOn && styles.activeIcon]}>
-                            <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={28} color="#000" />
-                        </View>
-                        <Text style={styles.controlLabel}>Speaker</Text>
-                    </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.controlButton}
+                                onPress={() => setIsSpeakerOn(!isSpeakerOn)}
+                            >
+                                <View style={[styles.iconContainer, isSpeakerOn && styles.activeIcon]}>
+                                    <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={28} color="#000" />
+                                </View>
+                                <Text style={styles.controlLabel}>Speaker</Text>
+                            </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.controlButton}>
-                        <View style={styles.iconContainer}>
-                            <MaterialIcons name="more-vert" size={28} color="#000" />
+                            <TouchableOpacity style={styles.controlButton}>
+                                <View style={styles.iconContainer}>
+                                    <MaterialIcons name="more-vert" size={28} color="#000" />
+                                </View>
+                                <Text style={styles.controlLabel}>More</Text>
+                            </TouchableOpacity>
                         </View>
-                        <Text style={styles.controlLabel}>More</Text>
-                    </TouchableOpacity>
-                </View>
 
-                <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
-                    <MaterialIcons name="call-end" size={36} color="#FFF" />
-                </TouchableOpacity>
+                        <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
+                            <MaterialIcons name="call-end" size={36} color="#FFF" />
+                        </TouchableOpacity>
+                    </>
+                )}
             </View>
 
             <KeypadModal />

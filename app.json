@@ -53,7 +53,8 @@
         }
       ],
       "./plugins/withPhoneStateReceiver",
-      "./plugins/withSigningConfig"
+      "./plugins/withSigningConfig",
+      "./plugins/withDialerSetup"
     ]
   }
 }

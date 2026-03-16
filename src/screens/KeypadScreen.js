@@ -9,9 +9,11 @@ import {
     Dimensions,
     Platform,
     Linking,
+    NativeModules,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+const { DialerModule } = NativeModules;
 import { useContactStore } from '../store/contactStore';
 import { COLORS, SPACING, SHADOWS } from '../constants/theme';
 import DialerKeypad from '../components/DialerKeypad';
@@ -99,7 +101,14 @@ const KeypadScreen = ({ navigation }) => {
     const handleCall = (number, contact = null) => {
         if (number.length >= 3) {
             addRecentDial(number);
-            Linking.openURL(`tel:${number}`);
+            if (Platform.OS === 'android' && DialerModule) {
+                DialerModule.placeCall(number).catch(e => {
+                    console.log('DialerModule placeCall failed, falling back to Linking', e);
+                    Linking.openURL(`tel:${number}`);
+                });
+            } else {
+                Linking.openURL(`tel:${number}`);
+            }
         }
     };
 

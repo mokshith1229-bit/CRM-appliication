@@ -23,8 +23,10 @@ import HotChatsScreen from '../screens/HotChatsScreen';
 import ChatDetailScreen from '../screens/ChatDetailScreen';
 import BottomTabs from '../components/BottomTabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, DeviceEventEmitter, NativeModules, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+
+const { DialerModule } = NativeModules;
 
 import { useDispatch, useSelector } from 'react-redux';
 import { checkAuth, syncPushToken } from '../store/slices/authSlice';
@@ -103,7 +105,21 @@ const AppNavigator = () => {
         return () => subscription.remove();
     }, [isNavReady]); // Only listen when nav is ready
     
-    // 4. Sync Push Token when authenticated
+    // 4. Listen to Native Call State
+    useEffect(() => {
+        if (!isAuthenticated || !isNavReady || Platform.OS !== 'android' || !DialerModule) return;
+
+        const callSubscription = DeviceEventEmitter.addListener('CallStateUpdated', (event) => {
+            const { state, number } = event;
+            if (state === 'DIALING' || state === 'RINGING') {
+                navigation.navigate('InAppCall', { number, callState: state }); // Let InAppCall component take over duration and updates
+            }
+        });
+
+        return () => callSubscription.remove();
+    }, [isAuthenticated, isNavReady]);
+
+    // 5. Sync Push Token when authenticated
     useEffect(() => {
         if (isAuthenticated && !isAuthLoading) {
             const syncToken = async () => {

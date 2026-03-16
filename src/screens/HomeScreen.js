@@ -15,6 +15,7 @@ import {
     TextInput, // Added for search input
     Linking,
     AppState, // Import AppState
+    NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -567,9 +568,15 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
 
     const handleCallAction = async (contact) => {
         setShowQuickActions(false);
-        // Don't auto-remove from New Enquiries on call
-        // Contact will only be removed when user changes status from "New" to something else
-        Linking.openURL(`tel:${contact.phone}`);
+        const { DialerModule } = NativeModules;
+        if (Platform.OS === 'android' && DialerModule) {
+            DialerModule.placeCall(contact.phone).catch(e => {
+                console.log('DialerModule placeCall failed, falling back to Linking', e);
+                Linking.openURL(`tel:${contact.phone}`);
+            });
+        } else {
+            Linking.openURL(`tel:${contact.phone}`);
+        }
     };
 
     const loadMoreCallLogs = async () => {
