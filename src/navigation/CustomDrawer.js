@@ -178,15 +178,15 @@ const CustomDrawer = ({ visible, onClose, navigation }) => {
         //         navigation.navigate('BookSiteVisit');
         //     },
         // },
-        {
-            id: 'high-demand-projects',
-            title: 'Projects',
-            icon: 'domain',
-            onPress: () => {
-                onClose();
-                navigation.navigate('HighDemandProjects');
-            },
-        },
+        // {
+        //     id: 'high-demand-projects',
+        //     title: 'Projects',
+        //     icon: 'domain',
+        //     onPress: () => {
+        //         onClose();
+        //         navigation.navigate('HighDemandProjects');
+        //     },
+        // },
         {
             id: 'my-statistics',
             title: 'My Statistics',
