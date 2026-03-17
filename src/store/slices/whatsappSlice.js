@@ -116,10 +116,22 @@ export const uploadMedia = createAsyncThunk(
             const formData = new FormData();
             
             if (typeof fileInput === 'string') {
-                // It's a URI (e.g. from camera or audio)
+                // It's a URI (e.g. from camera or audio recording)
                 const filename = fileInput.split('/').pop();
                 const match = /\.(\w+)$/.exec(filename);
-                const type = match ? `image/${match[1]}` : `image`; // Default to image if unknown
+                const ext = match ? match[1].toLowerCase() : '';
+                
+                // Better mime type mapping
+                let type = 'application/octet-stream';
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+                    type = `image/${ext === 'ext' ? 'jpeg' : ext}`;
+                } else if (['mp4', 'mov', '3gp'].includes(ext)) {
+                    type = 'video/mp4'; // Meta/WhatsApp usually wants mp4
+                } else if (['mp3', 'wav', 'm4a', 'aac', 'ogg', 'opus', 'amr'].includes(ext)) {
+                    type = ext === 'amr' ? 'audio/amr' : 
+                           ext === 'opus' ? 'audio/ogg; codecs=opus' : 
+                           (ext === 'm4a' || ext === 'aac') ? 'audio/mp4' : 'audio/mpeg';
+                }
                 
                 formData.append('file', {
                     uri: fileInput,
@@ -127,16 +139,25 @@ export const uploadMedia = createAsyncThunk(
                     type: type,
                 });
             } else {
-                // It's a file object (e.g. from document picker)
-                formData.append('file', fileInput);
+                // It's a file object (e.g. from DocumentPicker)
+                // Expo DocumentPicker assets use mimeType, but RN FormData requires 'type'
+                formData.append('file', {
+                    uri: fileInput.uri,
+                    name: fileInput.name || 'file',
+                    type: fileInput.type || fileInput.mimeType || 'application/octet-stream',
+                });
             }
             
             const response = await axiosClient.post('/whatsapp/media', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            return response.data?.data || response.data || response; // { id: 'media_id' }
+
+            // axiosClient interceptor returns response.data directly
+            return response.data || response; // { id: 'media_id' }
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Failed to upload media');
+            console.error('[uploadMedia] Error:', error);
+            const errorMessage = error.response?.data?.message || error.message || 'Failed to upload media';
+            return rejectWithValue(errorMessage);
         }
     }
 );

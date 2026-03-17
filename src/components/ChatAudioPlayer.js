@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { Audio } from 'expo-av';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const formatTime = (ms) => {
     if (!ms || isNaN(ms)) return '0:00';
@@ -64,14 +64,18 @@ const ChatAudioPlayer = ({ uri, isAgent }) => {
 
             // Download file locally to avoid streaming decoding failures
             let playUri = uri;
-            try {
-                // Determine a safe filename cache
-                const filename = `chat_audio_${Math.round(Math.random() * 10000000)}.m4a`;
-                const localUri = FileSystem.cacheDirectory + filename;
-                const { uri: downloadedUri } = await FileSystem.downloadAsync(uri, localUri);
-                playUri = downloadedUri;
-            } catch (downloadError) {
-                console.warn("Failed to download audio for playback, falling back to stream:", downloadError);
+            if (uri) {
+                try {
+                    // Determine a safe filename cache
+                    const filename = `chat_audio_${Math.round(Math.random() * 10000000)}.m4a`;
+                    const localUri = FileSystem.cacheDirectory + filename;
+                    const { uri: downloadedUri } = await FileSystem.downloadAsync(uri, localUri);
+                    playUri = downloadedUri;
+                } catch (downloadError) {
+                    console.warn("Failed to download audio for playback, falling back to stream:", downloadError);
+                }
+            } else {
+                console.warn("[ChatAudioPlayer] No URI provided for download");
             }
 
             const { sound } = await Audio.Sound.createAsync(

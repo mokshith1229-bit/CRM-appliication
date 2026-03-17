@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio, Video, ResizeMode } from 'expo-av';
 import EmojiPicker from 'rn-emoji-keyboard';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import ChatAudioPlayer from '../components/ChatAudioPlayer';
@@ -318,22 +318,63 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
 
     const downloadAndOpenFile = async (url, filename, mimeType) => {
+        if (!url) {
+            console.warn("[downloadAndOpenFile] URL is undefined or empty");
+            Alert.alert("Error", "Download link is missing for this file.");
+            return;
+        }
+
         try {
             setDownloadingUrl(url);
-            let extension = '';
-            if (filename && filename.includes('.')) {
-                extension = filename.substring(filename.lastIndexOf('.'));
-            } else if (mimeType && mimeType.includes('/')) {
-                extension = '.' + mimeType.split('/')[1];
-                if (extension === '.vnd.openxmlformats-officedocument.wordprocessingml.document') extension = '.docx';
-                if (extension === '.vnd.openxmlformats-officedocument.spreadsheetml.sheet') extension = '.xlsx';
-                if (extension === '.vnd.openxmlformats-officedocument.presentationml.presentation') extension = '.pptx';
+            
+            // Try to resolve filename if missing
+            let resolvedFilename = filename;
+            if (!resolvedFilename && url) {
+                try {
+                    const urlPath = url.split('?')[0];
+                    const lastPart = urlPath.split('/').pop();
+                    if (lastPart && lastPart.includes('.')) {
+                        resolvedFilename = decodeURIComponent(lastPart);
+                    }
+                } catch (e) {}
             }
 
-            const nameWithoutExt = filename ? filename.replace(/\.[^/.]+$/, "") : 'document';
-            const safeFilename = nameWithoutExt.replace(/[^a-zA-Z0-9.\-_]/g, '_') + extension;
+            let extension = '';
+            let resolvedMimeType = mimeType;
+
+            if (resolvedFilename && resolvedFilename.includes('.')) {
+                extension = resolvedFilename.substring(resolvedFilename.lastIndexOf('.')).toLowerCase();
+                // If mimeType is generic or missing, infer from extension
+                if (!resolvedMimeType || resolvedMimeType === '' || resolvedMimeType === 'application/octet-stream') {
+                    const mimeMap = {
+                        '.pdf': 'application/pdf',
+                        '.doc': 'application/msword',
+                        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        '.xls': 'application/vnd.ms-excel',
+                        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        '.ppt': 'application/vnd.ms-powerpoint',
+                        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.png': 'image/png',
+                        '.txt': 'text/plain',
+                    };
+                    if (mimeMap[extension]) {
+                        resolvedMimeType = mimeMap[extension];
+                    }
+                }
+            } else if (resolvedMimeType && resolvedMimeType.includes('/')) {
+                extension = '.' + resolvedMimeType.split('/')[1];
+                if (extension.includes('vnd.openxmlformats-officedocument.wordprocessingml.document')) extension = '.docx';
+                if (extension.includes('vnd.openxmlformats-officedocument.spreadsheetml.sheet')) extension = '.xlsx';
+                if (extension.includes('vnd.openxmlformats-officedocument.presentationml.presentation')) extension = '.pptx';
+            }
+
+            const nameWithoutExt = resolvedFilename ? resolvedFilename.replace(/\.[^/.]+$/, "") : 'document';
+            const safeFilename = nameWithoutExt.replace(/[^a-zA-Z0-9.\-_]/g, '_') + (extension || '.bin');
             const fileUri = `${FileSystem.documentDirectory}${safeFilename}`;
             
+            console.log(`[downloadAndOpenFile] Downloading ${url} to ${fileUri} with mime ${resolvedMimeType}`);
             const { uri } = await FileSystem.downloadAsync(url, fileUri);
             
             if (Platform.OS === 'android') {
@@ -342,7 +383,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
                     await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
                         data: contentUri,
                         flags: 1,
-                        type: mimeType || '*/*'
+                        type: resolvedMimeType || '*/*'
                     });
                 } catch (err) {
                      Alert.alert("Notice", "No application found to open this document.");
@@ -365,7 +406,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     const renderMessage = ({ item }) => {
         const isAgent = item.direction === 'outbound' || item.sender === 'agent';
         // Handle media safely if present
-        const mediaUrl = item.mediaUrl || item.content?.mediaUrl || item.content?.url || item.content?.gcsUrl;
+        const mediaUrl = item.mediaUrl || item.content?.mediaUrl || item.content?.url || item.content?.gcsUrl || item.url;
         const type = item.type || (mediaUrl ? 'media' : 'text');
         
         let messageTime = item.time;
@@ -384,12 +425,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
         return (
             <View style={[styles.messageBubble, isAgent ? styles.agentBubble : styles.userBubble]}>
-                {isImage && (
+                {isImage && mediaUrl && (
                     <TouchableOpacity style={styles.imageContainer} onPress={() => setFullscreenImageUri(mediaUrl)}>
                         <Image source={{ uri: mediaUrl }} style={styles.messageImage} resizeMode="cover" />
                     </TouchableOpacity>
                 )}
-                {isVideo && (
+                {isVideo && mediaUrl && (
                     <View style={styles.imageContainer}>
                         <Video
                             source={{ uri: mediaUrl }}
@@ -400,10 +441,10 @@ const ChatDetailScreen = ({ route, navigation }) => {
                         />
                     </View>
                 )}
-                {isAudio && (
+                {isAudio && mediaUrl && (
                      <ChatAudioPlayer uri={mediaUrl} isAgent={isAgent} />
                 )}
-                {isDocument && (
+                {isDocument && mediaUrl && (
                     <TouchableOpacity 
                         style={styles.fileContainer} 
                         onPress={() => downloadAndOpenFile(mediaUrl, item.description || item.content?.filename, mimeType)}
