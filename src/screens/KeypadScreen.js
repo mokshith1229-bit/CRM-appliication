@@ -10,6 +10,7 @@ import {
     Platform,
     Linking,
 } from 'react-native';
+import { makeCall } from '../utils/intents';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useContactStore } from '../store/contactStore';
@@ -99,7 +100,7 @@ const KeypadScreen = ({ navigation }) => {
     const handleCall = (number, contact = null) => {
         if (number.length >= 3) {
             addRecentDial(number);
-            Linking.openURL(`tel:${number}`);
+            makeCall(number);
         }
     };
 

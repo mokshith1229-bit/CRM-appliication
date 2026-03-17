@@ -16,6 +16,7 @@ import {
     Linking,
     AppState, // Import AppState
 } from 'react-native';
+import { makeCall } from '../utils/intents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { StatusBar } from 'expo-status-bar';
@@ -569,7 +570,7 @@ const HomeScreen = ({ navigation, route, onOpenDrawer }) => {
         setShowQuickActions(false);
         // Don't auto-remove from New Enquiries on call
         // Contact will only be removed when user changes status from "New" to something else
-        Linking.openURL(`tel:${contact.phone}`);
+        makeCall(contact.phone);
     };
 
     const loadMoreCallLogs = async () => {

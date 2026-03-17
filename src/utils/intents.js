@@ -1,7 +1,27 @@
 import { Linking, Alert, Platform } from 'react-native';
 
+export const normalizePhoneNumber = (phoneNumber) => {
+    if (!phoneNumber) return '';
+    
+    // Remove all non-digit characters except +
+    let clean = phoneNumber.replace(/[^\d+]/g, '');
+    
+    // Check for Indian number patterns
+    // Case 1: 12 digits starting with 91 but no + (e.g., 91xxxxxxxxxx)
+    if (clean.startsWith('91') && clean.length === 12 && !phoneNumber.startsWith('+')) {
+        return '+' + clean;
+    }
+    
+    // Case 2: 10 digits starting with mobile digits (6, 7, 8, 9)
+    // We could auto-add +91 here, but let's stick to what the user explicitly mentioned for now.
+    // The user said "no prefix at all" is also fine.
+    
+    return clean;
+};
+
 export const makeCall = async (phoneNumber) => {
-    const url = `tel:${phoneNumber}`;
+    const normalizedNumber = normalizePhoneNumber(phoneNumber);
+    const url = `tel:${normalizedNumber}`;
     try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
@@ -16,8 +36,11 @@ export const makeCall = async (phoneNumber) => {
 };
 
 export const openWhatsApp = async (phoneNumber) => {
-    // Remove spaces and special characters, keep only digits and +
-    const cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+    // Normalize number
+    const normalizedNumber = normalizePhoneNumber(phoneNumber);
+    // WhatsApp URL should not have '+' for some versions, but usually it works. 
+    // wa.me uses digits only with country code.
+    const cleanNumber = normalizedNumber.replace(/\+/g, '');
     const url = `whatsapp://send?phone=${cleanNumber}`;
 
     try {
@@ -34,7 +57,8 @@ export const openWhatsApp = async (phoneNumber) => {
 };
 
 export const sendSMS = async (phoneNumber, body = '') => {
-    const url = `sms:${phoneNumber}?body=${encodeURIComponent(body)}`;
+    const normalizedNumber = normalizePhoneNumber(phoneNumber);
+    const url = `sms:${normalizedNumber}?body=${encodeURIComponent(body)}`;
 
     try {
         const supported = await Linking.canOpenURL(url);
