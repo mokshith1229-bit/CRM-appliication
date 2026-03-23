@@ -267,6 +267,50 @@ export const syncTemplates = createAsyncThunk('whatsapp/syncTemplates', async (_
     }
 });
 
+// --- New Quick Replies Thunks ---
+
+export const suggestQuickReplies = createAsyncThunk(
+    'whatsapp/suggestQuickReplies',
+    async ({ query }, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.get('/whatsapp/quick-replies/suggest', {
+                params: { query }
+            });
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to suggest quick replies');
+        }
+    }
+);
+
+export const recommendQuickReplies = createAsyncThunk(
+    'whatsapp/recommendQuickReplies',
+    async ({ conversationId }, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.get('/whatsapp/quick-replies/recommend', {
+                params: { conversationId }
+            });
+            console.log(response);
+            
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to recommend quick replies');
+        }
+    }
+);
+
+export const trackQuickReplyUse = createAsyncThunk(
+    'whatsapp/trackQuickReplyUse',
+    async ({ id }, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.post(`/whatsapp/quick-replies/${id}/track-use`);
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to track quick reply use');
+        }
+    }
+);
+
 const whatsappSlice = createSlice({
     name: 'whatsapp',
     initialState: {
@@ -276,6 +320,8 @@ const whatsappSlice = createSlice({
         groups: [],
         automations: [],
         quickReplies: [],
+        suggestedReplies: [],
+        recommendedReplies: [],
         isLoading: false,
         error: null,
         unreadCount: 0,
@@ -496,6 +542,14 @@ const whatsappSlice = createSlice({
             // Fetch Quick Replies
             .addCase(fetchQuickReplies.fulfilled, (state, action) => {
                 state.quickReplies = action.payload.quickReplies || action.payload || [];
+            })
+            // Quick Reply Suggestions
+            .addCase(suggestQuickReplies.fulfilled, (state, action) => {
+                state.suggestedReplies = action.payload.quickReplies || action.payload || [];
+            })
+            // Quick Reply Recommendations
+            .addCase(recommendQuickReplies.fulfilled, (state, action) => {
+                state.recommendedReplies = action.payload.quickReplies || action.payload || [];
             });
     },
 });

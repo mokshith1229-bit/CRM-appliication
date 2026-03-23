@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, StatusBar, BackHandler, Keyboard, Alert, Image, Modal, ScrollView, Linking, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
+import { WHATSAPP_MEDIA_CONSTRAINTS } from '../constants/whatsapp';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio, Video, ResizeMode } from 'expo-av';
@@ -11,7 +12,7 @@ import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import ChatAudioPlayer from '../components/ChatAudioPlayer';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchConversationMessages, sendConversationMessage, uploadMedia, receiveMessage, createConversation, clearUnread, markChatAsRead, searchConversationMessages } from '../store/slices/whatsappSlice';
+import { fetchConversationMessages, sendConversationMessage, uploadMedia, receiveMessage, createConversation, clearUnread, markChatAsRead, searchConversationMessages, suggestQuickReplies, recommendQuickReplies, trackQuickReplyUse } from '../store/slices/whatsappSlice';
 import { validateLogOwnership } from '../store/slices/leadSlice';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -24,6 +25,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     const dispatch = useDispatch();
     const chats = useSelector(state => state.whatsapp.chats || []);
     const { isWhatsAppIntegrated } = useSelector(state => state.config);
+    const { suggestedReplies, recommendedReplies } = useSelector(state => state.whatsapp);
     
     // Attempt to resolve the chat's real ID from the store if we only have a phone number
     const resolvedChat = React.useMemo(() => {
@@ -205,6 +207,25 @@ const ChatDetailScreen = ({ route, navigation }) => {
     React.useEffect(() => {
         clearUnreadStatus();
     }, [effectiveId, messages.length, clearUnreadStatus]);
+
+    React.useEffect(() => {
+        if (effectiveId) {
+            dispatch(recommendQuickReplies({ conversationId: effectiveId }));
+        }
+    }, [effectiveId, dispatch]);
+
+    const handleInputChange = (text) => {
+        setInputText(text);
+        if (text.startsWith('/')) {
+            dispatch(suggestQuickReplies({ query: text.substring(1) }));
+        }
+    };
+
+    const selectQuickReply = (reply) => {
+        const text = reply.message_body || reply.content || reply.text || reply.body || '';
+        setInputText(text);
+        dispatch(trackQuickReplyUse({ id: reply._id || reply.id }));
+    };
 
     React.useEffect(() => {
         const showListener = Keyboard.addListener(
@@ -478,6 +499,58 @@ const ChatDetailScreen = ({ route, navigation }) => {
         );
     };
 
+    const renderSuggestions = () => {
+        if (!inputText?.startsWith('/') || !suggestedReplies || suggestedReplies.length === 0) return null;
+
+        return (
+            <View style={[
+                styles.suggestionsWrapper,
+                Platform.OS === 'android' && keyboardVisible && { bottom: keyboardHeight + 60 }
+            ]}>
+                <View style={styles.suggestionsHeader}>
+                    <MaterialIcons name="flash-on" size={14} color="#FFF" />
+                    <Text style={styles.suggestionsHeaderText}>QUICK REPLIES</Text>
+                </View>
+                <FlatList
+                    data={suggestedReplies}
+                    keyExtractor={(item) => item._id || item.id}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity 
+                            style={styles.suggestionItem}
+                            onPress={() => selectQuickReply(item)}
+                        >
+                            <Text style={styles.suggestionTitle}>{item.shortcut}</Text>
+                            <Text style={styles.suggestionContent} numberOfLines={1}>{item.message_body}</Text>
+                        </TouchableOpacity>
+                    )}
+                    style={{ maxHeight: 200 }}
+                    keyboardShouldPersistTaps="always"
+                />
+            </View>
+        );
+    };
+
+    const renderRecommendations = () => {
+        if (!recommendedReplies || recommendedReplies.length === 0 || inputText.length > 0) return null;
+
+        return (
+            <View style={styles.recommendationsWrapper}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recommendationsScroll}>
+                    {recommendedReplies.map((reply) => (
+                        <TouchableOpacity 
+                            key={reply._id || reply.id}
+                            style={styles.recommendationChip}
+                            onPress={() => selectQuickReply(reply)}
+                        >
+                            <MaterialIcons name="auto-awesome" size={12} color={COLORS.primaryPurple} />
+                            <Text style={styles.recommendationText}>{reply.shortcut}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+        );
+    };
+
     const handleSend = () => {
         if (!inputText.trim() || !effectiveId) return;
         
@@ -493,22 +566,28 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
     const handleAttachmentPress = async () => {
         try {
-            const allowedFileTypes = [
-                'audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg', 'audio/opus', 
-                'application/vnd.ms-powerpoint', 'application/msword', 
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-                'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-                'application/pdf', 'text/plain', 'application/vnd.ms-excel', 
-                'image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/3gpp'
-            ];
+            const allowedMimeTypes = Object.values(WHATSAPP_MEDIA_CONSTRAINTS).flatMap(c => c.allowed_mimetypes);
 
             const document = await DocumentPicker.getDocumentAsync({
-                type: allowedFileTypes,
+                type: allowedMimeTypes,
                 copyToCacheDirectory: true,
             });
+
             if (!document.canceled) {
                 const docAsset = document.assets[0];
+                const mimeType = docAsset.mimeType || docAsset.type;
+
+                const config = Object.values(WHATSAPP_MEDIA_CONSTRAINTS).find(c => c.allowed_mimetypes.includes(mimeType));
+
+                if (!config) {
+                    Alert.alert("Invalid File Type", `File type not supported by WhatsApp: ${mimeType || 'Unknown'}\nPlease upload a valid image, video, audio, or document.`);
+                    return;
+                }
+
+                if (docAsset.size > config.max_size) {
+                    Alert.alert("File Too Large", `${config.category} exceeds the limit of ${config.max_size / (1024 * 1024)}MB.`);
+                    return;
+                }
                 const uploadResult = await dispatch(uploadMedia(docAsset)).unwrap();
                 if (uploadResult.id) {
                     dispatch(sendConversationMessage({
@@ -688,6 +767,9 @@ const ChatDetailScreen = ({ route, navigation }) => {
                     />
                 </View>
                 
+                {renderSuggestions()}
+                {renderRecommendations()}
+
                 {/* Manual keyboard spacer for Android to ensure input is above keyboard */}
                 <View style={[
                     styles.inputContainer, 
@@ -702,19 +784,19 @@ const ChatDetailScreen = ({ route, navigation }) => {
                             placeholder="Message"
                             placeholderTextColor="#8696A0"
                             value={inputText}
-                            onChangeText={setInputText}
+                            onChangeText={handleInputChange}
                             multiline
                         />
                         <TouchableOpacity style={styles.iconButton} onPress={handleAttachmentPress}>
                             <MaterialIcons name="attach-file" size={24} color="#8696A0" style={{ transform: [{ rotate: '-45deg' }] }} />
                         </TouchableOpacity>
-                        {!inputText.trim() && (
+                        {!inputText?.trim() && (
                             <TouchableOpacity style={styles.iconButton} onPress={handleCameraPress}>
                                 <MaterialIcons name="camera-alt" size={24} color="#8696A0" />
                             </TouchableOpacity>
                         )}
                     </View>
-                    {inputText.trim() ? (
+                    {inputText?.trim() ? (
                          <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
                              <MaterialIcons name="send" size={20} color="#FFF" style={styles.sendIcon} />
                          </TouchableOpacity>
@@ -988,7 +1070,81 @@ const styles = StyleSheet.create({
         color: '#8696A0',
         fontSize: 16,
         textAlign: 'center',
-    }
+    },
+    // Quick Replies Styles
+    suggestionsWrapper: {
+        position: 'absolute',
+        bottom: 70,
+        left: 10,
+        right: 10,
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        overflow: 'hidden',
+        zIndex: 1000,
+    },
+    suggestionsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primaryPurple,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+    },
+    suggestionsHeaderText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: 'bold',
+        marginLeft: 4,
+        letterSpacing: 1,
+    },
+    suggestionItem: {
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    suggestionTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#333',
+    },
+    suggestionContent: {
+        fontSize: 12,
+        color: '#667781',
+        marginTop: 2,
+    },
+    recommendationsWrapper: {
+        paddingVertical: 8,
+        paddingHorizontal: 4,
+    },
+    recommendationsScroll: {
+        paddingHorizontal: 8,
+    },
+    recommendationChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: COLORS.primaryPurple + '40', // 40 is transparency
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+    },
+    recommendationText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: COLORS.primaryPurple,
+        marginLeft: 4,
+    },
 });
 
 export default ChatDetailScreen;
